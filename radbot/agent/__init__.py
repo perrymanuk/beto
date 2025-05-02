@@ -1,5 +1,19 @@
 """
 Agent package for the RadBot framework.
+
+The Home Assistant integration uses the standard REST API for communication.
+This provides several benefits:
+
+1. Direct communication to Home Assistant using standard REST API endpoints
+2. Comprehensive entity listing and state querying capabilities
+3. Robust entity search with relevance scoring
+4. State caching for improved performance
+
+The REST API approach allows:
+- Entity discovery via GET /api/states
+- Entity state queries via GET /api/states/<entity_id>
+- Entity control via POST /api/services/<domain>/<service>
+- Authentication using long-lived access tokens
 """
 
 import logging
@@ -18,6 +32,7 @@ from radbot.agent.web_search_agent_factory import (
     create_websearch_agent,
     create_websearch_enabled_root_agent
 )
+from radbot.agent.home_assistant_agent_factory import create_home_assistant_agent_factory
 
 # Import the root_agent from the root-level agent.py module
 logger.info("Importing root_agent from the root-level agent.py module")
@@ -51,5 +66,6 @@ __all__ = [
     'create_memory_enabled_agent',
     'create_websearch_agent',
     'create_websearch_enabled_root_agent',
+    'create_home_assistant_agent_factory',
     'root_agent'  # Export this for ADK web to use
 ]

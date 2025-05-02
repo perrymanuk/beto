@@ -5,10 +5,11 @@ This file is used by the ADK web interface to create the agent with all needed t
 The ADK web interface uses this file directly based on the adk.config.json setting.
 """
 
+import asyncio
 import logging
 import os
 import sys
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict, Union
 
 # Set up logging
 logging.basicConfig(
@@ -34,14 +35,32 @@ logger.info(f"Using Vertex AI: {config_manager.is_using_vertex_ai()}")
 # Import tools
 from radbot.tools.basic_tools import get_current_time, get_weather
 from radbot.tools.memory_tools import search_past_conversations, store_important_information
-from radbot.tools.mcp_tools import search_home_assistant_entities
 from radbot.tools.web_search_tools import create_tavily_search_tool
 from radbot.tools.mcp_fileserver_client import create_fileserver_toolset
 from radbot.tools.mcp_crawl4ai_client import create_crawl4ai_toolset, test_crawl4ai_connection
 
+# Import Home Assistant REST API tools
+from radbot.tools.ha_tools_impl import (
+    list_ha_entities,
+    get_ha_entity_state,
+    turn_on_ha_entity,
+    turn_off_ha_entity,
+    toggle_ha_entity,
+    search_ha_entities  # Use our direct implementation
+)
+
+# Ensure the Home Assistant client is properly initialized
+from radbot.tools.ha_client_singleton import get_ha_client
+
+# Import Home Assistant integration
+from radbot.agent.home_assistant_agent_factory import create_home_assistant_agent_factory
+from radbot.config.settings import ConfigManager
+
 # Log startup
 logger.info("ROOT agent.py loaded - this is the main implementation loaded by ADK web")
 print(f"SPECIAL DEBUG: agent.py loaded with MCP_FS_ROOT_DIR={os.environ.get('MCP_FS_ROOT_DIR', 'Not set')}")
+
+# We're using REST API approach for Home Assistant
 
 
 def create_agent(tools: Optional[List[Any]] = None):
@@ -65,8 +84,37 @@ def create_agent(tools: Optional[List[Any]] = None):
     memory_tools = [search_past_conversations, store_important_information]
     logger.info(f"Including memory tools: {[t.__name__ for t in memory_tools]}")
     
-    # Add Home Assistant entity search
-    basic_tools.append(search_home_assistant_entities)
+    # Add Home Assistant REST API integration
+    logger.info("Using Home Assistant REST API integration in agent creation")
+    
+    # Initialize Home Assistant client
+    ha_client = get_ha_client()
+    if ha_client:
+        logger.info(f"Home Assistant client initialized: {ha_client.base_url}")
+        
+        # Test connection by listing entities
+        try:
+            entities = ha_client.list_entities()
+            if entities:
+                logger.info(f"Successfully connected to Home Assistant. Found {len(entities)} entities.")
+            else:
+                logger.warning("Connected to Home Assistant but no entities were returned")
+        except Exception as e:
+            logger.error(f"Error testing Home Assistant connection: {e}")
+    else:
+        logger.warning("Home Assistant client could not be initialized - check HA_URL and HA_TOKEN")
+    
+    # Add Home Assistant REST API tools
+    ha_tools = [
+        search_ha_entities,
+        list_ha_entities,
+        get_ha_entity_state,
+        turn_on_ha_entity,
+        turn_off_ha_entity,
+        toggle_ha_entity
+    ]
+    basic_tools.extend(ha_tools)
+    logger.info(f"Added {len(ha_tools)} Home Assistant REST API tools")
     
     # Add MCP Fileserver tools
     try:
@@ -216,6 +264,33 @@ def create_agent(tools: Optional[List[Any]] = None):
             """
             instruction += "\n\n" + fs_instruction
             logger.info("Added MCP fileserver instructions to agent instruction")
+            
+        # Add Home Assistant REST API instructions
+        if any("home_assistant" in str(tool).lower() for tool in all_tools):
+            ha_instruction = """
+            You have access to Home Assistant smart home control tools through the REST API integration.
+            
+            First, search for entities:
+            - Use search_ha_entities("search_term") to find entities matching your search
+            - For domain-specific search, use search_ha_entities("search_term", "domain_filter") 
+              Example domains: light, switch, sensor, climate, media_player, etc.
+            
+            You can also list all entities:
+            - Use list_ha_entities() to get all Home Assistant entities
+            
+            Get information about specific entities:
+            - Use get_ha_entity_state("entity_id") to get the state of a specific entity
+              Example: get_ha_entity_state("light.living_room")
+            
+            Once you have the entity IDs, you can control them using:
+            - turn_on_ha_entity("entity_id") - to turn on devices
+            - turn_off_ha_entity("entity_id") - to turn off devices
+            - toggle_ha_entity("entity_id") - to toggle devices (on if off, off if on)
+            
+            Always check the entity state before controlling it to understand its current status.
+            """
+            instruction += "\n\n" + ha_instruction
+            logger.info("Added detailed Home Assistant REST API instructions to agent instruction")
     except Exception as e:
         logger.warning(f"Failed to load main_agent instruction: {str(e)}")
         instruction = """You are a helpful assistant. Your goal is to understand the user's request and fulfill it by using available tools."""
@@ -227,13 +302,19 @@ def create_agent(tools: Optional[List[Any]] = None):
     # Log the model we're using
     logger.info(f"Creating agent with model: {model_name}")
     
+    # Create the agent with tools
+    agent = None
+    
+    # For now, create regular agent without GenAI function calling
+    # This approach is more compatible across ADK versions
     agent = Agent(
         name="radbot_web",
-        model=model_name,  # Use the sanitized model name
+        model=model_name,
         instruction=instruction,
         description="The main agent that handles user requests with memory capabilities.",
         tools=all_tools
     )
+    logger.info("Created agent with standard tools")
     
     # Initialize memory service for the web UI and store API keys
     try:
@@ -269,3 +350,5 @@ def create_agent(tools: Optional[List[Any]] = None):
 # Create a root_agent instance for ADK web to use directly
 root_agent = create_agent()
 logger.info("Created root_agent instance for direct use by ADK web")
+
+# Using REST API approach for Home Assistant

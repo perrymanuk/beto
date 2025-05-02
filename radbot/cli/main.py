@@ -3,6 +3,7 @@ CLI entry point for radbot.
 
 This module provides a command-line interface for interacting with the agent.
 """
+import asyncio
 import logging
 import os
 import sys
@@ -11,7 +12,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from radbot.agent.agent import radbotAgent, create_agent
+from radbot.agent.agent import RadBotAgent, create_agent
 from radbot.config import config_manager
 from radbot.tools.basic_tools import get_current_time, get_weather
 
@@ -185,38 +186,35 @@ def HassTurnOff(entity_id: str):
             "error": str(e)
         }
 
-def setup_agent() -> Optional[radbotAgent]:
+async def setup_agent() -> Optional[radbotAgent]:
     """Set up and configure the agent with tools and memory.
     
     Returns:
         Configured radbotAgent instance or None if setup fails
     """
     try:
-        # Import the Home Assistant tool factory and memory agent factory
+        # Import the Home Assistant agent factory and memory agent factory
+        from radbot.agent.home_assistant_agent_factory import create_home_assistant_agent_factory
         from radbot.tools.mcp_tools import create_ha_mcp_enabled_agent
         from radbot.agent.agent import AgentFactory
         from radbot.agent.memory_agent_factory import create_memory_enabled_agent
+        from radbot.config.settings import ConfigManager
+        
+        config_manager = ConfigManager()
         
         # Configure basic tools
         basic_tools = [get_current_time, get_weather]
         
         # Add all the direct Home Assistant functions as basic tools
-        # This ensures they're available regardless of MCP integration status
+        # This ensures they're available regardless of integration status
         basic_tools.append(search_home_assistant_entities)
         basic_tools.append(HassTurnOn)
         basic_tools.append(HassTurnOff)
         logger.info("Added direct Home Assistant functions as basic tools")
         
-        # Check Home Assistant status first
-        ha_status = check_home_assistant_status()
-        if ha_status["connected"]:
-            logger.info(f"Home Assistant integration available: {ha_status['tools_count']} tools, "
-                       f"domains: {', '.join(ha_status['domains'])}")
-        else:
-            logger.warning(f"Home Assistant integration not available: {ha_status['status_message']}")
+        # No need for WebSocket setup anymore, we only use MCP
         
-        # Create a wrapper function for the Home Assistant agent factory
-        # that returns a memory-enabled agent
+        # Create a wrapper function for the agent factory
         def wrapped_agent_factory(tools=None):
             # Create a memory-enabled agent
             try:
@@ -233,17 +231,33 @@ def setup_agent() -> Optional[radbotAgent]:
                     instruction_name="main_agent",
                     model=config_manager.get_main_model()
                 )
-            
-        # Create an agent with Home Assistant MCP tools using the helper function
-        # This function will add Home Assistant tools if configured correctly
-        agent = create_ha_mcp_enabled_agent(
-            agent_factory=wrapped_agent_factory,
-            base_tools=basic_tools
-        )
         
-        # If the MCP integration failed, fall back to memory-enabled agent with basic tools
+        agent = None
+        
+        # Use the Home Assistant agent factory with MCP integration 
+        logger.info("Creating agent with Home Assistant MCP integration")
+        
+        # Check Home Assistant status first
+        ha_status = check_home_assistant_status()
+        if ha_status["connected"]:
+            logger.info(f"Home Assistant MCP integration available: {ha_status['tools_count']} tools, "
+                   f"domains: {', '.join(ha_status['domains'])}")
+            
+            # Create agent with Home Assistant capabilities
+            ha_agent_factory = create_home_assistant_agent_factory(
+                wrapped_agent_factory,
+                config_manager=config_manager,
+                base_tools=basic_tools
+            )
+            agent = ha_agent_factory()
+            logger.info("Created agent with Home Assistant MCP integration")
+        else:
+            logger.warning(f"Home Assistant MCP integration not available: {ha_status['status_message']}")
+            # Create a basic agent without Home Assistant since MCP is not available
+        
+        # If both integration approaches failed, fall back to memory-enabled agent with basic tools
         if not agent:
-            logger.warning("Home Assistant MCP integration failed, creating memory-enabled agent with basic tools")
+            logger.warning("Home Assistant integration failed, creating memory-enabled agent with basic tools")
             try:
                 agent = create_memory_enabled_agent(
                     tools=basic_tools,
@@ -273,21 +287,6 @@ def display_welcome_message() -> None:
     print("radbot CLI Interface".center(60))
     print("=" * 60)
     
-    # Check Home Assistant status
-    ha_status = check_home_assistant_status()
-    print(f"Home Assistant: {ha_status['status_message']}")
-    if ha_status["connected"]:
-        tool_count = ha_status.get('tools_count', 0)
-        print(f"Found {tool_count} Home Assistant tools")
-        
-        if ha_status.get("tools", []):
-            print(f"Sample tools: {', '.join(ha_status['tools'][:5])}")
-            
-        if ha_status.get("domains", []):
-            print(f"Available domains: {', '.join(ha_status['domains'])}")
-        elif ha_status.get("detected_domains", []):
-            print(f"Detected domains: {', '.join(ha_status['detected_domains'])}")
-    
     print("\nType your messages and press Enter to interact with the agent")
     print("Commands:")
     print("  /exit, /quit - Exit the application")
@@ -300,12 +299,12 @@ def display_welcome_message() -> None:
     print("=" * 60)
 
 
-def process_commands(command: str, agent: radbotAgent, user_id: str) -> bool:
+def process_commands(command: str, agent: RadBotAgent, user_id: str) -> bool:
     """Process special commands.
     
     Args:
         command: The command to process (without the leading '/')
-        agent: The radbotAgent instance
+        agent: The RadBotAgent instance
         user_id: The current user ID
         
     Returns:
@@ -448,53 +447,61 @@ def process_commands(command: str, agent: radbotAgent, user_id: str) -> bool:
         return False
 
 
-def main():
+async def main():
     """Main CLI entry point."""
     display_welcome_message()
     
-    # Set up agent
-    agent = setup_agent()
-    
-    if not agent:
-        print("Failed to set up agent. Exiting.")
-        sys.exit(1)
-    
-    # Generate a random user ID for this session
-    user_id = str(uuid.uuid4())
-    logger.info(f"Starting session with user_id: {user_id}")
-    
-    # Main interaction loop
-    while True:
-        try:
-            # Get user input
-            user_input = input("\nYou: ")
-            
-            # Check for commands (starting with '/')
-            if user_input.startswith('/'):
-                command = user_input[1:].strip().lower()
-                should_exit = process_commands(command, agent, user_id)
-                if should_exit:
-                    sys.exit(0)
-                continue
-            
-            # Process regular message
-            logger.info(f"Processing message: {user_input[:20]}{'...' if len(user_input) > 20 else ''}")
-            
-            response = agent.process_message(user_id, user_input)
-            print(f"\nradbot: {response}")
-            
-        except KeyboardInterrupt:
-            print("\n\nSession interrupted. Exiting.")
-            sys.exit(0)
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
-            print(f"\nAn error occurred: {str(e)}")
-            print("Continuing with new message...")
+    try:
+        print("Setting up agent...")
+        # Set up agent
+        agent = await setup_agent()
+        
+        if not agent:
+            print("Failed to set up agent. Exiting.")
+            sys.exit(1)
+        
+        print("Agent setup complete. Ready for interaction.")
+        
+        # Generate a random user ID for this session
+        user_id = str(uuid.uuid4())
+        logger.info(f"Starting session with user_id: {user_id}")
+        
+        # Main interaction loop
+        while True:
+            try:
+                # Get user input
+                user_input = input("\nYou: ")
+                
+                # Check for commands (starting with '/')
+                if user_input.startswith('/'):
+                    command = user_input[1:].strip().lower()
+                    should_exit = process_commands(command, agent, user_id)
+                    if should_exit:
+                        sys.exit(0)
+                    continue
+                
+                # Process regular message
+                logger.info(f"Processing message: {user_input[:20]}{'...' if len(user_input) > 20 else ''}")
+                
+                response = agent.process_message(user_id, user_input)
+                print(f"\nradbot: {response}")
+                
+            except KeyboardInterrupt:
+                print("\n\nSession interrupted. Exiting.")
+                raise
+            except Exception as e:
+                logger.error(f"Error processing message: {str(e)}")
+                print(f"\nAn error occurred: {str(e)}")
+                print("Continuing with new message...")
+    finally:
+        # No cleanup needed for MCP approach
+        pass
 
 
 if __name__ == "__main__":
     try:
-        main()
+        import asyncio
+        asyncio.run(main())
     except KeyboardInterrupt:
         print("\nInterrupted by user. Exiting.")
         sys.exit(0)

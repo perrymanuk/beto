@@ -31,6 +31,7 @@ class ConfigManager:
         """
         self.config_dir = config_dir or DEFAULT_CONFIG_DIR
         self.model_config = self._load_model_config()
+        self.ha_config = self._load_home_assistant_config()
         self.instruction_cache = {}
         
     def _load_model_config(self) -> Dict[str, Any]:
@@ -52,6 +53,27 @@ class ConfigManager:
             
             # Use Vertex AI flag
             "use_vertex_ai": os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "FALSE").upper() == "TRUE"
+        }
+
+    def _load_home_assistant_config(self) -> Dict[str, Any]:
+        """
+        Load Home Assistant configuration from environment variables.
+        
+        Returns:
+            Dictionary of Home Assistant configuration settings
+        """
+        # Get REST API configuration
+        ha_url = os.getenv("HA_URL")
+        ha_token = os.getenv("HA_TOKEN")
+            
+        return {
+            # Overall configuration
+            "use_rest_api": True,  # Always use REST API approach
+            "enabled": bool(ha_url and ha_token),
+            
+            # REST API configuration
+            "url": ha_url,
+            "token": ha_token,
         }
     
     def get_instruction(self, name: str) -> str:
@@ -135,3 +157,39 @@ class ConfigManager:
             True if using Vertex AI, False otherwise
         """
         return self.model_config["use_vertex_ai"]
+    
+    def get_home_assistant_config(self) -> Dict[str, Any]:
+        """
+        Get the Home Assistant configuration settings.
+        
+        Returns:
+            Dictionary with Home Assistant configuration
+        """
+        return self.ha_config
+    
+    def is_home_assistant_enabled(self) -> bool:
+        """
+        Check if Home Assistant integration is enabled and properly configured.
+        
+        Returns:
+            True if Home Assistant integration is enabled, False otherwise
+        """
+        return self.ha_config.get("enabled", False)
+    
+    def get_home_assistant_url(self) -> Optional[str]:
+        """
+        Get the Home Assistant URL.
+        
+        Returns:
+            The Home Assistant URL or None if not configured
+        """
+        return self.ha_config.get("url")
+    
+    def get_home_assistant_token(self) -> Optional[str]:
+        """
+        Get the Home Assistant authentication token.
+        
+        Returns:
+            The Home Assistant token or None if not configured
+        """
+        return self.ha_config.get("token")

@@ -283,13 +283,55 @@ def search_home_assistant_entities(search_term: str, domain_filter: Optional[str
     try:
         result = find_home_assistant_entities(search_term, domain_filter)
         logger.info(f"Entity search result: {result.get('status', 'unknown')} (found {result.get('match_count', 0)} matches)")
+        
+        # If no entities were found, provide a helpful message
+        if not result.get("success"):
+            if result.get("status") == "no_entities":
+                return {
+                    "success": False,
+                    "status": "no_entities",
+                    "message": "I couldn't find any entities in your Home Assistant system. This could be because:\n"
+                              "1. Home Assistant MCP server is not properly configured\n"
+                              "2. Your Home Assistant instance doesn't have any entities that match your search\n"
+                              "3. The MCP integration doesn't support entity listing for your Home Assistant version\n\n"
+                              "Please check your Home Assistant MCP server configuration.",
+                    "search_term": search_term,
+                    "domain_filter": domain_filter,
+                    "supported_domains": result.get("supported_domains", []),
+                    "match_count": 0,
+                    "matches": []
+                }
+            elif result.get("status") == "unsupported_domain":
+                domain = search_term.split(".", 1)[0] if "." in search_term else domain_filter
+                supported_domains = result.get("supported_domains", [])
+                
+                return {
+                    "success": False,
+                    "status": "unsupported_domain",
+                    "message": f"I couldn't find the entity because the domain '{domain}' is not supported by your Home Assistant MCP integration.\n\n"
+                              f"Supported domains are: {', '.join(supported_domains) if supported_domains else 'None detected'}\n\n"
+                              "This could be because:\n"
+                              "1. The domain is not properly enabled in your Home Assistant instance\n"
+                              "2. The domain is not exposed via the MCP integration\n"
+                              "3. The MCP server configuration needs updating\n\n"
+                              f"You searched for: {search_term}",
+                    "search_term": search_term,
+                    "domain_filter": domain_filter,
+                    "supported_domains": supported_domains,
+                    "domain": domain,
+                    "match_count": 0,
+                    "matches": []
+                }
+        
         return result
     except Exception as e:
         logger.error(f"Error in search_home_assistant_entities: {str(e)}")
-        # Return a fallback result so the function doesn't fail
+        # Return a more helpful error message
         return {
             "success": False,
             "error": str(e),
+            "message": "There was a problem connecting to your Home Assistant system. "
+                      "Please check your Home Assistant MCP server configuration and ensure it's running.",
             "search_term": search_term,
             "domain_filter": domain_filter,
             "match_count": 0,

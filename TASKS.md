@@ -48,6 +48,22 @@ This file tracks development tasks for the radbot project.
 - [x] Create test script for MCP fileserver operations
 - [ ] Implement additional MCP servers as needed
 
+## Home Assistant Integration
+
+- [x] Set up MCP client for Home Assistant (native integration)
+- [x] Create documentation for using Home Assistant's native MCP endpoint
+- [x] Update configuration to use MCP integration exclusively
+- [x] Create entity search functionality for MCP integration
+- [x] Implement robust error handling for MCP connection
+- [x] Create examples demonstrating MCP integration
+- [x] Update documentation for MCP integration
+- [x] Integrate Home Assistant tools with radbot_web agent
+- [x] Remove WebSocket implementation in favor of native MCP approach
+- [x] Fix entity search issues with MCP integration
+- [x] Improve error handling for unsupported domains in MCP
+- [x] Add documentation about MCP limitations
+- [ ] Create integration tests for MCP integration
+
 ## Web Search & Content Integration
 
 - [x] Implement Tavily search tool in web_search_tools.py
@@ -98,3 +114,10 @@ This file tracks development tasks for the radbot project.
 - [x] Implement CLI interface
 - [ ] Create scheduler for background tasks
 - [x] Add logging system
+
+## Voice & Audio
+
+- [ ] Implement bidirectional voice chat for the agent
+- [ ] Set up ElevenLabs TTS integration
+- [ ] Create WebSocket backend for audio streaming
+- [ ] Implement client-side audio handling

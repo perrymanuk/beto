@@ -420,6 +420,7 @@ async def _find_home_assistant_entities_async(search_term: str, domain_filter: O
                 
                 # Try to detect domains like light, switch, etc.
                 domains = set()
+                domain_tools = {}
                 for tool in ha_tools:
                     if not hasattr(tool, 'name'):
                         continue
@@ -427,59 +428,77 @@ async def _find_home_assistant_entities_async(search_term: str, domain_filter: O
                     tool_name = tool.name.lower()
                     
                     # Extract common domain names from tool names
-                    common_domains = ['light', 'switch', 'climate', 'media_player', 'cover', 'vacuum']
+                    common_domains = ['light', 'switch', 'climate', 'media_player', 'cover', 'vacuum', 'sensor', 'binary_sensor', 'fan']
                     
                     for domain in common_domains:
                         if domain in tool_name:
                             domains.add(domain)
+                            
+                            # Track tools by domain for later use
+                            if domain not in domain_tools:
+                                domain_tools[domain] = []
+                            domain_tools[domain].append(tool)
                             break
                 
-                # If we found domains, try to get entities for each domain
+                # If we found domains, try to check if our specific entity exists
                 if domains:
                     logger.info(f"Found domains: {', '.join(domains)}")
                     
-                    # For demonstration purposes, create some sample entities from the domains
-                    # This is a fallback when we can't get real entities
-                    for domain in domains:
-                        if domain_filter and domain != domain_filter:
-                            continue
-                            
-                        # Create sample entities that match the search term
-                        # This is better than nothing when real entity listing fails
-                        if search_term.lower() in ["basement", "plant"]:
-                            entity_ids.append(f"{domain}.{search_term.lower()}")
-                        if "room" in search_term.lower():
-                            entity_ids.append(f"{domain}.{search_term.lower().replace(' ', '_')}")
-                        if domain == "light":
-                            entity_ids.append(f"{domain}.{search_term.lower()}_lights")
-                    
-                    if entity_ids:
-                        logger.warning("Using fallback generated entities based on domains")
+                    if search_term and '.' in search_term:
+                        # If the search term is a fully qualified entity_id, check if it exists directly
+                        domain, entity_name = search_term.split('.', 1)
+                        if domain in domain_tools:
+                            # We have tools for this domain, try to build a virtual entity list
+                            entity_ids = [f"{domain}.{entity_name}"]
+                            logger.info(f"Treating search term as direct entity_id: {search_term}")
+                            logger.info(f"Domain {domain} is supported - adding to virtual entity list")
+                        else:
+                            logger.warning(f"Domain {domain} not supported in MCP tools")
+                            # Return an informative error about the specific domain
+                            return {
+                                "success": False,
+                                "status": "unsupported_domain",
+                                "error": f"Domain '{domain}' is not supported by the Home Assistant MCP integration",
+                                "search_term": search_term,
+                                "domain_filter": domain_filter,
+                                "supported_domains": list(domains),
+                                "match_count": 0,
+                                "matches": []
+                            }
+                    else:
+                        # For search by keyword, create virtual entities for each domain to enable discovery
+                        logger.warning("No entity listing tool available - creating virtual entities for search")
+                        # Using the domains we found, create some placeholder entities that match the search
+                        entity_ids = []
+                        for domain in domains:
+                            # Only create placeholders for the specified domain filter, if provided
+                            if domain_filter and domain != domain_filter:
+                                continue
+                                
+                            # Add a placeholder entity that contains the search term for each domain
+                            placeholder = f"{domain}.{search_term}"
+                            entity_ids.append(placeholder)
+                            logger.info(f"Added placeholder entity for search: {placeholder}")
                 
         except Exception as e:
             logger.warning(f"Error searching for entity tools: {str(e)}")
             
-        # We want to focus on real entities from the API, not generating fake ones
-        # If entity_ids is empty, log a warning
+        # Check if we have entity IDs to work with (either real or virtual)
         if not entity_ids:
             logger.warning("No entity IDs were retrieved from Home Assistant.")
             logger.warning("Make sure Home Assistant MCP server is properly configured.")
             
-            # Create some fallback entities based on the search term as a last resort
-            # This ensures the function doesn't fail completely when Home Assistant integration is broken
-            if domain_filter:
-                entity_ids = [
-                    f"{domain_filter}.{search_term.lower().replace(' ', '_')}",
-                    f"{domain_filter}.{search_term.lower()}"
-                ]
-                logger.warning(f"Using emergency fallback entities: {entity_ids}")
-            else:
-                # Create general fallback entities with common domains
-                entity_ids = [
-                    f"light.{search_term.lower().replace(' ', '_')}",
-                    f"switch.{search_term.lower().replace(' ', '_')}"
-                ]
-                logger.warning(f"Using emergency fallback entities: {entity_ids}")
+            # Return an informative error
+            return {
+                "success": False,
+                "status": "no_entities",
+                "error": "No entities could be retrieved from Home Assistant MCP server",
+                "search_term": search_term,
+                "domain_filter": domain_filter,
+                "supported_domains": list(domains) if domains else [],
+                "match_count": 0,
+                "matches": []
+            }
                             
         # Filter entity IDs based on search term and domain filter
         matches = []

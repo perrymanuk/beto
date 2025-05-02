@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-Test the Home Assistant entity search functionality.
+Test the Home Assistant entity search functionality with WebSocket and display registry.
 
-This script tests the entity search function for Home Assistant integration.
+This script tests the improved entity search functionality that uses the
+Home Assistant WebSocket API and entity registry display information.
 """
 
+import asyncio
 import os
 import sys
 import logging
 from pprint import pprint
 import json
+from typing import Dict, Any, List, Optional
 
 # Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,159 +29,228 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-def verify_ha_config():
-    """Verify that Home Assistant configuration is available."""
-    from radbot.tools.mcp_utils import test_home_assistant_connection
-    
+# Default Home Assistant WebSocket URL
+DEFAULT_HA_WS_URL = "ws://localhost:8123/api/websocket"
+
+def print_header(title):
+    """Print a formatted header."""
+    print("\n" + "=" * 70)
+    print(f" {title} ".center(70, "="))
+    print("=" * 70)
+
+def print_subheader(title):
+    """Print a formatted subheader."""
+    print("\n" + "-" * 60)
+    print(f" {title} ")
+    print("-" * 60)
+
+async def update_state_callback(event_data: Dict[str, Any]) -> None:
+    """Dummy callback for state updates during testing."""
+    # Not used in this test, but required for the WebSocket client
+    pass
+
+async def test_websocket_entity_search():
+    """Test the improved entity search functionality with WebSocket."""
+    from radbot.tools.ha_websocket_client import HomeAssistantWebsocketClient
+    from radbot.tools.ha_state_cache import HomeAssistantStateCache
+
     # Check environment variables
-    ha_url = os.getenv("HA_MCP_SSE_URL")
-    ha_token = os.getenv("HA_AUTH_TOKEN")
+    ha_ws_url = os.getenv("HA_WS_URL", DEFAULT_HA_WS_URL)
+    ha_token = os.getenv("HA_TOKEN")
     
-    if not ha_url or not ha_token:
-        print("❌ Missing environment variables:")
-        if not ha_url:
-            print("  - HA_MCP_SSE_URL is not set")
-        if not ha_token:
-            print("  - HA_AUTH_TOKEN is not set")
-        print("\nPlease set these in your .env file and try again.")
+    if not ha_token:
+        print("❌ HA_TOKEN environment variable is not set")
+        print("Please set this in your .env file or directly in your environment and try again.")
         return False
     
-    # Test connection
-    print("Testing Home Assistant MCP connection...")
-    result = test_home_assistant_connection()
+    print_header("Home Assistant WebSocket Entity Search Test")
+    print(f"Connecting to Home Assistant at {ha_ws_url}")
     
-    if not result.get("success"):
-        print(f"❌ Connection failed: {result.get('error', 'Unknown error')}")
-        print(f"  Status: {result.get('status', 'unknown')}")
+    ws_client = None
+    state_cache = HomeAssistantStateCache()
+    
+    try:
+        # Connect to Home Assistant
+        ws_client = HomeAssistantWebsocketClient(ha_ws_url, ha_token, update_state_callback)
+        
+        # Connect without starting the listener yet
+        connection_result = await ws_client.connect(auto_listen=False)
+        if not connection_result:
+            print("❌ Failed to connect to Home Assistant")
+            return False
+        
+        print("✅ Connected to Home Assistant WebSocket API")
+        
+        # Initialize with all states
+        print("Fetching all entity states...")
+        all_states = await ws_client.get_all_states()
+        print(f"✅ Received {len(all_states)} entities from Home Assistant")
+        
+        # Process each state into the cache
+        for state_data in all_states:
+            entity_id = state_data.get("entity_id")
+            if entity_id:
+                event_data = {"entity_id": entity_id, "new_state": state_data}
+                await state_cache.update_state(event_data)
+        
+        # Fetch enhanced registry data
+        print("Fetching registry display information...")
+        try:
+            entity_registry_display = await ws_client.get_entity_registry_for_display()
+            print(f"✅ Received {len(entity_registry_display)} display registry entries")
+            await state_cache.update_entity_registry_display(entity_registry_display)
+        except Exception as display_error:
+            print(f"❌ Error fetching display registry: {display_error}")
+            
+            # Fall back to regular registry
+            print("Falling back to standard registry...")
+            entity_registry = await ws_client.get_entity_registry()
+            print(f"✅ Received {len(entity_registry)} standard registry entries")
+            await state_cache.update_entity_registry(entity_registry)
+        
+        # Get device registry for additional context
+        print("Fetching device registry...")
+        device_registry = await ws_client.get_device_registry()
+        print(f"✅ Received {len(device_registry)} device registry entries")
+        await state_cache.update_device_registry(device_registry)
+        
+        # Get available domains for context
+        domains = await state_cache.get_domains()
+        print(f"Available domains: {', '.join(domains[:10])}{'...' if len(domains) > 10 else ''}")
+        
+        # Define test searches to evaluate the improved search functionality
+        test_searches = [
+            {"term": "light", "domain": None, "description": "Basic domain search"},
+            {"term": "living room", "domain": None, "description": "Location search"},
+            {"term": "temperature", "domain": None, "description": "Attribute search"},
+            {"term": "motion", "domain": None, "description": "Feature search"},
+            {"term": "door", "domain": None, "description": "Device type search"},
+            {"term": "upstairs", "domain": None, "description": "Area search"},
+            {"term": "kitchen light", "domain": None, "description": "Combined location + device"},
+            {"term": "bathroom", "domain": "light", "description": "Location with domain filter"},
+            {"term": "temp", "domain": "sensor", "description": "Abbreviated term with domain filter"},
+        ]
+        
+        # Run tests and collect results
+        test_results = []
+        
+        for test_case in test_searches:
+            term = test_case["term"]
+            domain = test_case["domain"]
+            description = test_case["description"]
+            
+            print_subheader(f"Search for '{term}' {f'in domain {domain}' if domain else ''} ({description})")
+            
+            try:
+                # Perform the search
+                results = await state_cache.search_entities(term, domain)
+                
+                # Record results
+                result_summary = {
+                    "search_term": term,
+                    "domain_filter": domain,
+                    "description": description,
+                    "success": True,
+                    "match_count": len(results),
+                    "error": None
+                }
+                test_results.append(result_summary)
+                
+                # Print results
+                if results:
+                    print(f"✅ Found {len(results)} matching entities")
+                    
+                    # Show top results with enhanced information from registry
+                    for i, entity in enumerate(results[:5]):
+                        score = entity.get("score", 0)
+                        entity_id = entity.get("entity_id", "unknown")
+                        state = entity.get("state", "unknown")
+                        friendly_name = entity.get("friendly_name", entity_id)
+                        
+                        # Extract registry info for enhanced details
+                        registry_info = entity.get("registry_info", {})
+                        device_name = None
+                        area_name = None
+                        
+                        if "device" in registry_info and registry_info["device"]:
+                            device_name = registry_info["device"].get("name")
+                            
+                        if "area" in registry_info and registry_info["area"]:
+                            area_name = registry_info["area"].get("name")
+                        
+                        # Print formatted result
+                        print(f"  [{i+1}] Score: {score:.1f}, Entity: {entity_id}")
+                        print(f"      Name: {friendly_name}, State: {state}")
+                        
+                        if device_name or area_name:
+                            device_str = f"Device: {device_name}" if device_name else ""
+                            area_str = f"Area: {area_name}" if area_name else ""
+                            context_str = ", ".join(filter(None, [device_str, area_str]))
+                            print(f"      {context_str}")
+                    
+                    # Show total count if more results
+                    if len(results) > 5:
+                        print(f"  ... and {len(results) - 5} more results")
+                else:
+                    print("❌ No matches found")
+            except Exception as e:
+                print(f"❌ Search error: {e}")
+                
+                # Record error
+                result_summary = {
+                    "search_term": term,
+                    "domain_filter": domain,
+                    "description": description,
+                    "success": False,
+                    "match_count": 0,
+                    "error": str(e)
+                }
+                test_results.append(result_summary)
+        
+        # Print test summary
+        print_header("Test Summary")
+        success_count = sum(1 for result in test_results if result["success"])
+        total_count = len(test_results)
+        
+        print(f"Total tests: {total_count}")
+        print(f"Successful: {success_count}")
+        print(f"Failed: {total_count - success_count}")
+        
+        # Show any failures
+        if success_count < total_count:
+            print("\nFailure details:")
+            for i, result in enumerate([r for r in test_results if not r["success"]]):
+                domain = f" (domain: {result['domain_filter']})" if result["domain_filter"] else ""
+                print(f"  {i+1}. Term: \"{result['search_term']}\"{domain}")
+                print(f"     Error: {result['error']}")
+        
+        return success_count == total_count
+        
+    except Exception as e:
+        print(f"❌ Unexpected error during WebSocket test: {e}")
         return False
-    
-    # Print connection information
-    print(f"✅ Connected to Home Assistant MCP")
-    print(f"  Found {result.get('tools_count', 0)} tools")
-    
-    if result.get("detected_domains"):
-        print(f"  Detected domains: {', '.join(result['detected_domains'])}")
-    
-    return True
+    finally:
+        # Clean up
+        if ws_client:
+            print("\nCleaning up WebSocket connection...")
+            await ws_client.stop()
+
+async def run_tests():
+    """Run all entity search tests."""
+    websocket_result = await test_websocket_entity_search()
+    return websocket_result
 
 def main():
-    """Run the entity search test."""
-    print("=" * 60)
-    print(" Home Assistant Entity Search Test ".center(60, "="))
-    print("=" * 60)
-    
-    # First verify Home Assistant configuration
-    if not verify_ha_config():
-        print("\n⚠️  Skipping tests due to configuration issues")
-        return 1
-    
-    # Import after configuration check to avoid errors if not configured
-    from radbot.tools.mcp_utils import find_home_assistant_entities
-    
-    # You can customize these search terms
-    search_terms = [
-        "basement",
-        "plant",
-        "light",
-        "basement plant",
-        "living room"
-    ]
-    
-    test_results = []
-    
-    for term in search_terms:
-        print(f"\nSearching for: \"{term}\"")
-        print("-" * 40)
-        
-        try:
-            # Search without domain filter
-            result = find_home_assistant_entities(term)
-            
-            # Store test result
-            test_case = {
-                "search_term": term,
-                "domain_filter": None,
-                "success": result.get("success", False),
-                "match_count": result.get("match_count", 0),
-                "error": result.get("error") if not result.get("success") else None
-            }
-            test_results.append(test_case)
-            
-            if result.get("success"):
-                match_count = result.get("match_count", 0)
-                print(f"✅ Found {match_count} matches")
-                
-                if match_count > 0:
-                    print("\nTop matches:")
-                    for i, match in enumerate(result.get("matches", [])[:5]):
-                        print(f"  {i+1}. {match['entity_id']} (score: {match['score']})")
-                else:
-                    print("No matches found")
-            else:
-                print(f"❌ Search failed: {result.get('error', 'Unknown error')}")
-            
-            # Now try with domain filter for lights
-            if term != "light":  # Skip "light" term for light domain filter to avoid confusion
-                print(f"\nSearching for: \"{term}\" in domain: light")
-                print("-" * 40)
-                
-                try:
-                    light_result = find_home_assistant_entities(term, domain_filter="light")
-                    
-                    # Store test result
-                    test_case = {
-                        "search_term": term,
-                        "domain_filter": "light",
-                        "success": light_result.get("success", False),
-                        "match_count": light_result.get("match_count", 0),
-                        "error": light_result.get("error") if not light_result.get("success") else None
-                    }
-                    test_results.append(test_case)
-                    
-                    if light_result.get("success"):
-                        match_count = light_result.get("match_count", 0)
-                        print(f"✅ Found {match_count} light matches")
-                        
-                        if match_count > 0:
-                            print("\nTop light matches:")
-                            for i, match in enumerate(light_result.get("matches", [])[:5]):
-                                print(f"  {i+1}. {match['entity_id']} (score: {match['score']})")
-                        else:
-                            print("No light matches found")
-                    else:
-                        print(f"❌ Light search failed: {light_result.get('error', 'Unknown error')}")
-                except Exception as e:
-                    print(f"❌ Error during light search: {str(e)}")
-        except Exception as e:
-            print(f"❌ Error during search: {str(e)}")
-    
-    # Print test summary
-    success_count = sum(1 for result in test_results if result["success"])
-    total_count = len(test_results)
-    
-    print("\n" + "=" * 60)
-    print(" Test Summary ".center(60, "="))
-    print("=" * 60)
-    print(f"Total tests: {total_count}")
-    print(f"Successful: {success_count}")
-    print(f"Failed: {total_count - success_count}")
-    
-    # If there are failures, show details
-    if success_count < total_count:
-        print("\nFailure details:")
-        for i, result in enumerate([r for r in test_results if not r["success"]]):
-            domain = f" (domain: {result['domain_filter']})" if result["domain_filter"] else ""
-            print(f"  {i+1}. Term: \"{result['search_term']}\"{domain}")
-            print(f"     Error: {result['error']}")
-    
-    return 0 if success_count == total_count else 1
-
-if __name__ == "__main__":
+    """Main entry point."""
     try:
-        sys.exit(main())
+        return asyncio.run(run_tests())
     except KeyboardInterrupt:
         print("\nTest interrupted by user")
-        sys.exit(130)
+        return 130
     except Exception as e:
-        print(f"\n❌ Unexpected error: {str(e)}")
-        sys.exit(1)
+        print(f"\n❌ Unexpected error: {e}")
+        return 1
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)
