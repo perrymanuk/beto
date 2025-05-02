@@ -8,6 +8,7 @@ A sophisticated, modular AI agent framework leveraging Google's Agent Developmen
 - **Multiple LLM Support**: Configurable to use various Google Gemini models (Flash, Pro 2.5)
 - **Persistent Memory**: Integrated Qdrant vector database for agent memory
 - **External Integration**: MCP protocol support for connecting to services like Home Assistant
+- **Web Knowledge**: Crawl4AI integration with Qdrant-powered vector search for semantic website ingestion and knowledge retrieval
 - **Agent Communication**: Internal sub-agent communication and optional A2A protocol support
 - **Modular Design**: Clear separation of concerns for easy extension and maintenance
 
@@ -35,6 +36,15 @@ A sophisticated, modular AI agent framework leveraging Google's Agent Developmen
 Run the CLI:
 ```
 make run-cli
+```
+
+Run the web interface (with MCP filesystem support):
+```
+# Optional: Set the root directory for filesystem access
+export MCP_FS_ROOT_DIR=/path/to/accessible/directory
+
+# Run the web interface
+make run-web
 ```
 
 Run the scheduler with additional arguments:

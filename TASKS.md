@@ -48,7 +48,7 @@ This file tracks development tasks for the radbot project.
 - [x] Create test script for MCP fileserver operations
 - [ ] Implement additional MCP servers as needed
 
-## Web Search Integration
+## Web Search & Content Integration
 
 - [x] Implement Tavily search tool in web_search_tools.py
 - [x] Add necessary imports for Tavily search tool
@@ -63,7 +63,24 @@ This file tracks development tasks for the radbot project.
 - [x] Update documentation in docs/implementation for web search feature
 - [x] Create example script for web search agent
 - [x] Update root_agent to include web search capabilities
-- [ ] Test web search integration
+- [x] Test web search integration
+
+## Crawl4AI & Vector Search
+
+- [x] Implement Crawl4AI vector store using Qdrant
+- [x] Fix issue with web_query errors (400 Bad Request)
+- [x] Create document chunking strategy for better search results
+- [x] Update Crawl4AI client to store extracted content in vector DB
+- [x] Fix read_url_as_markdown_directly function to store content
+- [x] Fix ingest_url_to_knowledge_base function to use vector store
+- [x] Update web_query function to use vector search instead of direct API call
+- [x] Write implementation documentation in docs/implementation/crawl4ai.md
+- [x] Create test script for Crawl4AI vector search functionality
+- [x] Update TASKS.md to track implementation progress
+- [x] Fix Qdrant compatibility issues with count_documents method
+- [x] Fix crawl4ai_ingest_url to extract content from "markdown" field
+- [x] Pin qdrant-client version for better compatibility
+- [x] Create validation scripts for crawl4ai and Qdrant fixes
 
 ## Testing & Documentation
 

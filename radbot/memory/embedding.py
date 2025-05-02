@@ -100,13 +100,15 @@ def _initialize_sentence_transformers() -> EmbeddingModel:
         raise
 
 
-def embed_text(text: str, model: EmbeddingModel) -> List[float]:
+def embed_text(text: str, model: EmbeddingModel, is_query: bool = True, source: str = "agent_memory") -> List[float]:
     """
     Generate embedding vector for a text string.
     
     Args:
         text: The text to embed
         model: The embedding model to use
+        is_query: Whether this is a query (True) or a document (False)
+        source: The source system for the embedding ("agent_memory" or "crawl4ai")
         
     Returns:
         List of embedding vector values
@@ -114,12 +116,22 @@ def embed_text(text: str, model: EmbeddingModel) -> List[float]:
     try:
         if model.name.startswith("gemini"):
             # Gemini embedding
-            result = model.client.embed_content(
-                model="models/embedding-001",
-                content=text,
-                task_type="RETRIEVAL_QUERY",
-                title="Memory vector"
-            )
+            if is_query:
+                # For queries, use RETRIEVAL_QUERY without title
+                result = model.client.embed_content(
+                    model="models/embedding-001",
+                    content=text,
+                    task_type="RETRIEVAL_QUERY"
+                )
+            else:
+                # For documents, use RETRIEVAL_DOCUMENT with title
+                title = f"{source.replace('_', ' ').title()} Document"
+                result = model.client.embed_content(
+                    model="models/embedding-001",
+                    content=text,
+                    task_type="RETRIEVAL_DOCUMENT",
+                    title=title
+                )
             return result["embedding"]
         
         elif hasattr(model.client, 'encode'):

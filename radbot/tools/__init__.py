@@ -24,6 +24,11 @@ from radbot.tools.web_search_tools import (
     create_tavily_search_tool,
     create_tavily_search_enabled_agent
 )
+from radbot.tools.mcp_crawl4ai_client import (
+    create_crawl4ai_toolset,
+    create_crawl4ai_enabled_agent,
+    test_crawl4ai_connection
+)
 
 # Export tools for easy import
 __all__ = [
@@ -52,4 +57,9 @@ __all__ = [
     'get_forecast',
     'format_weather_response',
     'format_forecast_response',
+    
+    # Crawl4AI tools
+    'create_crawl4ai_toolset',
+    'create_crawl4ai_enabled_agent',
+    'test_crawl4ai_connection',
 ]

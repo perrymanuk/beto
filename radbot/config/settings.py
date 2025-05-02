@@ -44,6 +44,9 @@ class ConfigManager:
             # Primary model for main agent (default to Pro 2.5)
             "main_model": os.getenv("RADBOT_MAIN_MODEL", "gemini-2.5-pro"),
             
+            # Also check GEMINI_MODEL env var for compatibility 
+            "gemini_model": os.getenv("GEMINI_MODEL"),
+            
             # Model for simpler sub-agents (default to Flash)
             "sub_agent_model": os.getenv("RADBOT_SUB_MODEL", "gemini-2.0-flash"),
             
@@ -102,10 +105,18 @@ class ConfigManager:
         """
         Get the main agent model name.
         
+        Order of precedence:
+        1. RADBOT_MAIN_MODEL env var 
+        2. GEMINI_MODEL env var
+        3. Default model (gemini-2.5-pro)
+        
         Returns:
             The configured main model name
         """
-        return self.model_config["main_model"]
+        # First try RADBOT_MAIN_MODEL, then GEMINI_MODEL, then default
+        return (self.model_config["main_model"] or 
+                self.model_config.get("gemini_model") or 
+                "gemini-2.5-pro")
     
     def get_sub_agent_model(self) -> str:
         """

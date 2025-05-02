@@ -263,7 +263,7 @@ def create_find_ha_entities_tool():
 
 
 # Create a pure function version of the search tool
-def search_home_assistant_entities(search_term: str, domain_filter: str = None) -> Dict[str, Any]:
+def search_home_assistant_entities(search_term: str, domain_filter: Optional[str] = None) -> Dict[str, Any]:
     """
     Search for Home Assistant entities by name or area.
     

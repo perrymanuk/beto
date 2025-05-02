@@ -22,12 +22,16 @@ classifiers = [
 dependencies = [
     "google-adk>=0.3.0",
     "google-generativeai>=0.8.5",
-    "qdrant-client>=1.14.2",
+    "qdrant-client==1.7.0",  # Pinned to a version that works well with our implementation
     "modelcontextprotocol>=0.1.0",
     "zoneinfo; python_version < '3.9'",
     "tzdata",
     "pydantic>=2.11.4",
     "python-dotenv>=1.1.0",
+    "nest-asyncio>=1.6.0",  # Required for MCP fileserver to work in running event loops
+    "requests>=2.31.0",     # Required for Crawl4AI API calls
+    "pymilvus>=2.4.0",      # Milvus client for vector database
+    "sentence-transformers>=2.5.0",  # For generating embeddings
 ]
 
 [project.optional-dependencies]

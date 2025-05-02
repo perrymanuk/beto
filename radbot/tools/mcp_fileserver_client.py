@@ -43,6 +43,12 @@ def get_fileserver_config() -> Tuple[Optional[str], bool, bool]:
     allow_write = allow_write_str in ("true", "yes", "1", "t", "y")
     allow_delete = allow_delete_str in ("true", "yes", "1", "t", "y")
     
+    # Log configuration
+    if root_dir:
+        logger.info(f"MCP Fileserver Config: root_dir={root_dir}, allow_write={allow_write}, allow_delete={allow_delete}")
+    else:
+        logger.info("MCP Fileserver Config: root_dir not set (MCP_FS_ROOT_DIR environment variable not found)")
+    
     return root_dir, allow_write, allow_delete
 
 async def create_fileserver_toolset_async() -> Tuple[Optional[List], Optional[contextlib.AsyncExitStack]]:
@@ -107,28 +113,65 @@ def create_fileserver_toolset() -> Optional[List]:
     Create an MCPToolset for connecting to the MCP fileserver.
     
     This function is a synchronous wrapper around create_fileserver_toolset_async.
+    It handles both cases: when called from a synchronous context and when called
+    from within an existing event loop.
     
     Returns:
         List: The list of MCP fileserver tools, or None if configuration fails
     """
     global _global_exit_stack
     
-    # Run in an asyncio event loop
+    print("SPECIAL DEBUG: Inside create_fileserver_toolset()")
+    
+    # Log current environment variables
+    root_dir = os.environ.get("MCP_FS_ROOT_DIR")
+    print(f"SPECIAL DEBUG: MCP_FS_ROOT_DIR={root_dir}")
+    
+    # Check if we're running in an event loop
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
+        print("SPECIAL DEBUG: Running in existing event loop, attempting to use nest_asyncio")
+        logger.info("Running in existing event loop, using nest_asyncio")
+        
+        # We're in an event loop, so we need to use nest_asyncio
+        try:
+            import nest_asyncio
+            nest_asyncio.apply()
+            print("SPECIAL DEBUG: Successfully applied nest_asyncio")
+            logger.info("Applied nest_asyncio")
+        except ImportError:
+            print("SPECIAL DEBUG: nest_asyncio not available!")
+            logger.warning("nest_asyncio not available. Cannot create MCP fileserver tools in a running event loop.")
+            logger.warning("Please install nest_asyncio package: pip install nest_asyncio")
+            return None
+        
+        # Now we can call our async function within this loop
+        print("SPECIAL DEBUG: About to call asyncio.run(create_fileserver_toolset_async())")
+        tools, exit_stack = asyncio.run(create_fileserver_toolset_async())
+        
     except RuntimeError:
-        # If there is no event loop, create one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Not in an event loop, we can create our own
+        print("SPECIAL DEBUG: Not running in an event loop, creating a new one")
+        logger.info("Not running in an event loop, creating a new one")
+        # Run in a new asyncio event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # If there is no event loop, create one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        print("SPECIAL DEBUG: About to call loop.run_until_complete(create_fileserver_toolset_async())")
+        tools, exit_stack = loop.run_until_complete(create_fileserver_toolset_async())
     
-    tools, exit_stack = loop.run_until_complete(create_fileserver_toolset_async())
-    
+    # Check if we got valid tools and exit_stack
     if tools is None or exit_stack is None:
+        logger.warning("Failed to create MCP fileserver tools or exit stack")
         return None
     
     # Store the exit stack in the global variable to keep the server alive
     _global_exit_stack = exit_stack
-    logger.info("Stored MCP fileserver exit stack in global variable")
+    logger.info(f"Stored MCP fileserver exit stack in global variable, {len(tools)} tools created")
     
     # Return the tools directly
     return tools

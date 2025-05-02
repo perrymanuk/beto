@@ -18,7 +18,7 @@ help:
 	@echo "lint           : Run all linting checks (flake8, mypy, black, isort)"
 	@echo "format         : Auto-format code with black and isort"
 	@echo "run-cli        : Start the radbot CLI interface"
-	@echo "run-web        : Start the radbot web interface using ADK"
+	@echo "run-web        : Start the radbot web interface using ADK (with MCP fileserver support)"
 	@echo "run-scheduler  : Run the scheduler with optional arguments (use ARGS=\"--your-args\")"
 	@echo "clean          : Remove build artifacts and cache files"
 	@echo ""
@@ -58,7 +58,7 @@ format:
 run-cli:
 	$(PYTHON) -m radbot.cli.main
 
-run-web:
+run-web: setup
 	$(ADK) web
 
 run-scheduler:

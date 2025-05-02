@@ -51,3 +51,4 @@ For example:
 3. Use HassTurnOff with the exact entity_id from search results 
 4. Report what you did in your persona style
 
+

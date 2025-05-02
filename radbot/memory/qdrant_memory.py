@@ -310,8 +310,8 @@ class QdrantMemoryService(BaseMemoryService):
         # Create a unique ID for the point
         point_id = str(uuid.uuid4())
         
-        # Generate embedding for the text
-        vector = embed_text(text, self.embedding_model)
+        # Generate embedding for the text (as a document for agent_memory)
+        vector = embed_text(text, self.embedding_model, is_query=False, source="agent_memory")
         
         # Get current timestamp in ISO format
         import datetime
@@ -360,8 +360,8 @@ class QdrantMemoryService(BaseMemoryService):
             List of relevant memory entries
         """
         try:
-            # Generate embedding for the query
-            query_vector = embed_text(query, self.embedding_model)
+            # Generate embedding for the query in the agent_memory context
+            query_vector = embed_text(query, self.embedding_model, is_query=True, source="agent_memory")
             
             # Create the filter
             must_conditions = [
