@@ -1,0 +1,53 @@
+{
+  "title": "UserInfo",
+  "type": "object",
+  "description": "Schema for structured user information extraction",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "User's name"
+    },
+    "preferences": {
+      "type": "object",
+      "description": "User preferences detected from conversation",
+      "properties": {
+        "communication_style": {
+          "type": "string",
+          "description": "Preferred communication style (formal, casual, technical, simple)",
+          "enum": ["formal", "casual", "technical", "simple"]
+        },
+        "interests": {
+          "type": "array",
+          "description": "Topics the user has shown interest in",
+          "items": {
+            "type": "string"
+          }
+        },
+        "response_length": {
+          "type": "string",
+          "description": "Preferred length of responses",
+          "enum": ["brief", "detailed", "comprehensive"]
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "description": "Contextual information about the user",
+      "properties": {
+        "location": {
+          "type": "string",
+          "description": "User's mentioned location"
+        },
+        "time_zone": {
+          "type": "string",
+          "description": "User's time zone if mentioned"
+        },
+        "current_task": {
+          "type": "string",
+          "description": "Current task or project the user is working on"
+        }
+      }
+    }
+  },
+  "required": ["name"]
+}

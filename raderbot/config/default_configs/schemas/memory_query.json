@@ -1,0 +1,22 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "MemoryQueryInput",
+    "type": "object",
+    "description": "Schema for memory query input",
+    "required": ["query", "user_id"],
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "The search query."
+        },
+        "user_id": {
+            "type": "string",
+            "description": "The user ID to filter memory by."
+        },
+        "max_results": {
+            "type": "integer",
+            "description": "Maximum number of results to return.",
+            "default": 5
+        }
+    }
+}

@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "raderbot"
+version = "0.1.0"
+authors = [
+    {name = "Perry Manuk", email = "perry.manuk@example.com"},
+]
+description = "A modular AI agent framework using Google ADK, Qdrant, MCP, and A2A"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "google-adk>=0.3.0",
+    "google-generativeai>=0.8.5",
+    "qdrant-client>=1.14.2",
+    "modelcontextprotocol>=0.1.0",
+    "zoneinfo; python_version < '3.9'",
+    "tzdata",
+    "pydantic>=2.11.4",
+    "python-dotenv>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0.0",
+    "isort>=5.12.0",
+    "flake8>=7.0.0",
+    "mypy>=1.5.0",
+    "pytest>=8.3.5",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.10.0",
+]
+
+web = [
+    "langchain-community>=0.2.16",
+    "tavily-python>=0.3.8",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/perrymanuk/raderbot"
+"Bug Tracker" = "https://github.com/perrymanuk/raderbot/issues"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
