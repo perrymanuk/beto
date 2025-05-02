@@ -27,7 +27,7 @@ load_dotenv()
 def setup_test_agent():
     """Set up a test agent with the weather tool."""
     # Import the weather tool
-    from raderbot.tools.basic_tools import get_weather, get_current_time
+    from radbot.tools.basic_tools import get_weather, get_current_time
     
     # Create an agent with just the weather tool
     agent = Agent(

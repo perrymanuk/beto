@@ -16,10 +16,10 @@ The agent framework consists of several key components:
 The main agent module defines the core agent and supporting structures.
 
 ```python
-# raderbot/agent.py
+# radbot/agent.py
 
 """
-Core agent implementation for the RaderBot framework.
+Core agent implementation for the radbot framework.
 """
 
 import os
@@ -60,9 +60,9 @@ You are the central coordinator for an AI assistant system. Your primary role is
 # Select the Gemini model based on environment, defaulting to Pro 2.5
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 
-class RaderBotAgent:
+class radbotAgent:
     """
-    Main agent class for the RaderBot framework.
+    Main agent class for the radbot framework.
     
     This class encapsulates the ADK agent, runner, and session management.
     It provides a unified interface for interacting with the agent system.
@@ -75,7 +75,7 @@ class RaderBotAgent:
         model: str = GEMINI_MODEL,
     ):
         """
-        Initialize the RaderBot agent.
+        Initialize the radbot agent.
         
         Args:
             session_service: Optional custom session service for conversation state
@@ -97,7 +97,7 @@ class RaderBotAgent:
         # Initialize the runner with the agent
         self.runner = Runner(
             agent=self.root_agent,
-            app_name="raderbot",
+            app_name="radbot",
             session_service=self.session_service
         )
     
@@ -167,9 +167,9 @@ def create_agent(
     session_service: Optional[SessionService] = None,
     tools: Optional[List[Any]] = None,
     model: str = GEMINI_MODEL
-) -> RaderBotAgent:
+) -> radbotAgent:
     """
-    Create a configured RaderBot agent.
+    Create a configured radbot agent.
     
     Args:
         session_service: Optional session service for conversation state
@@ -177,9 +177,9 @@ def create_agent(
         model: Gemini model to use
         
     Returns:
-        A configured RaderBotAgent instance
+        A configured radbotAgent instance
     """
-    return RaderBotAgent(session_service=session_service, tools=tools, model=model)
+    return radbotAgent(session_service=session_service, tools=tools, model=model)
 ```
 
 ## Basic CLI Interface (`cli.py`)
@@ -187,20 +187,20 @@ def create_agent(
 This module provides a simple command-line interface for interacting with the agent.
 
 ```python
-# raderbot/cli.py
+# radbot/cli.py
 
 """
-Command-line interface for interacting with the RaderBot agent.
+Command-line interface for interacting with the radbot agent.
 """
 
 import sys
 import uuid
 
-from raderbot.agent import create_agent
+from radbot.agent import create_agent
 
 def main():
     """
-    Run the RaderBot CLI interface.
+    Run the radbot CLI interface.
     """
     # Generate a random user ID for this session
     user_id = str(uuid.uuid4())
@@ -208,7 +208,7 @@ def main():
     # Create the agent
     agent = create_agent()
     
-    print("RaderBot Agent CLI")
+    print("radbot Agent CLI")
     print("Type 'exit' or 'quit' to end the session")
     print("Type your message and press Enter to interact with the agent")
     print("-" * 50)
@@ -220,13 +220,13 @@ def main():
         
         # Check for exit command
         if user_input.lower() in ["exit", "quit"]:
-            print("Exiting RaderBot CLI. Goodbye!")
+            print("Exiting radbot CLI. Goodbye!")
             sys.exit(0)
         
         # Process the message
         try:
             response = agent.process_message(user_id, user_input)
-            print(f"\nRaderBot: {response}")
+            print(f"\nradbot: {response}")
         except Exception as e:
             print(f"\nError: {str(e)}")
 
@@ -239,13 +239,13 @@ if __name__ == "__main__":
 This module provides the entry point for running the agent as a command-line application.
 
 ```python
-# raderbot/__main__.py
+# radbot/__main__.py
 
 """
-Entry point for running the RaderBot agent directly.
+Entry point for running the radbot agent directly.
 """
 
-from raderbot.cli import main
+from radbot.cli import main
 
 if __name__ == "__main__":
     main()
@@ -254,15 +254,15 @@ if __name__ == "__main__":
 ## Package Initialization (`__init__.py`)
 
 ```python
-# raderbot/__init__.py
+# radbot/__init__.py
 
 """
-RaderBot - A modular AI agent framework using Google ADK, Qdrant, MCP, and A2A.
+radbot - A modular AI agent framework using Google ADK, Qdrant, MCP, and A2A.
 """
 
 __version__ = "0.1.0"
 
-from raderbot.agent import create_agent, RaderBotAgent
+from radbot.agent import create_agent, radbotAgent
 ```
 
 ## Integration with Makefile
@@ -275,7 +275,7 @@ Update the Makefile to include commands for running the CLI:
 # ...existing commands...
 
 run-cli:
-	python -m raderbot
+	python -m radbot
 
 # ...
 ```
@@ -284,7 +284,7 @@ run-cli:
 
 ### Agent Structure
 
-- **RaderBotAgent Class**: Encapsulates the ADK components (agent, runner, session service) into a single, easy-to-use class that handles the initialization and interaction details.
+- **radbotAgent Class**: Encapsulates the ADK components (agent, runner, session service) into a single, easy-to-use class that handles the initialization and interaction details.
 - **Factory Function**: The `create_agent()` function provides a simple way to instantiate a configured agent without needing to directly use the class constructor.
 - **Modular Tool Integration**: The `add_tool()` and `add_tools()` methods allow for dynamic addition of tools, enabling incremental enhancement of agent capabilities.
 - **Sub-Agent Support**: The `add_sub_agent()` method facilitates the creation of a hierarchical agent structure with specialized sub-agents.

@@ -1,10 +1,10 @@
-# RaderBot Framework Documentation
+# radbot Framework Documentation
 
-This document provides an overview of the RaderBot Framework, a modular AI agent system built with Google's Agent Development Kit (ADK), Qdrant vector database, and Model Context Protocol (MCP).
+This document provides an overview of the radbot Framework, a modular AI agent system built with Google's Agent Development Kit (ADK), Qdrant vector database, and Model Context Protocol (MCP).
 
 ## System Architecture
 
-RaderBot is designed as a modular, extensible framework with the following core components:
+radbot is designed as a modular, extensible framework with the following core components:
 
 1. **Agent System**: Core agent orchestration using Google's ADK
 2. **Memory System**: Persistent agent memory using Qdrant vector database
@@ -15,7 +15,7 @@ RaderBot is designed as a modular, extensible framework with the following core 
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│                        RaderBot Framework                     │
+│                        radbot Framework                     │
 ├───────────────┬───────────────────┬───────────────┬───────────┤
 │  Agent System │   Memory System   │  Tools System │   MCP     │
 │     (ADK)     │     (Qdrant)      │     (ADK)     │ Integration│
@@ -39,7 +39,7 @@ The agent system is built on Google's Agent Development Kit (ADK) and provides:
 - **Agent Manager**: Handles agent creation, configuration, and communication
 
 Key classes:
-- `RaderBotAgent`: Main agent wrapper
+- `radbotAgent`: Main agent wrapper
 - `AgentManager`: Manages agent hierarchies and communication
 
 ### 2. Memory System
@@ -106,8 +106,8 @@ Key classes:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-username/raderbot.git
-   cd raderbot
+   git clone https://github.com/your-username/radbot.git
+   cd radbot
    ```
 
 2. **Set up the environment**:
@@ -143,7 +143,7 @@ Key classes:
 ### Basic Interaction
 
 ```python
-from raderbot.agent import create_agent
+from radbot.agent import create_agent
 
 # Create an agent with default configuration
 agent = create_agent()
@@ -156,7 +156,7 @@ print(response)
 ### Memory-Enabled Agent
 
 ```python
-from raderbot.agent_factory import create_memory_enabled_agent
+from radbot.agent_factory import create_memory_enabled_agent
 
 # Create an agent with memory capabilities
 agent = create_memory_enabled_agent()
@@ -169,8 +169,8 @@ print(response)
 ### Home Assistant Integration
 
 ```python
-from raderbot.agent import create_agent
-from raderbot.tools.mcp_tools import home_assistant_mcp
+from radbot.agent import create_agent
+from radbot.tools.mcp_tools import home_assistant_mcp
 
 # Create an agent
 agent = create_agent()
@@ -190,7 +190,7 @@ print(response)
 ### Adding Custom Tools
 
 ```python
-from raderbot.agent import create_agent
+from radbot.agent import create_agent
 
 # Define a custom tool
 def my_custom_tool(parameter: str) -> dict:
@@ -214,10 +214,10 @@ agent = create_agent(tools=[my_custom_tool])
 
 ### Custom Agent Instructions
 
-Create a custom instruction file in `raderbot/config/default_configs/instructions/my_custom_agent.md` and use it:
+Create a custom instruction file in `radbot/config/default_configs/instructions/my_custom_agent.md` and use it:
 
 ```python
-from raderbot.agent import create_agent
+from radbot.agent import create_agent
 
 # Create an agent with custom instruction
 agent = create_agent(instruction_name="my_custom_agent")
@@ -235,8 +235,8 @@ The framework includes comprehensive error handling:
 Example error handling:
 
 ```python
-from raderbot.tools.mcp_tools import home_assistant_mcp
-from raderbot.tools.mcp_utils import test_home_assistant_connection
+from radbot.tools.mcp_tools import home_assistant_mcp
+from radbot.tools.mcp_utils import test_home_assistant_connection
 
 # Test the Home Assistant connection
 result = test_home_assistant_connection()

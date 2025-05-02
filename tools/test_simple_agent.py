@@ -10,7 +10,7 @@ import sys
 import logging
 import json
 
-# Add the parent directory to the path so we can import raderbot modules
+# Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv

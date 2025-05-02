@@ -1,10 +1,10 @@
 # Inter-Agent Communication Strategy
 
-This document details the implementation of communication strategies between agents within the RaderBot framework.
+This document details the implementation of communication strategies between agents within the radbot framework.
 
 ## Communication Architecture Overview
 
-The RaderBot framework supports three primary methods of inter-agent communication:
+The radbot framework supports three primary methods of inter-agent communication:
 
 1. **Agent Tool Call**: Main agent calls a sub-agent directly as a tool
 2. **Agent Transfer**: Main agent transfers control to a specialized sub-agent
@@ -15,17 +15,17 @@ The RaderBot framework supports three primary methods of inter-agent communicati
 ### 1. Sub-Agent Classes (`agents/sub_agents.py`)
 
 ```python
-# raderbot/agents/sub_agents.py
+# radbot/agents/sub_agents.py
 
 """
-Sub-agent implementations for the RaderBot framework.
+Sub-agent implementations for the radbot framework.
 """
 
 from typing import Optional, Dict, Any, List
 import logging
 
 from google.adk.agents import Agent
-from raderbot.config import config_manager
+from radbot.config import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +83,10 @@ def create_home_assistant_agent(ha_tools: Optional[List[Any]] = None) -> Agent:
 ### 2. Agent Tool Wrappers (`agents/agent_tools.py`)
 
 ```python
-# raderbot/agents/agent_tools.py
+# radbot/agents/agent_tools.py
 
 """
-Agent tool wrappers for the RaderBot framework.
+Agent tool wrappers for the radbot framework.
 
 This module provides utilities to wrap agents as callable tools.
 """
@@ -124,7 +124,7 @@ def wrap_agents_as_tools(agents: List[Agent]) -> List[AgentTool]:
 ### 3. Agent Manager for Transfer (`agents/manager.py`)
 
 ```python
-# raderbot/agents/manager.py
+# radbot/agents/manager.py
 
 """
 Agent manager for handling agent hierarchies and transfers.
@@ -138,8 +138,8 @@ from google.adk.runners import Runner, LlmAgentRunner
 from google.adk.sessions import SessionService, InMemorySessionService
 from google.adk.autoflow import AutoFlow
 
-from raderbot.config import config_manager
-from raderbot.agents.sub_agents import (
+from radbot.config import config_manager
+from radbot.agents.sub_agents import (
     create_summarizer_agent,
     create_research_agent,
     create_home_assistant_agent
@@ -177,7 +177,7 @@ class AgentManager:
         # Initialize the runner with AutoFlow for agent transfers
         self.runner = Runner(
             agent=self.main_agent,
-            app_name="raderbot",
+            app_name="radbot",
             session_service=self.session_service,
             flow=AutoFlow()  # Enable agent transfers
         )
@@ -256,9 +256,9 @@ class AgentManager:
 ```python
 # Example usage
 
-from raderbot.agents.manager import AgentManager
-from raderbot.tools.basic_tools import get_current_time, get_weather
-from raderbot.agents.agent_tools import wrap_agent_as_tool
+from radbot.agents.manager import AgentManager
+from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.agents.agent_tools import wrap_agent_as_tool
 
 # Create the agent manager with basic tools
 manager = AgentManager(tools=[get_current_time, get_weather])
@@ -280,7 +280,7 @@ response = manager.process_message("user123", "What's the weather in London?")
 Agents can communicate implicitly through the shared session state:
 
 ```python
-# raderbot/tools/state_tools.py
+# radbot/tools/state_tools.py
 
 """
 Tools for managing shared session state as a communication mechanism.

@@ -1,4 +1,4 @@
-# Raderbot: Modular AI Agent Framework
+# Radbot: Modular AI Agent Framework
 
 A sophisticated, modular AI agent framework leveraging Google's Agent Development Kit (ADK), Qdrant vector database, Model Context Protocol (MCP), and Agent2Agent (A2A) protocols.
 
@@ -15,8 +15,8 @@ A sophisticated, modular AI agent framework leveraging Google's Agent Developmen
 
 1. Clone the repository:
    ```
-   git clone https://github.com/perrymanuk/raderbot.git
-   cd raderbot
+   git clone https://github.com/perrymanuk/radbot.git
+   cd radbot
    ```
 
 2. Set up your environment:
@@ -53,10 +53,10 @@ make run-scheduler ARGS="--additional-args"
 
 ## Project Structure
 
-- `/raderbot/agent`: Core agent logic and definitions
-- `/raderbot/tools`: Tool implementations (time, weather, etc.)
-- `/raderbot/memory`: Memory system with Qdrant integration
-- `/raderbot/cli`: Command-line interfaces and runners
+- `/radbot/agent`: Core agent logic and definitions
+- `/radbot/tools`: Tool implementations (time, weather, etc.)
+- `/radbot/memory`: Memory system with Qdrant integration
+- `/radbot/cli`: Command-line interfaces and runners
 - `/docs/implementation`: Implementation documentation
 - `/tests`: Unit and integration tests
 

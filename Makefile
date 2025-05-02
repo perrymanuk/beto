@@ -9,7 +9,7 @@ ADK := adk
 
 # Help target that lists all available targets with descriptions
 help:
-	@echo "RaderBot Makefile Targets:"
+	@echo "radbot Makefile Targets:"
 	@echo "=========================="
 	@echo "setup          : Install development dependencies using uv"
 	@echo "test           : Run all tests"
@@ -17,8 +17,8 @@ help:
 	@echo "test-integration: Run only integration tests"
 	@echo "lint           : Run all linting checks (flake8, mypy, black, isort)"
 	@echo "format         : Auto-format code with black and isort"
-	@echo "run-cli        : Start the RaderBot CLI interface"
-	@echo "run-web        : Start the RaderBot web interface using ADK"
+	@echo "run-cli        : Start the radbot CLI interface"
+	@echo "run-web        : Start the radbot web interface using ADK"
 	@echo "run-scheduler  : Run the scheduler with optional arguments (use ARGS=\"--your-args\")"
 	@echo "clean          : Remove build artifacts and cache files"
 	@echo ""
@@ -46,23 +46,23 @@ test-integration:
 	$(PYTEST) tests/integration
 
 lint:
-	flake8 raderbot tests
-	mypy raderbot tests
-	black --check raderbot tests
-	isort --check raderbot tests
+	flake8 radbot tests
+	mypy radbot tests
+	black --check radbot tests
+	isort --check radbot tests
 
 format:
-	black raderbot tests
-	isort raderbot tests
+	black radbot tests
+	isort radbot tests
 
 run-cli:
-	$(PYTHON) -m raderbot.cli.main
+	$(PYTHON) -m radbot.cli.main
 
 run-web:
 	$(ADK) web
 
 run-scheduler:
-	$(PYTHON) -m raderbot.cli.scheduler $(ARGS)
+	$(PYTHON) -m radbot.cli.scheduler $(ARGS)
 
 clean:
 	rm -rf build/

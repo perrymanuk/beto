@@ -14,7 +14,7 @@ from qdrant_client import QdrantClient, models
 
 from google.adk.sessions import Session
 from google.adk.memory import BaseMemoryService
-from raderbot.memory.embedding import get_embedding_model, embed_text
+from radbot.memory.embedding import get_embedding_model, embed_text
 
 # Load environment variables
 load_dotenv()

@@ -1,5 +1,5 @@
 """
-Tests for RaderBotAgent integration with ConfigManager.
+Tests for radbotAgent integration with ConfigManager.
 """
 import os
 import tempfile
@@ -12,14 +12,14 @@ from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 
-from raderbot.agent.agent import (
-    RaderBotAgent, 
+from radbot.agent.agent import (
+    radbotAgent, 
     AgentFactory, 
     create_agent, 
     create_runner,
     FALLBACK_INSTRUCTION
 )
-from raderbot.config.settings import ConfigManager
+from radbot.config.settings import ConfigManager
 
 
 class TestAgentConfigIntegration:
@@ -61,7 +61,7 @@ class TestAgentConfigIntegration:
     def test_agent_init_with_config(self):
         """Test agent initialization with config manager."""
         # Create agent with config
-        agent = RaderBotAgent(
+        agent = radbotAgent(
             config=self.config,
             instruction_name="test_instruction"
         )
@@ -74,7 +74,7 @@ class TestAgentConfigIntegration:
     def test_agent_init_fallback(self):
         """Test agent fallback when instruction not found."""
         # Create agent with non-existent instruction name
-        agent = RaderBotAgent(
+        agent = radbotAgent(
             config=self.config,
             instruction_name="non_existent"
         )
@@ -136,14 +136,14 @@ class TestAgentConfigIntegration:
         )
         
         # Verify agent configuration
-        assert isinstance(agent, RaderBotAgent)
+        assert isinstance(agent, radbotAgent)
         assert "You are a test agent" in agent.root_agent.instruction
         assert agent.model == "test-main-model"
         
     def test_update_instruction_by_name(self):
         """Test updating instruction by name."""
         # Create agent
-        agent = RaderBotAgent(config=self.config)
+        agent = radbotAgent(config=self.config)
         
         # Update instruction by name
         agent.update_instruction(instruction_name="test_instruction")
@@ -155,7 +155,7 @@ class TestAgentConfigIntegration:
     def test_update_instruction_direct(self):
         """Test updating instruction directly."""
         # Create agent
-        agent = RaderBotAgent(config=self.config)
+        agent = radbotAgent(config=self.config)
         
         # Update instruction directly
         new_instruction = "This is a new direct instruction."
@@ -168,7 +168,7 @@ class TestAgentConfigIntegration:
     def test_update_instruction_error(self):
         """Test error handling when updating instruction."""
         # Create agent
-        agent = RaderBotAgent(config=self.config)
+        agent = radbotAgent(config=self.config)
         
         # Test with missing parameters
         with pytest.raises(ValueError):
@@ -181,7 +181,7 @@ class TestAgentConfigIntegration:
     def test_get_configuration(self):
         """Test getting agent configuration."""
         # Create agent
-        agent = RaderBotAgent(
+        agent = radbotAgent(
             config=self.config,
             instruction_name="test_instruction"
         )
@@ -203,7 +203,7 @@ class TestAgentConfigIntegration:
         mock_tool2 = MagicMock()
         
         # Create agent with tools
-        agent = RaderBotAgent(
+        agent = radbotAgent(
             config=self.config,
             tools=[mock_tool1, mock_tool2]
         )

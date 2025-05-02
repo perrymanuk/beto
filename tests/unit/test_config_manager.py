@@ -8,7 +8,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, mock_open
 
-from raderbot.config.settings import ConfigManager
+from radbot.config.settings import ConfigManager
 
 # Test fixture for a temporary config directory
 @pytest.fixture
@@ -53,8 +53,8 @@ def test_load_model_config():
     
     # Test with environment variables
     with patch.dict(os.environ, {
-        "RADERBOT_MAIN_MODEL": "test-model",
-        "RADERBOT_SUB_MODEL": "test-sub-model",
+        "RADBOT_MAIN_MODEL": "test-model",
+        "RADBOT_SUB_MODEL": "test-sub-model",
         "GOOGLE_GENAI_USE_VERTEXAI": "TRUE"
     }):
         config = ConfigManager()
@@ -91,13 +91,13 @@ def test_get_schema_config(temp_config_dir):
 
 def test_get_main_model():
     """Test retrieving the main model name."""
-    with patch.dict(os.environ, {"RADERBOT_MAIN_MODEL": "custom-model"}):
+    with patch.dict(os.environ, {"RADBOT_MAIN_MODEL": "custom-model"}):
         config = ConfigManager()
         assert config.get_main_model() == "custom-model"
 
 def test_get_sub_agent_model():
     """Test retrieving the sub-agent model name."""
-    with patch.dict(os.environ, {"RADERBOT_SUB_MODEL": "custom-sub-model"}):
+    with patch.dict(os.environ, {"RADBOT_SUB_MODEL": "custom-sub-model"}):
         config = ConfigManager()
         assert config.get_sub_agent_model() == "custom-sub-model"
 

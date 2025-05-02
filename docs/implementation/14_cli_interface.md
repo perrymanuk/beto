@@ -1,19 +1,19 @@
 # CLI Interface Implementation
 
-This document details the implementation of the command-line interface (CLI) for the RaderBot agent framework, as well as the ADK web interface.
+This document details the implementation of the command-line interface (CLI) for the radbot agent framework, as well as the ADK web interface.
 
 ## Overview
 
-The CLI interface provides a simple, interactive way to test and use the RaderBot agent. It serves both as a development tool for testing new features and as a basic user interface for interacting with the agent.
+The CLI interface provides a simple, interactive way to test and use the radbot agent. It serves both as a development tool for testing new features and as a basic user interface for interacting with the agent.
 
 ## Key Components
 
 ### 1. Agent Setup
 
-The CLI initializes and configures the RaderBot agent with appropriate tools:
+The CLI initializes and configures the radbot agent with appropriate tools:
 
 ```python
-def setup_agent() -> Optional[RaderBotAgent]:
+def setup_agent() -> Optional[radbotAgent]:
     """Set up and configure the agent with tools and memory."""
     try:
         # Configure basic tools
@@ -30,7 +30,7 @@ def setup_agent() -> Optional[RaderBotAgent]:
 
 This function:
 - Loads and configures the basic tools (time and weather)
-- Creates an instance of RaderBotAgent using the factory function
+- Creates an instance of radbotAgent using the factory function
 - Handles any exceptions that might occur during setup
 - Returns the configured agent or None if setup fails
 
@@ -42,7 +42,7 @@ The CLI provides a simple text-based interface with commands:
 def display_welcome_message() -> None:
     """Display welcome message and instructions."""
     print("\n" + "=" * 60)
-    print("RaderBot CLI Interface".center(60))
+    print("radbot CLI Interface".center(60))
     print("=" * 60)
     print("Type your messages and press Enter to interact with the agent")
     print("Commands:")
@@ -57,10 +57,10 @@ def display_welcome_message() -> None:
 The CLI supports special commands prefixed with a slash (/):
 
 ```python
-def process_commands(command: str, agent: RaderBotAgent, user_id: str) -> bool:
+def process_commands(command: str, agent: radbotAgent, user_id: str) -> bool:
     """Process special commands."""
     if command in ["exit", "quit"]:
-        print("\nExiting RaderBot CLI. Goodbye!")
+        print("\nExiting radbot CLI. Goodbye!")
         return True
     elif command == "reset":
         try:
@@ -120,7 +120,7 @@ def main():
             
             # Process regular message
             response = agent.process_message(user_id, user_input)
-            print(f"\nRaderBot: {response}")
+            print(f"\nradbot: {response}")
             
         except KeyboardInterrupt:
             print("\n\nSession interrupted. Exiting.")
@@ -171,27 +171,27 @@ make run-cli
 Or directly with:
 
 ```bash
-python -m raderbot.cli.main
+python -m radbot.cli.main
 ```
 
 ## ADK Web Interface
 
-Google ADK provides a web interface that can be used to interact with RaderBot through a browser. The web interface can be launched using:
+Google ADK provides a web interface that can be used to interact with radbot through a browser. The web interface can be launched using:
 
 ```bash
 make run-web        # Using the provided Makefile target
 # or
-adk web -a raderbot  # Directly using the ADK command
+adk web -a radbot  # Directly using the ADK command
 ```
 
 ### ADK Web Requirements
 
-For the ADK web interface to work properly, the agent module must expose a `root_agent` attribute. RaderBot implements this in `raderbot/agent/__init__.py` by creating and exporting a default agent:
+For the ADK web interface to work properly, the agent module must expose a `root_agent` attribute. radbot implements this in `radbot/agent/__init__.py` by creating and exporting a default agent:
 
 ```python
 # Setup a default root_agent for ADK web command
 root_agent = AgentFactory.create_root_agent(
-    name="raderbot_web",
+    name="radbot_web",
     tools=[get_current_time, get_weather]
 )
 
@@ -202,17 +202,17 @@ __all__ = [
 ]
 ```
 
-When `adk web -a raderbot` is run, the ADK web server:
+When `adk web -a radbot` is run, the ADK web server:
 
-1. Imports the `raderbot` module
-2. Looks for `raderbot.agent.root_agent`
+1. Imports the `radbot` module
+2. Looks for `radbot.agent.root_agent`
 3. Uses this agent to handle web UI interactions
 
 ### Customizing the Web Agent
 
 To customize the web agent with additional tools or different configurations:
 
-1. Modify the `root_agent` initialization in `raderbot/agent/__init__.py`
+1. Modify the `root_agent` initialization in `radbot/agent/__init__.py`
 2. Add any necessary imports for tools or sub-agents
 3. Restart the web server to apply changes
 
@@ -229,11 +229,11 @@ Potential future enhancements for the CLI interface:
 
 ## Integration with Overall System
 
-The CLI and ADK web interfaces serve as multiple possible interfaces to the RaderBot agent system. They demonstrate how the RaderBotAgent class can be integrated into different environments while maintaining consistent behavior.
+The CLI and ADK web interfaces serve as multiple possible interfaces to the radbot agent system. They demonstrate how the radbotAgent class can be integrated into different environments while maintaining consistent behavior.
 
 Other potential interfaces that could be implemented in the future include:
 - Voice interface
 - Chat application integration
 - API endpoints
 
-All of these would use the same underlying RaderBotAgent class and tools, just with different input/output mechanisms.
+All of these would use the same underlying radbotAgent class and tools, just with different input/output mechanisms.

@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Import our weather functions
-from raderbot.tools.weather_connector import get_weather, format_weather_response
-from raderbot.tools.basic_tools import get_weather as basic_get_weather
+from radbot.tools.weather_connector import get_weather, format_weather_response
+from radbot.tools.basic_tools import get_weather as basic_get_weather
 
 async def test_weather_in_event_loop():
     """Test the weather function inside an event loop."""

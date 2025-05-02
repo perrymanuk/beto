@@ -11,7 +11,7 @@ import logging
 from pprint import pprint
 import json
 
-# Add the parent directory to the path so we can import raderbot modules
+# Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -28,7 +28,7 @@ load_dotenv()
 
 def verify_ha_config():
     """Verify that Home Assistant configuration is available."""
-    from raderbot.tools.mcp_utils import test_home_assistant_connection
+    from radbot.tools.mcp_utils import test_home_assistant_connection
     
     # Check environment variables
     ha_url = os.getenv("HA_MCP_SSE_URL")
@@ -73,7 +73,7 @@ def main():
         return 1
     
     # Import after configuration check to avoid errors if not configured
-    from raderbot.tools.mcp_utils import find_home_assistant_entities
+    from radbot.tools.mcp_utils import find_home_assistant_entities
     
     # You can customize these search terms
     search_terms = [

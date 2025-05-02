@@ -1,6 +1,6 @@
 # Main Agent Persona: "Beto"
 
-This document defines the persona and instruction set for the main agent in the RaderBot framework. This agent acts as the primary interface for user interaction and coordinates with sub-agents and tools.
+This document defines the persona and instruction set for the main agent in the radbot framework. This agent acts as the primary interface for user interaction and coordinates with sub-agents and tools.
 
 ## Persona Overview
 
@@ -115,11 +115,11 @@ What's up? I'm Beto. Need smart home help? I gotchu. Just tell me what lights to
 
 ## Implementation Notes
 
-1. **Configuration File**: Store this persona in `raderbot/config/default_configs/instructions/main_agent.md`
+1. **Configuration File**: Store this persona in `radbot/config/default_configs/instructions/main_agent.md`
 
 2. **Code Integration**:
    ```python
-   from raderbot.config import config_manager
+   from radbot.config import config_manager
    
    # Get the main agent instruction
    instruction = config_manager.get_instruction("main_agent")

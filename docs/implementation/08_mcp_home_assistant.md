@@ -1,6 +1,6 @@
 # MCP Integration for Home Assistant
 
-This document details the implementation of Model Context Protocol (MCP) integration with Home Assistant for the Raderbot agent framework.
+This document details the implementation of Model Context Protocol (MCP) integration with Home Assistant for the radbot agent framework.
 
 ## MCP Integration Architecture
 
@@ -16,7 +16,7 @@ The integration consists of several key components:
 ### Home Assistant MCP Client (`tools/mcp_tools.py`)
 
 ```python
-# raderbot/tools/mcp_tools.py
+# radbot/tools/mcp_tools.py
 
 """
 MCP integration tools for connecting to Home Assistant.
@@ -81,8 +81,8 @@ def create_home_assistant_toolset() -> Optional[MCPToolset]:
 To add the Home Assistant tools to an agent:
 
 ```python
-from raderbot.tools.mcp_tools import create_home_assistant_toolset
-from raderbot.agent.agent import AgentFactory
+from radbot.tools.mcp_tools import create_home_assistant_toolset
+from radbot.agent.agent import AgentFactory
 
 # Create Home Assistant toolset
 ha_toolset = create_home_assistant_toolset()
@@ -103,7 +103,7 @@ root_agent = AgentFactory.create_root_agent(tools=tools)
 ### Home Assistant MCP Testing (`tools/mcp_utils.py`)
 
 ```python
-# raderbot/tools/mcp_utils.py
+# radbot/tools/mcp_utils.py
 
 """
 Utility functions for working with the Model Context Protocol (MCP).
@@ -118,7 +118,7 @@ from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 from google.adk.tools.mcp_tool import MCPToolset, SseServerParams
 
-from raderbot.tools.mcp_tools import create_home_assistant_toolset
+from radbot.tools.mcp_tools import create_home_assistant_toolset
 
 # Load environment variables
 load_dotenv()
@@ -173,7 +173,7 @@ def test_home_assistant_connection() -> Dict[str, Any]:
 Update the CLI interface to include Home Assistant MCP status:
 
 ```python
-# raderbot/cli/main.py (updated)
+# radbot/cli/main.py (updated)
 
 import logging
 import os
@@ -183,10 +183,10 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from raderbot.agent.agent import AgentFactory, create_runner
-from raderbot.tools.basic_tools import get_current_time, get_weather
-from raderbot.tools.mcp_tools import create_home_assistant_toolset
-from raderbot.tools.mcp_utils import test_home_assistant_connection
+from radbot.agent.agent import AgentFactory, create_runner
+from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.mcp_tools import create_home_assistant_toolset
+from radbot.tools.mcp_utils import test_home_assistant_connection
 
 # Set up logging
 logging.basicConfig(
@@ -226,7 +226,7 @@ def setup_agent():
 
 def main():
     """Main CLI entry point."""
-    print("Raderbot CLI")
+    print("radbot CLI")
     
     # Check Home Assistant MCP status
     ha_status = "Not configured"
@@ -286,7 +286,7 @@ Detailed instructions for setting up the Home Assistant MCP Server:
 2. **Generate Long-Lived Access Token**:
    - Navigate to your profile page (click your username in the bottom left)
    - Scroll down to "Long-Lived Access Tokens"
-   - Create a new token with a descriptive name (e.g., "Raderbot Agent")
+   - Create a new token with a descriptive name (e.g., "radbot Agent")
    - Copy the token immediately (it's only shown once)
 
 3. **Configure Environment Variables**:

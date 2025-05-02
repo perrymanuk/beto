@@ -12,7 +12,7 @@ import asyncio
 from typing import Dict, Any, Optional
 import inspect
 
-# Add the parent directory to the path so we can import raderbot modules
+# Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -30,7 +30,7 @@ load_dotenv()
 
 def test_search_tool():
     """Test the entity search function tool directly."""
-    from raderbot.tools.mcp_utils import find_home_assistant_entities
+    from radbot.tools.mcp_utils import find_home_assistant_entities
     
     print("=" * 60)
     print(" Testing Home Assistant Entity Search Directly ".center(60, "="))

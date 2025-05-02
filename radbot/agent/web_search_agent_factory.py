@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Optional
 
 from google.adk.agents import Agent
 
-from raderbot.agent.agent import AgentFactory, RaderBotAgent, create_agent
-from raderbot.config.settings import ConfigManager
-from raderbot.tools.web_search_tools import (
+from radbot.agent.agent import AgentFactory, RadBotAgent, create_agent
+from radbot.config.settings import ConfigManager
+from radbot.tools.web_search_tools import (
     create_tavily_search_tool,
     create_tavily_search_enabled_agent
 )
@@ -27,9 +27,9 @@ def create_websearch_agent(
     config: Optional[ConfigManager] = None,
     max_results: int = 5,
     search_depth: str = "advanced",
-) -> RaderBotAgent:
+) -> RadBotAgent:
     """
-    Create a RaderBot agent with web search capabilities.
+    Create a RadBot agent with web search capabilities.
     
     This factory function creates an agent with the Tavily search tool
     for web search capabilities.
@@ -43,7 +43,7 @@ def create_websearch_agent(
         search_depth: Search depth, either "basic" or "advanced" (default: "advanced")
         
     Returns:
-        A RaderBotAgent with web search capabilities
+        A RadBotAgent with web search capabilities
     """
     # Start with base tools or empty list
     tools = list(base_tools or [])

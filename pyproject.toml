@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "raderbot"
+name = "radbot"
 version = "0.1.0"
 authors = [
     {name = "Perry Manuk", email = "perry.manuk@example.com"},
@@ -47,8 +47,8 @@ web = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/perrymanuk/raderbot"
-"Bug Tracker" = "https://github.com/perrymanuk/raderbot/issues"
+"Homepage" = "https://github.com/perrymanuk/radbot"
+"Bug Tracker" = "https://github.com/perrymanuk/radbot/issues"
 
 [tool.black]
 line-length = 88

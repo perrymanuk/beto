@@ -6,6 +6,7 @@ This file is used by the ADK web interface to create the agent with all needed t
 
 import logging
 import os
+import asyncio
 from typing import Optional, Any, List
 
 from dotenv import load_dotenv
@@ -13,11 +14,12 @@ from google.adk.tools import FunctionTool
 from google.adk.agents import Agent
 
 # Import agent factories and tools
-from raderbot.tools.basic_tools import get_current_time, get_weather
-from raderbot.tools.memory_tools import search_past_conversations, store_important_information
-from raderbot.tools.mcp_tools import search_home_assistant_entities
-from raderbot.tools.web_search_tools import create_tavily_search_tool
-from raderbot.config import config_manager
+from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.tools.mcp_tools import search_home_assistant_entities
+from radbot.tools.web_search_tools import create_tavily_search_tool
+from radbot.tools.mcp_fileserver_client import create_fileserver_toolset
+from radbot.config import config_manager
 
 # Set up logging
 logging.basicConfig(
@@ -54,6 +56,20 @@ def create_agent(tools: Optional[List[Any]] = None):
     # Add Home Assistant entity search
     basic_tools.append(search_home_assistant_entities)
     
+    # Add MCP Fileserver tools
+    try:
+        fs_tools = create_fileserver_toolset()
+        if fs_tools:
+            # fs_tools is now a list of tools, so extend basic_tools with it
+            basic_tools.extend(fs_tools)
+            # Log tools individually for better debugging
+            fs_tool_names = [tool.name if hasattr(tool, 'name') else str(tool) for tool in fs_tools]
+            logger.info(f"Successfully added {len(fs_tools)} MCP fileserver tools: {', '.join(fs_tool_names)}")
+        else:
+            logger.warning("MCP fileserver tools not available")
+    except Exception as e:
+        logger.warning(f"Failed to create MCP fileserver tools: {str(e)}")
+    
     # Add Tavily web search tool
     try:
         web_search_tool = create_tavily_search_tool(
@@ -73,7 +89,7 @@ def create_agent(tools: Optional[List[Any]] = None):
             # Define a simple function without decorators
             def web_search(query: str) -> str:
                 """Search the web for current information on a topic."""
-                from raderbot.tools.web_search_tools import HAVE_TAVILY, TavilySearchResults
+                from radbot.tools.web_search_tools import HAVE_TAVILY, TavilySearchResults
                 import os
                 
                 logger.info(f"Running fallback web search for query: {query}")
@@ -131,13 +147,26 @@ def create_agent(tools: Optional[List[Any]] = None):
     # Get the instruction
     try:
         instruction = config_manager.get_instruction("main_agent")
+        
+        # Add MCP fileserver instructions if available
+        if any("fileserver" in str(tool).lower() for tool in all_tools):
+            fs_instruction = """
+            You can access files on the system through the MCP fileserver tools. Here are some examples:
+            - To list files: Use the fileserver_mcp.list_files tool with the path parameter
+            - To read a file: Use the fileserver_mcp.read_file tool with the path parameter
+            - To write to a file: Use the fileserver_mcp.write_file tool with the path and content parameters
+            
+            Always tell the user what action you're taking, and report back the results. If a filesystem operation fails, inform the user politely about the issue.
+            """
+            instruction += "\n\n" + fs_instruction
+            logger.info("Added MCP fileserver instructions to agent instruction")
     except Exception as e:
         logger.warning(f"Failed to load main_agent instruction: {str(e)}")
         instruction = """You are a helpful assistant. Your goal is to understand the user's request and fulfill it by using available tools."""
     
     # Create an ADK Agent directly - this is what the web UI expects
     agent = Agent(
-        name="raderbot_web",
+        name="radbot_web",
         model=config_manager.get_main_model(),
         instruction=instruction,
         description="The main agent that handles user requests with memory capabilities.",
@@ -147,7 +176,7 @@ def create_agent(tools: Optional[List[Any]] = None):
     # Initialize memory service for the web UI and store API keys
     # We'll add this to the context so tools can access it
     try:
-        from raderbot.memory.qdrant_memory import QdrantMemoryService
+        from radbot.memory.qdrant_memory import QdrantMemoryService
         memory_service = QdrantMemoryService()
         logger.info("Successfully initialized QdrantMemoryService for web agent")
         
@@ -159,7 +188,7 @@ def create_agent(tools: Optional[List[Any]] = None):
         # Create a Runner with memory service
         runner = Runner(
             agent=agent,
-            app_name="raderbot",
+            app_name="radbot",
             session_service=InMemorySessionService(),
             memory_service=memory_service
         )

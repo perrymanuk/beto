@@ -6,7 +6,7 @@ Tests the utility functions for working with Home Assistant MCP.
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 
-from raderbot.tools.mcp_utils import (
+from radbot.tools.mcp_utils import (
     test_home_assistant_connection,
     check_home_assistant_entity,
     list_home_assistant_domains
@@ -14,7 +14,7 @@ from raderbot.tools.mcp_utils import (
 
 
 class TestHomeAssistantConnection:
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_connection_failed_initialization(self, mock_create_toolset):
         """Test handling when toolset initialization fails."""
         # Setup
@@ -29,7 +29,7 @@ class TestHomeAssistantConnection:
         assert "Failed to create" in result["error"]
         mock_create_toolset.assert_called_once()
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_connection_success_with_list_tools(self, mock_create_toolset):
         """Test successful connection using list_tools method."""
         # Setup
@@ -50,7 +50,7 @@ class TestHomeAssistantConnection:
         assert len(result["tools"]) == 2
         mock_toolset.list_tools.assert_called_once()
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     @pytest.mark.xfail(reason="Google ADK 0.3.0 compatibility issue")
     def test_connection_success_with_internal_tools(self, mock_create_toolset):
         """Test successful connection using _tools attribute."""
@@ -77,7 +77,7 @@ class TestHomeAssistantConnection:
         assert result["tools_count"] == 2
         assert len(result["tools"]) == 2
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_connection_exception(self, mock_create_toolset):
         """Test handling of exceptions during connection test."""
         # Setup
@@ -96,7 +96,7 @@ class TestHomeAssistantConnection:
 
 
 class TestCheckHomeAssistantEntity:
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_entity_check_initialization_failed(self, mock_create_toolset):
         """Test handling when toolset initialization fails during entity check."""
         # Setup
@@ -110,7 +110,7 @@ class TestCheckHomeAssistantEntity:
         assert result["status"] == "initialization_failed"
         mock_create_toolset.assert_called_once()
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_entity_check_invalid_id(self, mock_create_toolset):
         """Test handling of invalid entity ID format."""
         # Setup
@@ -125,7 +125,7 @@ class TestCheckHomeAssistantEntity:
         assert result["status"] == "invalid_entity_id"
         assert "Invalid entity ID format" in result["error"]
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     @pytest.mark.xfail(reason="Google ADK 0.3.0 compatibility issue")
     def test_entity_check_unsupported_domain(self, mock_create_toolset):
         """Test handling when entity domain is not supported."""
@@ -145,7 +145,7 @@ class TestCheckHomeAssistantEntity:
         assert "nonexistent" in result["domain"]
         assert "nonexistent.entity" in result["entity_id"]
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_entity_check_success(self, mock_create_toolset):
         """Test successful entity check."""
         # Setup
@@ -167,7 +167,7 @@ class TestCheckHomeAssistantEntity:
 
 
 class TestListHomeAssistantDomains:
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_list_domains_initialization_failed(self, mock_create_toolset):
         """Test handling when toolset initialization fails during domain listing."""
         # Setup
@@ -181,7 +181,7 @@ class TestListHomeAssistantDomains:
         assert result["status"] == "initialization_failed"
         mock_create_toolset.assert_called_once()
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_list_domains_success_with_list_tools(self, mock_create_toolset):
         """Test successful domain listing using list_tools method."""
         # Setup
@@ -203,7 +203,7 @@ class TestListHomeAssistantDomains:
         assert sorted(result["domains"]) == ["climate", "light", "sensor"]
         assert result["domains_count"] == 3
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     @pytest.mark.xfail(reason="Google ADK 0.3.0 compatibility issue")
     def test_list_domains_success_with_internal_tools(self, mock_create_toolset):
         """Test successful domain listing using _tools attribute."""
@@ -231,7 +231,7 @@ class TestListHomeAssistantDomains:
         assert sorted(result["domains"]) == ["cover", "light", "media_player"]
         assert result["domains_count"] == 3
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_list_domains_exception(self, mock_create_toolset):
         """Test handling of exceptions during domain listing."""
         # Setup

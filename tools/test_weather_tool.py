@@ -25,7 +25,7 @@ def main():
     logger.info("Testing weather tool with Los Angeles")
     
     # Import the get_weather function from basic_tools
-    from raderbot.tools.basic_tools import get_weather
+    from radbot.tools.basic_tools import get_weather
     
     # Test cities
     cities = ["Los Angeles", "New York", "Tokyo", "Paris", "NonExistentCity"]
@@ -47,8 +47,8 @@ def main():
     logger.info("Testing direct weather connector functions for Los Angeles")
     
     try:
-        from raderbot.tools.weather_connector import get_weather as get_real_weather
-        from raderbot.tools.weather_connector import format_weather_response
+        from radbot.tools.weather_connector import get_weather as get_real_weather
+        from radbot.tools.weather_connector import format_weather_response
         
         weather_data = get_real_weather("Los Angeles")
         

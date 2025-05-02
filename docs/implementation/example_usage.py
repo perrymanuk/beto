@@ -4,10 +4,10 @@ This is for demonstration purposes only.
 """
 
 from pathlib import Path
-from raderbot.agent.agent import create_agent, RaderBotAgent
-from raderbot.config import config_manager
-from raderbot.config.settings import ConfigManager
-from raderbot.config.schema_models import UserInfoInput, MemoryQueryInput
+from radbot.agent.agent import create_agent, radbotAgent
+from radbot.config import config_manager
+from radbot.config.settings import ConfigManager
+from radbot.config.schema_models import UserInfoInput, MemoryQueryInput
 
 # Example 1: Using the default config_manager instance
 agent = create_agent()
@@ -19,7 +19,7 @@ custom_config_path = Path("/path/to/custom/configs")
 custom_config = ConfigManager(config_dir=custom_config_path)
 
 # Creating an agent with custom configuration
-custom_agent = RaderBotAgent(
+custom_agent = radbotAgent(
     model=custom_config.get_main_model(), 
     instruction_name="custom_prompt"
 )

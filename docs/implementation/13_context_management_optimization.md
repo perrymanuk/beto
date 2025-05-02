@@ -1,6 +1,6 @@
 # Context Management Optimization
 
-This document outlines the implementation of context management optimization in the RaderBot agent framework to address issues of excessive context nesting, redundant information, and inefficient token usage.
+This document outlines the implementation of context management optimization in the radbot agent framework to address issues of excessive context nesting, redundant information, and inefficient token usage.
 
 ## Current Issues
 
@@ -37,13 +37,13 @@ We'll implement a comprehensive context optimization system with several key com
 The core optimization engine that applies multiple strategies to reduce context size:
 
 ```python
-# raderbot/context/context_processor.py
+# radbot/context/context_processor.py
 
 import logging
 from typing import Dict, Any, List, Optional, Union
 
-from raderbot.context.token_counter import TokenCounter
-from raderbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.context.token_counter import TokenCounter
+from radbot.memory.qdrant_memory import QdrantMemoryService
 
 class ContextProcessor:
     """Process and optimize context for LLM requests."""
@@ -237,7 +237,7 @@ class ContextProcessor:
 Accurate token counting using tiktoken or similar libraries:
 
 ```python
-# raderbot/context/token_counter.py
+# radbot/context/token_counter.py
 
 import logging
 from typing import Union, Dict, List, Any
@@ -310,12 +310,12 @@ class TokenCounter:
 Using the memory system to build context instead of including raw history:
 
 ```python
-# raderbot/context/memory_context.py
+# radbot/context/memory_context.py
 
 import logging
 from typing import Dict, Any, List, Optional
 
-from raderbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.memory.qdrant_memory import QdrantMemoryService
 
 class MemoryBasedContext:
     """Build context using memory retrieval instead of raw history."""
@@ -391,7 +391,7 @@ class MemoryBasedContext:
         try:
             # Search memory for relevant information
             results = await self.memory_service.search_memory(
-                app_name="raderbot",
+                app_name="radbot",
                 user_id=user_id,
                 query=query,
                 limit=limit
@@ -408,12 +408,12 @@ class MemoryBasedContext:
 Allocate tokens to different parts of the context:
 
 ```python
-# raderbot/context/token_budget.py
+# radbot/context/token_budget.py
 
 import logging
 from typing import Dict, Any, List, Optional
 
-from raderbot.context.token_counter import TokenCounter
+from radbot.context.token_counter import TokenCounter
 
 class TokenBudgetManager:
     """Manage token budget for various context components."""
@@ -515,7 +515,7 @@ class TokenBudgetManager:
 Track context optimization metrics:
 
 ```python
-# raderbot/context/context_telemetry.py
+# radbot/context/context_telemetry.py
 
 import time
 import logging
@@ -602,17 +602,17 @@ class ContextTelemetry:
 
 ## Integration with Agent Architecture
 
-To integrate these components with the RaderBot agent framework:
+To integrate these components with the radbot agent framework:
 
 ```python
-# raderbot/agent.py (extended)
+# radbot/agent.py (extended)
 
-from raderbot.context.context_processor import ContextProcessor
-from raderbot.context.token_budget import TokenBudgetManager
-from raderbot.context.memory_context import MemoryBasedContext
-from raderbot.context.context_telemetry import ContextTelemetry
+from radbot.context.context_processor import ContextProcessor
+from radbot.context.token_budget import TokenBudgetManager
+from radbot.context.memory_context import MemoryBasedContext
+from radbot.context.context_telemetry import ContextTelemetry
 
-class RaderBotAgent:
+class radbotAgent:
     # Existing code...
     
     def __init__(self, *args, **kwargs):
@@ -717,14 +717,14 @@ class RaderBotAgent:
 A utility to monitor context optimization statistics:
 
 ```python
-# raderbot/utils/context_status.py
+# radbot/utils/context_status.py
 
 import argparse
 import json
 import sys
 from typing import Dict, Any
 
-from raderbot.agent import create_agent
+from radbot.agent import create_agent
 
 async def get_context_stats() -> Dict[str, Any]:
     """

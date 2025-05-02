@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Example script demonstrating the web search capabilities of RaderBot.
+Example script demonstrating the web search capabilities of radbot.
 
 This example shows how to create and use an agent with Tavily web search integration.
 """
@@ -10,8 +10,8 @@ import os
 
 from dotenv import load_dotenv
 
-from raderbot.agent import create_websearch_agent
-from raderbot.tools.basic_tools import get_current_time, get_weather
+from radbot.agent import create_websearch_agent
+from radbot.tools.basic_tools import get_current_time, get_weather
 
 # Configure logging
 logging.basicConfig(
@@ -32,7 +32,7 @@ def main():
         logger.warning("Please add your Tavily API key to your .env file or environment variables.")
         logger.warning("You can get a key at https://tavily.com/")
 
-    # Create a RaderBot agent with web search capabilities and basic tools
+    # Create a radbot agent with web search capabilities and basic tools
     logger.info("Creating web search enabled agent...")
     agent = create_websearch_agent(
         max_results=3,  # Return top 3 search results

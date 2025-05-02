@@ -1,5 +1,5 @@
 """
-Configuration settings and management for the RaderBot agent framework.
+Configuration settings and management for the radbot agent framework.
 """
 
 import os
@@ -42,10 +42,10 @@ class ConfigManager:
         """
         return {
             # Primary model for main agent (default to Pro 2.5)
-            "main_model": os.getenv("RADERBOT_MAIN_MODEL", "gemini-2.5-pro"),
+            "main_model": os.getenv("RADBOT_MAIN_MODEL", "gemini-2.5-pro"),
             
             # Model for simpler sub-agents (default to Flash)
-            "sub_agent_model": os.getenv("RADERBOT_SUB_MODEL", "gemini-2.0-flash"),
+            "sub_agent_model": os.getenv("RADBOT_SUB_MODEL", "gemini-2.0-flash"),
             
             # Use Vertex AI flag
             "use_vertex_ai": os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "FALSE").upper() == "TRUE"

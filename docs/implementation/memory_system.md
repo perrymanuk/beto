@@ -2,7 +2,7 @@
 
 ## Overview
 
-RaderBot uses a semantic memory system built on top of the Qdrant vector database. This enables the agent to remember past conversations, store important information, and retrieve contextually relevant memories based on semantic similarity rather than just keyword matching.
+radbot uses a semantic memory system built on top of the Qdrant vector database. This enables the agent to remember past conversations, store important information, and retrieve contextually relevant memories based on semantic similarity rather than just keyword matching.
 
 ## Components
 
@@ -42,7 +42,7 @@ Agent tools for interacting with the memory system.
 
 ### Qdrant Setup
 
-RaderBot supports three deployment options for Qdrant:
+radbot supports three deployment options for Qdrant:
 
 1. **Local Qdrant Server** (development)
    ```
@@ -86,9 +86,9 @@ The system supports different memory types:
 ### Creating a Memory-Enabled Agent
 
 ```python
-from raderbot.memory.qdrant_memory import QdrantMemoryService
-from raderbot.agent.agent import AgentFactory
-from raderbot.tools.memory_tools import get_memory_tools
+from radbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.agent.agent import AgentFactory
+from radbot.tools.memory_tools import get_memory_tools
 
 # Create memory service
 memory_service = QdrantMemoryService(

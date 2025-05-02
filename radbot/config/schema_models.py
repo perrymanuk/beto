@@ -1,5 +1,5 @@
 """
-Pydantic models for structured data interfaces in the RaderBot framework.
+Pydantic models for structured data interfaces in the radbot framework.
 """
 
 from typing import List, Optional

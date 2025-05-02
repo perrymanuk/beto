@@ -1,10 +1,10 @@
 # Agent Configuration Integration
 
-This document details the integration between the RaderBot agent implementation and the configuration system, focusing on dynamic instruction loading, model selection, and flexible agent creation.
+This document details the integration between the radbot agent implementation and the configuration system, focusing on dynamic instruction loading, model selection, and flexible agent creation.
 
 ## Overview
 
-The integration of the ConfigManager with the RaderBotAgent enables:
+The integration of the ConfigManager with the radbotAgent enables:
 
 1. Loading agent instructions dynamically from files
 2. Selecting appropriate models based on agent type and environment settings
@@ -14,12 +14,12 @@ The integration of the ConfigManager with the RaderBotAgent enables:
 
 ## Implementation Changes
 
-### RaderBotAgent Class
+### radbotAgent Class
 
-The RaderBotAgent class was updated to work with the ConfigManager:
+The radbotAgent class was updated to work with the ConfigManager:
 
 ```python
-class RaderBotAgent:
+class radbotAgent:
     def __init__(
         self,
         session_service: Optional[SessionService] = None,
@@ -121,9 +121,9 @@ def create_agent(
     instruction_name: str = "main_agent",
     name: str = "main_coordinator",
     config: Optional[ConfigManager] = None
-) -> RaderBotAgent:
+) -> radbotAgent:
     # Create the agent with all the specified parameters
-    return RaderBotAgent(
+    return radbotAgent(
         session_service=session_service,
         tools=tools,
         model=model,
@@ -167,8 +167,8 @@ The integration implements robust error handling for configuration loading:
 ### Creating a Main Agent
 
 ```python
-from raderbot.agent.agent import create_agent
-from raderbot.tools.basic_tools import get_current_time, get_weather
+from radbot.agent.agent import create_agent
+from radbot.tools.basic_tools import get_current_time, get_weather
 
 # Create main agent with default configuration
 agent = create_agent(
@@ -183,8 +183,8 @@ response = agent.process_message(user_id="user123", message="What's the weather 
 ### Creating a Sub-Agent
 
 ```python
-from raderbot.agent.agent import AgentFactory
-from raderbot.tools.memory_tools import search_past_conversations
+from radbot.agent.agent import AgentFactory
+from radbot.tools.memory_tools import search_past_conversations
 
 # Create memory sub-agent
 memory_agent = AgentFactory.create_sub_agent(
@@ -203,8 +203,8 @@ main_agent.add_sub_agent(memory_agent)
 
 ```python
 from pathlib import Path
-from raderbot.agent.agent import create_agent
-from raderbot.config.settings import ConfigManager
+from radbot.agent.agent import create_agent
+from radbot.config.settings import ConfigManager
 
 # Create custom configuration
 custom_config = ConfigManager(config_dir=Path("/path/to/custom/configs"))

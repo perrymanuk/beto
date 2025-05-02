@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import Dict, Any, List, Optional
 
-# Add the parent directory to the path so we can import raderbot modules
+# Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -69,7 +69,7 @@ def search_home_assistant_entities(search_term: str, domain_filter: Optional[str
     
     try:
         # Try to import and use the real function
-        from raderbot.tools.mcp_utils import find_home_assistant_entities
+        from radbot.tools.mcp_utils import find_home_assistant_entities
         result = find_home_assistant_entities(search_term, domain_filter)
         logger.info(f"Got {result.get('match_count', 0)} matches from real implementation")
         
@@ -127,7 +127,7 @@ def HassTurnOff(entity_id: str) -> Dict[str, Any]:
     
     try:
         # Check if we have real Home Assistant tools available
-        from raderbot.tools.mcp_tools import create_home_assistant_toolset
+        from radbot.tools.mcp_tools import create_home_assistant_toolset
         ha_tools = create_home_assistant_toolset()
         
         # Find the TurnOff tool
@@ -167,7 +167,7 @@ def HassTurnOn(entity_id: str) -> Dict[str, Any]:
     
     try:
         # Check if we have real Home Assistant tools available
-        from raderbot.tools.mcp_tools import create_home_assistant_toolset
+        from radbot.tools.mcp_tools import create_home_assistant_toolset
         ha_tools = create_home_assistant_toolset()
         
         # Find the TurnOn tool

@@ -1,5 +1,5 @@
 """
-Web search tools for Raderbot agents.
+Web search tools for radbot agents.
 
 This module provides tools for web search capabilities using various search APIs.
 """

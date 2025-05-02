@@ -11,7 +11,7 @@ import logging
 import inspect
 import json
 
-# Add the parent directory to the path so we can import raderbot modules
+# Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -154,7 +154,7 @@ def diagnose_function_tool():
 
 def diagnose_entity_search_tool():
     """Diagnose the entity search tool specifically."""
-    from raderbot.tools.mcp_tools import create_find_ha_entities_tool
+    from radbot.tools.mcp_tools import create_find_ha_entities_tool
     
     print("\n" + "=" * 60)
     print(" Entity Search Tool Diagnostics ".center(60, "="))
@@ -166,7 +166,7 @@ def diagnose_entity_search_tool():
         print_tool_details(tool)
         
         # Try to call the function
-        from raderbot.tools.mcp_utils import find_home_assistant_entities
+        from radbot.tools.mcp_utils import find_home_assistant_entities
         print("\nUnderlying function details:")
         print(f"  Name: {find_home_assistant_entities.__name__}")
         print(f"  Signature: {inspect.signature(find_home_assistant_entities)}")
@@ -255,7 +255,7 @@ def diagnose_schema_conversion():
     print(" ADK Schema Conversion Diagnostics ".center(60, "="))
     print("=" * 60)
     
-    from raderbot.tools.mcp_tools import create_find_ha_entities_tool
+    from radbot.tools.mcp_tools import create_find_ha_entities_tool
     
     try:
         # Import the Agent class to examine its schema conversion

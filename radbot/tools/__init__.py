@@ -1,26 +1,26 @@
 """
-Tools package for the RaderBot agent framework.
+Tools package for the radbot agent framework.
 """
 
-from raderbot.tools.basic_tools import get_current_time, get_weather as get_mock_weather
-from raderbot.tools.memory_tools import search_past_conversations, store_important_information
-from raderbot.tools.mcp_tools import (
+from radbot.tools.basic_tools import get_current_time, get_weather as get_mock_weather
+from radbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.tools.mcp_tools import (
     create_home_assistant_toolset,
     create_ha_mcp_enabled_agent
 )
-from raderbot.tools.mcp_utils import (
+from radbot.tools.mcp_utils import (
     test_home_assistant_connection,
     check_home_assistant_entity,
     list_home_assistant_domains
 )
-from raderbot.tools.weather_connector import (
+from radbot.tools.weather_connector import (
     WeatherConnector,
     get_weather,
     get_forecast,
     format_weather_response,
     format_forecast_response
 )
-from raderbot.tools.web_search_tools import (
+from radbot.tools.web_search_tools import (
     create_tavily_search_tool,
     create_tavily_search_enabled_agent
 )

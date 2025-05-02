@@ -1,6 +1,6 @@
 # Basic Tools Implementation
 
-This document details the implementation of basic tools for the RaderBot agent framework, specifically the time and weather tools.
+This document details the implementation of basic tools for the radbot agent framework, specifically the time and weather tools.
 
 ## Tool Design Principles
 
@@ -14,10 +14,10 @@ Our tool implementations follow these key principles:
 ## Basic Tools Module (`tools/basic_tools.py`)
 
 ```python
-# raderbot/tools/basic_tools.py
+# radbot/tools/basic_tools.py
 
 """
-Basic utility tools for the RaderBot agent framework.
+Basic utility tools for the radbot agent framework.
 
 Includes tools for fetching the current time and weather information.
 """
@@ -179,13 +179,13 @@ def fahrenheit_to_celsius(fahrenheit: float) -> float:
 ## Package Initialization (`tools/__init__.py`)
 
 ```python
-# raderbot/tools/__init__.py
+# radbot/tools/__init__.py
 
 """
-Tools package for the RaderBot agent framework.
+Tools package for the radbot agent framework.
 """
 
-from raderbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic_tools import get_current_time, get_weather
 
 # Export the tools for easy import
 __all__ = ['get_current_time', 'get_weather']
@@ -196,23 +196,23 @@ __all__ = ['get_current_time', 'get_weather']
 To register these tools with the agent:
 
 ```python
-# raderbot/tools/register_tools.py
+# radbot/tools/register_tools.py
 
 """
-Tool registration functions for the RaderBot agent framework.
+Tool registration functions for the radbot agent framework.
 """
 
 from typing import List, Any
 
-from raderbot.tools.basic_tools import get_current_time, get_weather
-from raderbot.agent import RaderBotAgent
+from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.agent import radbotAgent
 
-def register_basic_tools(agent: RaderBotAgent) -> None:
+def register_basic_tools(agent: radbotAgent) -> None:
     """
-    Register the basic tools with the RaderBot agent.
+    Register the basic tools with the radbot agent.
     
     Args:
-        agent (RaderBotAgent): The agent to register tools with
+        agent (radbotAgent): The agent to register tools with
     """
     agent.add_tools([get_current_time, get_weather])
 
@@ -232,14 +232,14 @@ def get_all_basic_tools() -> List[Any]:
 ```python
 # Example of creating an agent with basic tools
 
-from raderbot.agent import create_agent
-from raderbot.tools import get_current_time, get_weather
+from radbot.agent import create_agent
+from radbot.tools import get_current_time, get_weather
 
 # Create an agent with basic tools
 agent = create_agent(tools=[get_current_time, get_weather])
 
 # Alternatively, use the registration function
-from raderbot.tools.register_tools import register_basic_tools
+from radbot.tools.register_tools import register_basic_tools
 agent = create_agent()
 register_basic_tools(agent)
 ```
@@ -334,7 +334,7 @@ Unit tests should be created to verify the tool functionality:
 
 import unittest
 from unittest.mock import MagicMock
-from raderbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic_tools import get_current_time, get_weather
 
 class TestBasicTools(unittest.TestCase):
     def test_get_current_time_success(self):

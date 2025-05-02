@@ -1,5 +1,5 @@
 """
-Memory tools for the RaderBot agent framework.
+Memory tools for the radbot agent framework.
 
 These tools allow agents to interact with the memory system.
 """
@@ -70,7 +70,7 @@ def search_past_conversations(
         
         # Search memories
         results = memory_service.search_memory(
-            app_name="raderbot",
+            app_name="radbot",
             user_id=user_id,
             query=query,
             limit=max_results,

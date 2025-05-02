@@ -10,9 +10,9 @@ import pytest
 import numpy as np
 from qdrant_client import QdrantClient, models
 
-from raderbot.memory.embedding import EmbeddingModel, embed_text
-from raderbot.memory.qdrant_memory import QdrantMemoryService
-from raderbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.memory.embedding import EmbeddingModel, embed_text
+from radbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.tools.memory_tools import search_past_conversations, store_important_information
 
 
 class TestEmbedding:
@@ -29,17 +29,17 @@ class TestEmbedding:
         assert model.vector_size == 768
         assert isinstance(model.client, MagicMock)
     
-    @patch('raderbot.memory.embedding._initialize_gemini_embedding')
+    @patch('radbot.memory.embedding._initialize_gemini_embedding')
     def test_get_embedding_model_gemini(self, mock_init):
         """Test getting Gemini embedding model."""
-        from raderbot.memory.embedding import get_embedding_model
+        from radbot.memory.embedding import get_embedding_model
         
         # Mock the initialization function
         mock_model = EmbeddingModel(name="mock-gemini", vector_size=768, client=MagicMock())
         mock_init.return_value = mock_model
         
         # Call the function with environment set to use gemini
-        with patch.dict('os.environ', {"RADERBOT_EMBED_MODEL": "gemini"}):
+        with patch.dict('os.environ', {"radbot_EMBED_MODEL": "gemini"}):
             model = get_embedding_model()
             
         # Verify the result
@@ -68,8 +68,8 @@ class TestEmbedding:
 class TestQdrantMemoryService:
     """Tests for the QdrantMemoryService class."""
     
-    @patch('raderbot.memory.qdrant_memory.QdrantClient')
-    @patch('raderbot.memory.qdrant_memory.get_embedding_model')
+    @patch('radbot.memory.qdrant_memory.QdrantClient')
+    @patch('radbot.memory.qdrant_memory.get_embedding_model')
     def test_init_with_host_port(self, mock_get_model, mock_client):
         """Test initialization with host and port."""
         # Setup mocks
@@ -86,8 +86,8 @@ class TestQdrantMemoryService:
         # Verify collection initialization was attempted
         service.client.get_collections.assert_called_once()
     
-    @patch('raderbot.memory.qdrant_memory.QdrantClient')
-    @patch('raderbot.memory.qdrant_memory.get_embedding_model')
+    @patch('radbot.memory.qdrant_memory.QdrantClient')
+    @patch('radbot.memory.qdrant_memory.get_embedding_model')
     def test_init_with_url_api_key(self, mock_get_model, mock_client):
         """Test initialization with URL and API key."""
         # Setup mocks
@@ -101,8 +101,8 @@ class TestQdrantMemoryService:
         # Verify client initialization
         mock_client.assert_called_once_with(url="https://test.qdrant.io", api_key="test-key")
     
-    @patch('raderbot.memory.qdrant_memory.QdrantClient')
-    @patch('raderbot.memory.qdrant_memory.get_embedding_model')
+    @patch('radbot.memory.qdrant_memory.QdrantClient')
+    @patch('radbot.memory.qdrant_memory.get_embedding_model')
     def test_search_memory(self, mock_get_model, mock_client):
         """Test searching memory."""
         # Setup mocks
@@ -111,7 +111,7 @@ class TestQdrantMemoryService:
         mock_get_model.return_value = mock_model
         
         # Mock embedding function
-        with patch('raderbot.memory.qdrant_memory.embed_text') as mock_embed:
+        with patch('radbot.memory.qdrant_memory.embed_text') as mock_embed:
             mock_vector = [0.1] * 768
             mock_embed.return_value = mock_vector
             

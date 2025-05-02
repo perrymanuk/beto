@@ -1,6 +1,6 @@
 # Memory System Implementation
 
-This document details the implementation of the memory system for the RaderBot agent framework, focusing on the integration with Qdrant as the vector database and the creation of memory tools for agents.
+This document details the implementation of the memory system for the radbot agent framework, focusing on the integration with Qdrant as the vector database and the creation of memory tools for agents.
 
 ## Overview
 
@@ -75,7 +75,7 @@ class EmbeddingModel:
 def get_embedding_model() -> EmbeddingModel:
     """Initialize and return the appropriate embedding model."""
     # Determine which embedding model to use
-    embed_model = os.getenv("RADERBOT_EMBED_MODEL", "gemini").lower()
+    embed_model = os.getenv("radbot_EMBED_MODEL", "gemini").lower()
     
     if embed_model == "gemini":
         return _initialize_gemini_embedding()
@@ -146,7 +146,7 @@ def create_memory_enabled_agent(
     memory_service: Optional[QdrantMemoryService] = None,
     instruction_name: str = "main_agent",
     name: str = "memory_enabled_agent",
-) -> RaderBotAgent:
+) -> radbotAgent:
     """Create an agent with memory capabilities."""
     # Implementation details
     # ...
@@ -156,7 +156,7 @@ This factory function:
 1. Creates or uses a provided QdrantMemoryService
 2. Adds memory tools to the agent's tool list
 3. Configures the ADK Runner with the memory service
-4. Returns a fully configured RaderBotAgent with memory capabilities
+4. Returns a fully configured radbotAgent with memory capabilities
 
 ## Memory Access Pattern
 
@@ -185,7 +185,7 @@ The memory system can be configured through environment variables:
 
 - `QDRANT_HOST`, `QDRANT_PORT`: Local Qdrant connection details
 - `QDRANT_URL`, `QDRANT_API_KEY`: Qdrant Cloud connection details
-- `RADERBOT_EMBED_MODEL`: Embedding model selection
+- `radbot_EMBED_MODEL`: Embedding model selection
 - `SENTENCE_TRANSFORMERS_MODEL`: Model name for sentence-transformers (if used)
 
 This allows for flexible deployment in different environments without code changes.

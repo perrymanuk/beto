@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Home Assistant integration provides a way for RaderBot to interact with Home Assistant through the Model Context Protocol (MCP). This integration allows the agent to query and control Home Assistant entities, retrieve states, and execute services.
+The Home Assistant integration provides a way for radbot to interact with Home Assistant through the Model Context Protocol (MCP). This integration allows the agent to query and control Home Assistant entities, retrieve states, and execute services.
 
 ## Components
 
@@ -37,7 +37,7 @@ Utility functions for testing and debugging Home Assistant MCP connections.
 ### Basic Setup
 
 ```python
-from raderbot.tools.mcp_tools import create_home_assistant_toolset
+from radbot.tools.mcp_tools import create_home_assistant_toolset
 
 # Create the Home Assistant toolset
 ha_toolset = create_home_assistant_toolset()
@@ -52,8 +52,8 @@ agent = create_agent(tools=tools)
 ### Using the Helper Function
 
 ```python
-from raderbot.tools.mcp_tools import create_ha_mcp_enabled_agent
-from raderbot.agent.agent import AgentFactory
+from radbot.tools.mcp_tools import create_ha_mcp_enabled_agent
+from radbot.agent.agent import AgentFactory
 
 # Create agent with Home Assistant integration
 agent = create_ha_mcp_enabled_agent(
@@ -80,7 +80,7 @@ These can be set in a `.env` file, your system environment, or provided programm
 1. In Home Assistant, navigate to your profile (click on your username in the sidebar)
 2. Scroll to the bottom of the page to the "Long-Lived Access Tokens" section
 3. Click "Create Token"
-4. Give it a name like "RaderBot"
+4. Give it a name like "radbot"
 5. Copy the token (it will only be shown once)
 6. Add it to your environment variables
 

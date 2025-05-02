@@ -1,5 +1,5 @@
 """
-Memory tools for the RaderBot agent framework.
+Memory tools for the radbot agent framework.
 
 These tools allow agents to interact with the memory system.
 """
@@ -56,7 +56,7 @@ def search_past_conversations(
             if not memory_service:
                 # Try to create memory service if not available
                 try:
-                    from raderbot.memory.qdrant_memory import QdrantMemoryService
+                    from radbot.memory.qdrant_memory import QdrantMemoryService
                     memory_service = QdrantMemoryService()
                     logger.info("Created QdrantMemoryService on demand")
                     # Store in global ToolContext
@@ -164,7 +164,7 @@ def search_past_conversations(
         
         # Search memories
         results = memory_service.search_memory(
-            app_name="raderbot",
+            app_name="radbot",
             user_id=user_id,
             query=query,
             limit=result_limit,
@@ -258,7 +258,7 @@ def store_important_information(
             if not memory_service:
                 # Try to create memory service if not available
                 try:
-                    from raderbot.memory.qdrant_memory import QdrantMemoryService
+                    from radbot.memory.qdrant_memory import QdrantMemoryService
                     memory_service = QdrantMemoryService()
                     logger.info("Created QdrantMemoryService on demand")
                     # Store in global ToolContext

@@ -1,14 +1,14 @@
 # Project Setup and Environment Configuration
 
-This document details the initial setup of the RaderBot project, an AI agent framework built with Google's Agent Development Kit (ADK).
+This document details the initial setup of the radbot project, an AI agent framework built with Google's Agent Development Kit (ADK).
 
 ## Directory Structure
 
 The project follows a modular structure to organize code effectively:
 
 ```
-raderbot/
-├── raderbot/
+radbot/
+├── radbot/
 │   ├── __init__.py           # Package initialization
 │   ├── agent.py              # Core agent definitions
 │   ├── tools/

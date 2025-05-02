@@ -35,7 +35,7 @@ except ImportError:
             return []
 
 # Import local modules
-from raderbot.memory.embedding import get_embedding_model, embed_text
+from radbot.memory.embedding import get_embedding_model, embed_text
 
 # Load environment variables
 load_dotenv()
@@ -104,7 +104,7 @@ class QdrantMemoryService(BaseMemoryService):
             raise
             
         # Use collection name from environment or default to provided/default value
-        self.collection_name = os.getenv("QDRANT_COLLECTION") or collection_name or "raderbot_memories"
+        self.collection_name = os.getenv("QDRANT_COLLECTION") or collection_name or "radbot_memories"
         logger.info(f"Using collection name: {self.collection_name}")
         
         # Get embedding model info

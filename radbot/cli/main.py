@@ -1,5 +1,5 @@
 """
-CLI entry point for Raderbot.
+CLI entry point for radbot.
 
 This module provides a command-line interface for interacting with the agent.
 """
@@ -11,9 +11,9 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from raderbot.agent.agent import RaderBotAgent, create_agent
-from raderbot.config import config_manager
-from raderbot.tools.basic_tools import get_current_time, get_weather
+from radbot.agent.agent import radbotAgent, create_agent
+from radbot.config import config_manager
+from radbot.tools.basic_tools import get_current_time, get_weather
 
 # Set up logging
 logging.basicConfig(
@@ -33,7 +33,7 @@ def check_home_assistant_status() -> dict:
     Returns:
         Dictionary with status information
     """
-    from raderbot.tools.mcp_utils import test_home_assistant_connection, list_home_assistant_domains
+    from radbot.tools.mcp_utils import test_home_assistant_connection, list_home_assistant_domains
     
     result = {
         "connected": False,
@@ -78,7 +78,7 @@ def search_home_assistant_entities(search_term: str, domain_filter=None):
     
     try:
         # Try to import and use the real function
-        from raderbot.tools.mcp_utils import find_home_assistant_entities
+        from radbot.tools.mcp_utils import find_home_assistant_entities
         return find_home_assistant_entities(search_term, domain_filter)
     except Exception as e:
         logger.error(f"Error in direct entity search: {str(e)}")
@@ -117,7 +117,7 @@ def HassTurnOn(entity_id: str):
     
     try:
         # Try to use the real Home Assistant tools if available
-        from raderbot.tools.mcp_tools import create_home_assistant_toolset
+        from radbot.tools.mcp_tools import create_home_assistant_toolset
         ha_tools = create_home_assistant_toolset()
         
         for tool in ha_tools:
@@ -158,7 +158,7 @@ def HassTurnOff(entity_id: str):
     
     try:
         # Try to use the real Home Assistant tools if available
-        from raderbot.tools.mcp_tools import create_home_assistant_toolset
+        from radbot.tools.mcp_tools import create_home_assistant_toolset
         ha_tools = create_home_assistant_toolset()
         
         for tool in ha_tools:
@@ -185,17 +185,17 @@ def HassTurnOff(entity_id: str):
             "error": str(e)
         }
 
-def setup_agent() -> Optional[RaderBotAgent]:
+def setup_agent() -> Optional[radbotAgent]:
     """Set up and configure the agent with tools and memory.
     
     Returns:
-        Configured RaderBotAgent instance or None if setup fails
+        Configured radbotAgent instance or None if setup fails
     """
     try:
         # Import the Home Assistant tool factory and memory agent factory
-        from raderbot.tools.mcp_tools import create_ha_mcp_enabled_agent
-        from raderbot.agent.agent import AgentFactory
-        from raderbot.agent.memory_agent_factory import create_memory_enabled_agent
+        from radbot.tools.mcp_tools import create_ha_mcp_enabled_agent
+        from radbot.agent.agent import AgentFactory
+        from radbot.agent.memory_agent_factory import create_memory_enabled_agent
         
         # Configure basic tools
         basic_tools = [get_current_time, get_weather]
@@ -223,7 +223,7 @@ def setup_agent() -> Optional[RaderBotAgent]:
                 return create_memory_enabled_agent(
                     tools=tools,
                     instruction_name="main_agent",
-                    name="raderbot"
+                    name="radbot"
                 )
             except Exception as e:
                 logger.warning(f"Failed to create memory-enabled agent: {str(e)}")
@@ -248,7 +248,7 @@ def setup_agent() -> Optional[RaderBotAgent]:
                 agent = create_memory_enabled_agent(
                     tools=basic_tools,
                     instruction_name="main_agent",
-                    name="raderbot"
+                    name="radbot"
                 )
                 logger.info("Created memory-enabled agent with basic tools")
             except Exception as e:
@@ -270,7 +270,7 @@ def setup_agent() -> Optional[RaderBotAgent]:
 def display_welcome_message() -> None:
     """Display welcome message and instructions."""
     print("\n" + "=" * 60)
-    print("RaderBot CLI Interface".center(60))
+    print("radbot CLI Interface".center(60))
     print("=" * 60)
     
     # Check Home Assistant status
@@ -300,19 +300,19 @@ def display_welcome_message() -> None:
     print("=" * 60)
 
 
-def process_commands(command: str, agent: RaderBotAgent, user_id: str) -> bool:
+def process_commands(command: str, agent: radbotAgent, user_id: str) -> bool:
     """Process special commands.
     
     Args:
         command: The command to process (without the leading '/')
-        agent: The RaderBotAgent instance
+        agent: The radbotAgent instance
         user_id: The current user ID
         
     Returns:
         True if application should exit, False otherwise
     """
     if command in ["exit", "quit"]:
-        print("\nExiting RaderBot CLI. Goodbye!")
+        print("\nExiting radbot CLI. Goodbye!")
         return True
     elif command == "reset":
         try:
@@ -359,7 +359,7 @@ def process_commands(command: str, agent: RaderBotAgent, user_id: str) -> bool:
                 
                 # Get memory stats if possible
                 try:
-                    from raderbot.tools.memory_tools import search_past_conversations
+                    from radbot.tools.memory_tools import search_past_conversations
                     # Use an empty query to get stats
                     memory_stats = search_past_conversations(
                         query="", 
@@ -411,7 +411,7 @@ def process_commands(command: str, agent: RaderBotAgent, user_id: str) -> bool:
                 print(f"Tools count: {ha_status['tools_count']}")
                 
             # Try to get a detailed tool list
-            from raderbot.tools.mcp_utils import test_home_assistant_connection
+            from radbot.tools.mcp_utils import test_home_assistant_connection
             try:
                 details = test_home_assistant_connection()
                 if details.get("success") and details.get("tools"):
@@ -481,7 +481,7 @@ def main():
             logger.info(f"Processing message: {user_input[:20]}{'...' if len(user_input) > 20 else ''}")
             
             response = agent.process_message(user_id, user_input)
-            print(f"\nRaderBot: {response}")
+            print(f"\nradbot: {response}")
             
         except KeyboardInterrupt:
             print("\n\nSession interrupted. Exiting.")

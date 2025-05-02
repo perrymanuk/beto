@@ -1,25 +1,25 @@
 """
-Agent package for the RaderBot framework.
+Agent package for the RadBot framework.
 """
 
-from raderbot.agent.agent import (
-    RaderBotAgent, 
+from radbot.agent.agent import (
+    RadBotAgent, 
     AgentFactory, 
     create_agent,
     create_runner
 )
-from raderbot.agent.memory_agent_factory import create_memory_enabled_agent
-from raderbot.agent.web_search_agent_factory import (
+from radbot.agent.memory_agent_factory import create_memory_enabled_agent
+from radbot.agent.web_search_agent_factory import (
     create_websearch_agent,
     create_websearch_enabled_root_agent
 )
 
 # Create a default root_agent for ADK web interface
-from raderbot.tools.basic_tools import get_current_time, get_weather
-from raderbot.tools.memory_tools import search_past_conversations, store_important_information
-from raderbot.tools.web_search_tools import create_tavily_search_tool
+from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.tools.web_search_tools import create_tavily_search_tool
 import logging
-from raderbot.config import config_manager
+from radbot.config import config_manager
 from google.adk.agents import Agent
 
 # Get the instruction for the web agent
@@ -51,7 +51,7 @@ except Exception as e:
         # Define a simple function without decorators
         def web_search(query: str) -> str:
             """Search the web for current information on a topic."""
-            from raderbot.tools.web_search_tools import HAVE_TAVILY, TavilySearchResults
+            from radbot.tools.web_search_tools import HAVE_TAVILY, TavilySearchResults
             import os
             
             logging.info(f"Running fallback web search for query: {query}")
@@ -94,7 +94,7 @@ logging.info(f"Creating web agent with tools: {[t.__name__ if hasattr(t, '__name
 
 # Create the BaseAgent directly - this is what ADK web expects
 root_agent = Agent(
-    name="raderbot_web",
+    name="radbot_web",
     model=config_manager.get_main_model(),
     instruction=instruction,
     description="The main agent that handles user requests with memory capabilities.",
@@ -105,7 +105,7 @@ logging.info(f"Created ADK BaseAgent for web UI with {len(base_tools)} tools")
 
 # Initialize a global memory service and store API keys that will be accessible to tools
 try:
-    from raderbot.memory.qdrant_memory import QdrantMemoryService
+    from radbot.memory.qdrant_memory import QdrantMemoryService
     from google.adk.tools.tool_context import ToolContext
     import os
 
@@ -134,7 +134,7 @@ except Exception as e:
 
 # Export classes and functions for easy import
 __all__ = [
-    'RaderBotAgent',
+    'RadBotAgent',
     'AgentFactory',
     'create_agent',
     'create_runner',

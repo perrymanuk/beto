@@ -13,13 +13,13 @@ import time
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
-from raderbot.tools.mcp_tools import create_home_assistant_toolset, create_ha_mcp_enabled_agent
-from raderbot.tools.mcp_utils import (
+from radbot.tools.mcp_tools import create_home_assistant_toolset, create_ha_mcp_enabled_agent
+from radbot.tools.mcp_utils import (
     test_home_assistant_connection, 
     list_home_assistant_domains,
     check_home_assistant_entity
 )
-from raderbot.agent.agent import AgentFactory
+from radbot.agent.agent import AgentFactory
 
 # Set up logging
 logging.basicConfig(

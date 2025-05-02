@@ -12,10 +12,10 @@ from google.adk.sessions import InMemorySessionService
 # SessionService is now just InMemorySessionService in recent ADK versions
 SessionService = InMemorySessionService  # Type alias for backward compatibility
 
-from raderbot.agent.agent import RaderBotAgent
-from raderbot.memory.qdrant_memory import QdrantMemoryService
-from raderbot.tools.memory_tools import search_past_conversations, store_important_information
-from raderbot.config import config_manager
+from radbot.agent.agent import RadBotAgent
+from radbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.config import config_manager
 
 # Load environment variables
 load_dotenv()
@@ -26,7 +26,7 @@ def create_memory_enabled_agent(
     memory_service: Optional[QdrantMemoryService] = None,
     instruction_name: str = "main_agent",
     name: str = "memory_enabled_agent",
-) -> RaderBotAgent:
+) -> RadBotAgent:
     """
     Create an agent with memory capabilities.
     
@@ -38,7 +38,7 @@ def create_memory_enabled_agent(
         name: Name for the agent
         
     Returns:
-        A configured RaderBotAgent instance with memory capabilities
+        A configured RadBotAgent instance with memory capabilities
     """
     # Create or use provided session service
     session_service = session_service or InMemorySessionService()
@@ -52,7 +52,7 @@ def create_memory_enabled_agent(
         api_key = os.getenv("QDRANT_API_KEY")
         
         # Get collection name from env if available
-        collection = os.getenv("QDRANT_COLLECTION", "raderbot_memories")
+        collection = os.getenv("QDRANT_COLLECTION", "radbot_memories")
         
         # Create memory service
         try:
@@ -95,7 +95,7 @@ def create_memory_enabled_agent(
     logging.info(f"Creating memory-enabled agent with tools: {', '.join(tool_names[:10])}")
     
     # Use the updated constructor that accepts memory_service directly
-    agent = RaderBotAgent(
+    agent = RadBotAgent(
         name=name,
         session_service=session_service,
         tools=all_tools,
@@ -112,7 +112,7 @@ def create_memory_enabled_agent(
         # Also recreate the runner to ensure it has the memory service
         agent.runner = Runner(
             agent=agent.root_agent,
-            app_name="raderbot",
+            app_name="radbot",
             session_service=session_service,
             memory_service=memory_service
         )

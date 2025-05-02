@@ -1,7 +1,7 @@
 """
 Integration tests for Home Assistant MCP integration.
 
-These tests verify the integration between RaderBot and Home Assistant via MCP.
+These tests verify the integration between radbot and Home Assistant via MCP.
 """
 import os
 import pytest
@@ -10,10 +10,10 @@ from unittest.mock import patch, MagicMock
 
 # For Google ADK 0.3.0+, we use our own SseServerParams class
 from google.adk.tools.mcp_tool import MCPToolset
-from raderbot.tools.mcp_tools import SseServerParams
+from radbot.tools.mcp_tools import SseServerParams
 
-from raderbot.tools.mcp_tools import create_home_assistant_toolset, create_ha_mcp_enabled_agent
-from raderbot.tools.mcp_utils import (
+from radbot.tools.mcp_tools import create_home_assistant_toolset, create_ha_mcp_enabled_agent
+from radbot.tools.mcp_utils import (
     test_home_assistant_connection, 
     check_home_assistant_entity,
     list_home_assistant_domains
@@ -50,7 +50,7 @@ class TestHomeAssistantIntegration:
         else:
             os.environ.pop("HA_AUTH_TOKEN", None)
 
-    @patch('raderbot.tools.mcp_tools.MCPToolset')
+    @patch('radbot.tools.mcp_tools.MCPToolset')
     def test_create_toolset_with_environment_variables(self, mock_mcp_toolset):
         """Test that environment variables are correctly used when creating a toolset."""
         # Setup mock
@@ -73,7 +73,7 @@ class TestHomeAssistantIntegration:
         assert ha_params.url == "mock://homeassistant:8123/api/mcp/stream"
         assert ha_params.headers["Authorization"] == "Bearer mock_token_for_testing"
     
-    @patch('raderbot.tools.mcp_utils.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_utils.create_home_assistant_toolset')
     def test_integration_workflow(self, mock_create_toolset):
         """Test full integration workflow from connection test to domain listing."""
         # Setup mock toolset
@@ -103,7 +103,7 @@ class TestHomeAssistantIntegration:
         assert entity_result["success"] is True
         assert entity_result["domain"] == "light"
     
-    @patch('raderbot.tools.mcp_tools.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_tools.create_home_assistant_toolset')
     def test_agent_creation_with_ha_integration(self, mock_create_toolset):
         """Test creating an agent with Home Assistant integration."""
         # Setup mock toolset

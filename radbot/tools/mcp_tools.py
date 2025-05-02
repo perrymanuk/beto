@@ -137,7 +137,7 @@ def create_home_assistant_toolset() -> List[Any]:
 def create_find_ha_entities_tool():
     """Create a function tool to search for Home Assistant entities."""
     import logging
-    from raderbot.tools.mcp_utils import find_home_assistant_entities
+    from radbot.tools.mcp_utils import find_home_assistant_entities
     
     logger = logging.getLogger(__name__)
     
@@ -278,7 +278,7 @@ def search_home_assistant_entities(search_term: str, domain_filter: str = None) 
     logger = logging.getLogger(__name__)
     
     logger.info(f"Entity search called with term: '{search_term}', domain_filter: '{domain_filter}'")
-    from raderbot.tools.mcp_utils import find_home_assistant_entities
+    from radbot.tools.mcp_utils import find_home_assistant_entities
     
     try:
         result = find_home_assistant_entities(search_term, domain_filter)
@@ -364,7 +364,7 @@ def create_ha_mcp_enabled_agent(agent_factory, base_tools=None, ensure_memory_to
         
         # Ensure memory tools are included if requested
         if ensure_memory_tools:
-            from raderbot.tools.memory_tools import search_past_conversations, store_important_information
+            from radbot.tools.memory_tools import search_past_conversations, store_important_information
             memory_tools = [search_past_conversations, store_important_information]
             
             # Check if memory tools are already in tools list

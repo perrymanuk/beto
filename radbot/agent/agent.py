@@ -1,7 +1,7 @@
 """
-Main agent implementation for Raderbot.
+Main agent implementation for Radbot.
 
-This module defines the core RaderBotAgent class and factory functions using Google's ADK.
+This module defines the core RadBotAgent class and factory functions using Google's ADK.
 """
 import os
 from typing import Any, Dict, List, Optional, Union
@@ -13,8 +13,8 @@ from google.adk.sessions import InMemorySessionService
 # SessionService is now just InMemorySessionService in recent ADK versions
 SessionService = InMemorySessionService  # Type alias for backward compatibility
 
-from raderbot.config import config_manager
-from raderbot.config.settings import ConfigManager
+from radbot.config import config_manager
+from radbot.config.settings import ConfigManager
 
 # Load environment variables
 load_dotenv()
@@ -27,9 +27,9 @@ memory when necessary. Be clear and concise in your responses.
 """
 
 
-class RaderBotAgent:
+class RadBotAgent:
     """
-    Main agent class for the RaderBot framework.
+    Main agent class for the RadBot framework.
     
     This class encapsulates the ADK agent, runner, and session management.
     It provides a unified interface for interacting with the agent system.
@@ -47,7 +47,7 @@ class RaderBotAgent:
         memory_service: Optional[Any] = None
     ):
         """
-        Initialize the RaderBot agent.
+        Initialize the RadBot agent.
         
         Args:
             session_service: Optional custom session service for conversation state
@@ -105,7 +105,7 @@ class RaderBotAgent:
                 logger = logging.getLogger(__name__)
                 logger.info("Memory tools detected, trying to create memory service")
                 
-                from raderbot.memory.qdrant_memory import QdrantMemoryService
+                from radbot.memory.qdrant_memory import QdrantMemoryService
                 self._memory_service = QdrantMemoryService()
                 logger.info("Successfully created QdrantMemoryService")
             except Exception as e:
@@ -116,7 +116,7 @@ class RaderBotAgent:
         if self._memory_service:
             self.runner = Runner(
                 agent=self.root_agent,
-                app_name="raderbot",
+                app_name="radbot",
                 session_service=self.session_service,
                 memory_service=self._memory_service
             )
@@ -125,7 +125,7 @@ class RaderBotAgent:
         else:
             self.runner = Runner(
                 agent=self.root_agent,
-                app_name="raderbot",
+                app_name="radbot",
                 session_service=self.session_service
             )
     
@@ -378,7 +378,7 @@ class AgentFactory:
 
 def create_runner(
     agent: Agent, 
-    app_name: str = "raderbot",
+    app_name: str = "radbot",
     session_service: Optional[SessionService] = None
 ) -> Runner:
     """Create an ADK Runner with the specified agent.
@@ -410,9 +410,9 @@ def create_agent(
     name: str = "main_coordinator",
     config: Optional[ConfigManager] = None,
     include_memory_tools: bool = True
-) -> RaderBotAgent:
+) -> RadBotAgent:
     """
-    Create a configured RaderBot agent.
+    Create a configured RadBot agent.
     
     Args:
         session_service: Optional session service for conversation state
@@ -424,7 +424,7 @@ def create_agent(
         include_memory_tools: If True, includes memory tools automatically
         
     Returns:
-        A configured RaderBotAgent instance
+        A configured RadBotAgent instance
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -435,7 +435,7 @@ def create_agent(
     # Include memory tools if requested
     if include_memory_tools:
         try:
-            from raderbot.tools.memory_tools import search_past_conversations, store_important_information
+            from radbot.tools.memory_tools import search_past_conversations, store_important_information
             memory_tools = [search_past_conversations, store_important_information]
             
             # Add memory tools if they're not already included
@@ -456,7 +456,7 @@ def create_agent(
             logger.warning(f"Failed to add memory tools: {str(e)}")
     
     # Create the agent with all the specified parameters
-    agent = RaderBotAgent(
+    agent = RadBotAgent(
         session_service=session_service,
         tools=all_tools,
         model=model,

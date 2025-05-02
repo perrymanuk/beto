@@ -1,6 +1,6 @@
 # Agent Configuration System
 
-This document details the configuration system for the RaderBot agent framework, focusing on prompt management, model selection, and configuration loading.
+This document details the configuration system for the radbot agent framework, focusing on prompt management, model selection, and configuration loading.
 
 ## Configuration System Design
 
@@ -15,10 +15,10 @@ The configuration system allows for:
 ### Configuration Settings (`config/settings.py`)
 
 ```python
-# raderbot/config/settings.py
+# radbot/config/settings.py
 
 """
-Configuration settings and management for the RaderBot agent framework.
+Configuration settings and management for the radbot agent framework.
 """
 
 import os
@@ -61,10 +61,10 @@ class ConfigManager:
         """
         return {
             # Primary model for main agent (default to Pro 2.5)
-            "main_model": os.getenv("RADERBOT_MAIN_MODEL", "gemini-2.5-pro"),
+            "main_model": os.getenv("RADBOT_MAIN_MODEL", "gemini-2.5-pro"),
             
             # Model for simpler sub-agents (default to Flash)
-            "sub_agent_model": os.getenv("RADERBOT_SUB_MODEL", "gemini-2.0-flash"),
+            "sub_agent_model": os.getenv("RADBOT_SUB_MODEL", "gemini-2.0-flash"),
             
             # Use Vertex AI flag
             "use_vertex_ai": os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "FALSE").upper() == "TRUE"
@@ -148,13 +148,13 @@ class ConfigManager:
 ### Package Initialization (`config/__init__.py`)
 
 ```python
-# raderbot/config/__init__.py
+# radbot/config/__init__.py
 
 """
-Configuration management for the RaderBot agent framework.
+Configuration management for the radbot agent framework.
 """
 
-from raderbot.config.settings import ConfigManager
+from radbot.config.settings import ConfigManager
 
 # Create a default instance for import
 config_manager = ConfigManager()
@@ -166,7 +166,7 @@ config_manager = ConfigManager()
 
 ```python
 # Create necessary directories
-DEFAULT_CONFIG_DIR = Path("raderbot/config/default_configs")
+DEFAULT_CONFIG_DIR = Path("radbot/config/default_configs")
 DEFAULT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 (DEFAULT_CONFIG_DIR / "instructions").mkdir(exist_ok=True)
 (DEFAULT_CONFIG_DIR / "schemas").mkdir(exist_ok=True)
@@ -206,10 +206,10 @@ Pydantic models provide type-safe representations of structured data that can be
 ### Schema Models (`schema_models.py`)
 
 ```python
-# raderbot/config/schema_models.py
+# radbot/config/schema_models.py
 
 """
-Pydantic models for structured data interfaces in the RaderBot framework.
+Pydantic models for structured data interfaces in the radbot framework.
 """
 
 from typing import List, Optional
@@ -240,10 +240,10 @@ class MemoryQueryInput(BaseModel):
 The updated agent implementation integrates with the configuration system:
 
 ```python
-# raderbot/agent.py (updated excerpt)
+# radbot/agent.py (updated excerpt)
 
-from raderbot.config import config_manager
-from raderbot.config.schema_models import UserInfoInput, ExtractedInfoOutput
+from radbot.config import config_manager
+from radbot.config.schema_models import UserInfoInput, ExtractedInfoOutput
 
 # Use the configuration manager to get instructions and model names
 def create_agent(
@@ -251,9 +251,9 @@ def create_agent(
     tools: Optional[List[Any]] = None,
     model: Optional[str] = None,
     instruction_name: str = "main_agent"
-) -> RaderBotAgent:
+) -> radbotAgent:
     """
-    Create a configured RaderBot agent.
+    Create a configured radbot agent.
     
     Args:
         session_service: Optional session service for conversation state
@@ -262,7 +262,7 @@ def create_agent(
         instruction_name: Name of the instruction prompt to load (from config)
         
     Returns:
-        A configured RaderBotAgent instance
+        A configured radbotAgent instance
     """
     # Get the model name (use provided or get from config)
     model_name = model or config_manager.get_main_model()
@@ -274,7 +274,7 @@ def create_agent(
         # Fall back to the hardcoded instruction if the file doesn't exist
         instruction = MAIN_AGENT_INSTRUCTION
     
-    return RaderBotAgent(
+    return radbotAgent(
         session_service=session_service,
         tools=tools,
         model=model_name,
@@ -288,9 +288,9 @@ This example shows how to create an agent with structured input:
 
 ```python
 # Example agent with structured input
-from raderbot.agent import Agent
-from raderbot.config import config_manager
-from raderbot.config.schema_models import UserInfoInput
+from radbot.agent import Agent
+from radbot.config import config_manager
+from radbot.config.schema_models import UserInfoInput
 
 # Create an agent that expects structured input
 data_processing_agent = Agent(
@@ -311,7 +311,7 @@ The configuration system supports two levels of overrides:
 
 ```python
 # Example of custom configuration directory
-from raderbot.config.settings import ConfigManager
+from radbot.config.settings import ConfigManager
 from pathlib import Path
 
 # Create a config manager with custom directory
@@ -319,9 +319,9 @@ custom_config_path = Path("/path/to/custom/configs")
 custom_config = ConfigManager(config_dir=custom_config_path)
 
 # Use the custom config to create an agent
-from raderbot.agent import RaderBotAgent
+from radbot.agent import radbotAgent
 
-custom_agent = RaderBotAgent(
+custom_agent = radbotAgent(
     model=custom_config.get_main_model(), 
     instruction=custom_config.get_instruction("custom_prompt")
 )

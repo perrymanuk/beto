@@ -1,5 +1,5 @@
 """
-Basic tools for Raderbot agents.
+Basic tools for radbot agents.
 
 This module implements simple tools like time and weather services.
 """
@@ -111,8 +111,8 @@ def get_weather(city: str, tool_context: Optional[ToolContext] = None) -> str:
     import os
     import logging
     from dotenv import load_dotenv
-    from raderbot.tools.weather_connector import get_weather as get_real_weather
-    from raderbot.tools.weather_connector import format_weather_response
+    from radbot.tools.weather_connector import get_weather as get_real_weather
+    from radbot.tools.weather_connector import format_weather_response
     
     logger = logging.getLogger(__name__)
     logger.info(f"get_weather tool called with city: {city}")

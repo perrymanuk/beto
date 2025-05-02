@@ -19,7 +19,7 @@ from typing import Dict, Any, List
 from dotenv import load_dotenv
 
 # Import the WeatherConnector
-from raderbot.tools.weather_connector import WeatherConnector, get_weather, get_forecast
+from radbot.tools.weather_connector import WeatherConnector, get_weather, get_forecast
 
 # Configure logging
 logging.basicConfig(
@@ -92,7 +92,7 @@ async def main():
     if "error" in weather_result:
         logger.error(f"Error: {weather_result['error']}")
     else:
-        from raderbot.tools.weather_connector import format_weather_response
+        from radbot.tools.weather_connector import format_weather_response
         formatted = format_weather_response(weather_result)
         logger.info(formatted)
 

@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, List, Union
 
 from dotenv import load_dotenv
 
-from raderbot.tools.mcp_tools import create_home_assistant_toolset
+from radbot.tools.mcp_tools import create_home_assistant_toolset
 
 # Load environment variables
 load_dotenv()
@@ -116,7 +116,7 @@ async def _check_home_assistant_entity_async(entity_id: str) -> Dict[str, Any]:
         Dictionary with entity information or error details
     """
     # Import here to avoid circular imports
-    from raderbot.tools.mcp_tools import _create_home_assistant_toolset_async
+    from radbot.tools.mcp_tools import _create_home_assistant_toolset_async
     
     # Initialize the Home Assistant MCP
     ha_tools, exit_stack = await _create_home_assistant_toolset_async()
@@ -229,7 +229,7 @@ async def _list_home_assistant_domains_async() -> Dict[str, Any]:
         Dictionary with domain information or error details
     """
     # Import here to avoid circular imports
-    from raderbot.tools.mcp_tools import _create_home_assistant_toolset_async
+    from radbot.tools.mcp_tools import _create_home_assistant_toolset_async
     
     # Initialize the Home Assistant MCP
     ha_tools, exit_stack = await _create_home_assistant_toolset_async()
@@ -342,7 +342,7 @@ async def _find_home_assistant_entities_async(search_term: str, domain_filter: O
         Dictionary with entity information or error details
     """
     # Import here to avoid circular imports
-    from raderbot.tools.mcp_tools import _create_home_assistant_toolset_async
+    from radbot.tools.mcp_tools import _create_home_assistant_toolset_async
     
     # Initialize the Home Assistant MCP
     ha_tools, exit_stack = await _create_home_assistant_toolset_async()

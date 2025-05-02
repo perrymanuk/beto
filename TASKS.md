@@ -1,6 +1,6 @@
 # Tasks
 
-This file tracks development tasks for the Raderbot project.
+This file tracks development tasks for the radbot project.
 
 ## Setup & Infrastructure
 
@@ -41,6 +41,12 @@ This file tracks development tasks for the Raderbot project.
 - [x] Add entity search functionality to find real Home Assistant entities
 - [x] Fix entity search tool malformed function call error
 - [x] Add diagnostic tools to debug Home Assistant integration
+- [x] Implement MCP fileserver integration
+- [x] Create MCP fileserver server script
+- [x] Implement MCP fileserver client integration
+- [x] Add MCP fileserver tools to main agent
+- [x] Create test script for MCP fileserver operations
+- [ ] Implement additional MCP servers as needed
 
 ## Web Search Integration
 
@@ -68,6 +74,7 @@ This file tracks development tasks for the Raderbot project.
 - [x] Document agent configuration
 - [x] Document memory system architecture
 - [x] Add help target to Makefile
+- [x] Document MCP fileserver implementation
 
 ## CLI & Interfaces
 

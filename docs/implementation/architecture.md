@@ -1,10 +1,10 @@
-# Raderbot Architecture
+# radbot Architecture
 
-This document provides an overview of the Raderbot architecture, detailing the key components and their interactions.
+This document provides an overview of the radbot architecture, detailing the key components and their interactions.
 
 ## Overview
 
-Raderbot is a modular AI agent framework built on Google's Agent Development Kit (ADK). It uses Gemini models for reasoning, Qdrant for persistent memory, MCP for external service communication, and optionally A2A for inter-agent communication.
+radbot is a modular AI agent framework built on Google's Agent Development Kit (ADK). It uses Gemini models for reasoning, Qdrant for persistent memory, MCP for external service communication, and optionally A2A for inter-agent communication.
 
 ## Key Components
 

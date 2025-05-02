@@ -10,11 +10,11 @@ import logging
 import sys
 from pprint import pprint
 
-# Add the parent directory to the path so we can import raderbot modules
+# Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from raderbot.tools.mcp_tools import create_home_assistant_toolset
-from raderbot.tools.mcp_utils import test_home_assistant_connection, list_home_assistant_domains
+from radbot.tools.mcp_tools import create_home_assistant_toolset
+from radbot.tools.mcp_utils import test_home_assistant_connection, list_home_assistant_domains
 
 # Configure logging
 logging.basicConfig(

@@ -1,6 +1,6 @@
-# RaderBot Agent and ConfigManager Integration
+# radbot Agent and ConfigManager Integration
 
-This document outlines the integration between the `RaderBotAgent` class and the `ConfigManager` in the RaderBot framework.
+This document outlines the integration between the `radbotAgent` class and the `ConfigManager` in the radbot framework.
 
 ## Overview
 
@@ -16,7 +16,7 @@ The integration allows the agent system to load configuration from centralized s
 
 ### Agent Configuration
 
-The `RaderBotAgent` class now accepts a `ConfigManager` instance as an optional parameter. If not provided, it falls back to the global instance. The agent uses the ConfigManager for:
+The `radbotAgent` class now accepts a `ConfigManager` instance as an optional parameter. If not provided, it falls back to the global instance. The agent uses the ConfigManager for:
 
 - Loading the appropriate model name (`get_main_model()`)
 - Loading instruction prompts (`get_instruction(instruction_name)`)
@@ -52,8 +52,8 @@ The agent now supports updating its configuration at runtime:
 ### Creating an Agent with Custom Config
 
 ```python
-from raderbot.config.settings import ConfigManager
-from raderbot.agent.agent import create_agent
+from radbot.config.settings import ConfigManager
+from radbot.agent.agent import create_agent
 
 # Create a custom config manager
 custom_config = ConfigManager(config_dir=Path("/path/to/custom/configs"))
@@ -68,7 +68,7 @@ agent = create_agent(
 ### Creating a Sub-Agent with Different Model
 
 ```python
-from raderbot.agent.agent import AgentFactory
+from radbot.agent.agent import AgentFactory
 
 # Create a sub-agent that uses the sub-agent model from config
 memory_agent = AgentFactory.create_sub_agent(

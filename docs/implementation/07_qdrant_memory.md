@@ -1,6 +1,6 @@
 # Qdrant Memory System Implementation
 
-This document details the implementation of a persistent memory system for the RaderBot agent framework using Qdrant as the vector database.
+This document details the implementation of a persistent memory system for the radbot agent framework using Qdrant as the vector database.
 
 ## Memory System Architecture
 
@@ -16,7 +16,7 @@ The memory system consists of several key components:
 ### Qdrant Memory Service (`memory/qdrant_memory.py`)
 
 ```python
-# raderbot/memory/qdrant_memory.py
+# radbot/memory/qdrant_memory.py
 
 """
 Custom memory service implementation using Qdrant as the vector database.
@@ -34,7 +34,7 @@ from qdrant_client import QdrantClient, models
 
 from google.adk.sessions import Session
 from google.adk.memory import BaseMemoryService
-from raderbot.memory.embedding import get_embedding_model, embed_text
+from radbot.memory.embedding import get_embedding_model, embed_text
 
 # Load environment variables
 load_dotenv()
@@ -433,7 +433,7 @@ class QdrantMemoryService(BaseMemoryService):
 ### Text Embedding Module (`memory/embedding.py`)
 
 ```python
-# raderbot/memory/embedding.py
+# radbot/memory/embedding.py
 
 """
 Text embedding utilities for the Qdrant memory system.
@@ -471,7 +471,7 @@ def get_embedding_model() -> EmbeddingModel:
         EmbeddingModel: The configured embedding model
     """
     # Determine which embedding model to use based on environment variables
-    embed_model = os.getenv("RADERBOT_EMBED_MODEL", "gemini").lower()
+    embed_model = os.getenv("radbot_EMBED_MODEL", "gemini").lower()
     
     if embed_model == "gemini":
         return _initialize_gemini_embedding()
@@ -579,10 +579,10 @@ def embed_text(text: str, model: EmbeddingModel) -> List[float]:
 ### Memory Tools (`tools/memory_tools.py`)
 
 ```python
-# raderbot/tools/memory_tools.py
+# radbot/tools/memory_tools.py
 
 """
-Memory tools for the RaderBot agent framework.
+Memory tools for the radbot agent framework.
 
 These tools allow agents to interact with the memory system.
 """
@@ -653,7 +653,7 @@ def search_past_conversations(
         
         # Search memories
         results = memory_service.search_memory(
-            app_name="raderbot",
+            app_name="radbot",
             user_id=user_id,
             query=query,
             limit=max_results,
@@ -760,14 +760,14 @@ def store_important_information(
 ## Package Initialization (`memory/__init__.py`)
 
 ```python
-# raderbot/memory/__init__.py
+# radbot/memory/__init__.py
 
 """
-Memory system package for the RaderBot agent framework.
+Memory system package for the radbot agent framework.
 """
 
-from raderbot.memory.qdrant_memory import QdrantMemoryService
-from raderbot.memory.embedding import get_embedding_model, embed_text
+from radbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.memory.embedding import get_embedding_model, embed_text
 
 # Export classes for easy import
 __all__ = ['QdrantMemoryService', 'get_embedding_model', 'embed_text']
@@ -778,7 +778,7 @@ __all__ = ['QdrantMemoryService', 'get_embedding_model', 'embed_text']
 ### Runner Configuration with Memory Service
 
 ```python
-# raderbot/agent_factory.py
+# radbot/agent_factory.py
 
 """
 Factory functions for creating agents with full capabilities.
@@ -791,9 +791,9 @@ from dotenv import load_dotenv
 from google.adk.runners import Runner
 from google.adk.sessions import SessionService, InMemorySessionService
 
-from raderbot.agent import RaderBotAgent
-from raderbot.memory.qdrant_memory import QdrantMemoryService
-from raderbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.agent import radbotAgent
+from radbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.tools.memory_tools import search_past_conversations, store_important_information
 
 # Load environment variables
 load_dotenv()
@@ -802,7 +802,7 @@ def create_memory_enabled_agent(
     session_service: Optional[SessionService] = None,
     tools: Optional[List[Any]] = None,
     memory_service: Optional[QdrantMemoryService] = None,
-) -> RaderBotAgent:
+) -> radbotAgent:
     """
     Create an agent with memory capabilities.
     
@@ -812,7 +812,7 @@ def create_memory_enabled_agent(
         memory_service: Optional custom memory service (creates one if not provided)
         
     Returns:
-        A configured RaderBotAgent instance with memory capabilities
+        A configured radbotAgent instance with memory capabilities
     """
     # Create or use provided session service
     session_service = session_service or InMemorySessionService()
@@ -837,7 +837,7 @@ def create_memory_enabled_agent(
     all_tools = (tools or []) + memory_tools
     
     # Create the agent
-    agent = RaderBotAgent(
+    agent = radbotAgent(
         session_service=session_service,
         tools=all_tools
     )
@@ -845,7 +845,7 @@ def create_memory_enabled_agent(
     # Configure the runner with memory service
     agent.runner = Runner(
         agent=agent.root_agent,
-        app_name="raderbot",
+        app_name="radbot",
         session_service=session_service,
         memory_service=memory_service
     )
@@ -856,10 +856,10 @@ def create_memory_enabled_agent(
 ## Memory Ingestion Pipeline
 
 ```python
-# raderbot/memory/ingestion.py
+# radbot/memory/ingestion.py
 
 """
-Memory ingestion pipeline for the RaderBot agent framework.
+Memory ingestion pipeline for the radbot agent framework.
 
 This module provides utilities for processing and ingesting session data into memory.
 """
@@ -871,7 +871,7 @@ from threading import Thread, Event
 
 from google.adk.sessions import Session, SessionService
 
-from raderbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.memory.qdrant_memory import QdrantMemoryService
 
 logger = logging.getLogger(__name__)
 

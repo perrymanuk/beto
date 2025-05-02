@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import Dict, Any, Optional
 
-# Add the parent directory to the path so we can import raderbot modules
+# Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
@@ -38,7 +38,7 @@ def main():
     print("=" * 60)
     
     # Import the entity search function
-    from raderbot.tools.mcp_utils import find_home_assistant_entities
+    from radbot.tools.mcp_utils import find_home_assistant_entities
     
     # Create a direct wrapper function
     def search_home_assistant_entities(search_term: str, domain_filter: Optional[str] = None) -> Dict[str, Any]:

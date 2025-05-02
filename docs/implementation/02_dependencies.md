@@ -1,6 +1,6 @@
 # Core Dependencies Installation and Configuration
 
-This document covers the installation and configuration of the core dependencies required for the RaderBot agent framework.
+This document covers the installation and configuration of the core dependencies required for the radbot agent framework.
 
 ## ADK Installation and Setup
 
@@ -127,7 +127,7 @@ Create a `pyproject.toml` file with all dependencies:
 
 ```toml
 [project]
-name = "raderbot"
+name = "radbot"
 version = "0.1.0"
 description = "A modular AI agent framework using ADK, Qdrant, MCP, and A2A"
 requires-python = ">=3.10"

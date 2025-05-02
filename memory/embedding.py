@@ -34,7 +34,7 @@ def get_embedding_model() -> EmbeddingModel:
         EmbeddingModel: The configured embedding model
     """
     # Determine which embedding model to use based on environment variables
-    embed_model = os.getenv("RADERBOT_EMBED_MODEL", "gemini").lower()
+    embed_model = os.getenv("radbot_EMBED_MODEL", "gemini").lower()
     
     if embed_model == "gemini":
         return _initialize_gemini_embedding()

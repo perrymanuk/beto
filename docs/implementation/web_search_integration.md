@@ -1,22 +1,22 @@
 # Web Search Integration
 
-This document provides details about the web search capabilities added to RaderBot using the Tavily API.
+This document provides details about the web search capabilities added to radbot using the Tavily API.
 
 ## Overview
 
-RaderBot can now search the web using the Tavily API, allowing it to find information from across the internet to answer user queries. This is implemented as a standalone tool that can be added to any agent.
+radbot can now search the web using the Tavily API, allowing it to find information from across the internet to answer user queries. This is implemented as a standalone tool that can be added to any agent.
 
 ## Technical Implementation
 
 ### Components
 
 1. **Tavily Search Tool**:
-   - Defined in `raderbot/tools/web_search_tools.py`
+   - Defined in `radbot/tools/web_search_tools.py`
    - Uses the LangChain integration with Tavily API
    - Wrapped for Google ADK compatibility using `LangchainTool`
 
 2. **Agent Factory**:
-   - Implemented in `raderbot/agent/web_search_agent_factory.py`
+   - Implemented in `radbot/agent/web_search_agent_factory.py`
    - Provides factory functions for creating agents with web search capabilities
    - Supports customization of search parameters
 
@@ -47,9 +47,9 @@ The Tavily search tool can be configured with the following parameters:
 ### Creating an Agent with Web Search
 
 ```python
-from raderbot.agent import create_websearch_agent
+from radbot.agent import create_websearch_agent
 
-# Create a RaderBot agent with web search capabilities
+# Create a radbot agent with web search capabilities
 agent = create_websearch_agent(
     max_results=5,
     search_depth="advanced"
@@ -63,7 +63,7 @@ print(response)
 ### Creating a Root Agent with Web Search
 
 ```python
-from raderbot.agent import create_websearch_enabled_root_agent
+from radbot.agent import create_websearch_enabled_root_agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 
@@ -78,7 +78,7 @@ root_agent = create_websearch_enabled_root_agent(
 session_service = InMemorySessionService()
 runner = Runner(
     agent=root_agent,
-    app_name="raderbot",
+    app_name="radbot",
     session_service=session_service
 )
 

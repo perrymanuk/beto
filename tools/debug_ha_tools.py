@@ -10,14 +10,14 @@ import sys
 import logging
 from pprint import pprint
 
-# Add the parent directory to the path so we can import raderbot modules
+# Add the parent directory to the path so we can import radbot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
-from raderbot.tools.mcp_tools import create_home_assistant_toolset
-from raderbot.tools.mcp_utils import test_home_assistant_connection
-from raderbot.agent.agent import create_agent
-from raderbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.mcp_tools import create_home_assistant_toolset
+from radbot.tools.mcp_utils import test_home_assistant_connection
+from radbot.agent.agent import create_agent
+from radbot.tools.basic_tools import get_current_time, get_weather
 
 # Configure logging
 logging.basicConfig(

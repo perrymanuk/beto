@@ -12,9 +12,9 @@ import logging
 import argparse
 from dotenv import load_dotenv
 
-from raderbot.tools.mcp_utils import test_home_assistant_connection
-from raderbot.tools.mcp_utils import check_home_assistant_entity
-from raderbot.tools.mcp_utils import list_home_assistant_domains
+from radbot.tools.mcp_utils import test_home_assistant_connection
+from radbot.tools.mcp_utils import check_home_assistant_entity
+from radbot.tools.mcp_utils import list_home_assistant_domains
 
 # Set up logging
 logging.basicConfig(

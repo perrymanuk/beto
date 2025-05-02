@@ -8,8 +8,8 @@ import os
 import uuid
 from dotenv import load_dotenv
 
-from raderbot.tools.basic_tools import get_current_time, get_weather
-from raderbot.agent.memory_agent_factory import create_memory_enabled_agent
+from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.agent.memory_agent_factory import create_memory_enabled_agent
 
 # Load environment variables
 load_dotenv()

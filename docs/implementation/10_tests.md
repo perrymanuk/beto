@@ -1,10 +1,10 @@
-# Testing Framework for RaderBot
+# Testing Framework for radbot
 
-This document details the testing strategy and implementation for the RaderBot agent framework.
+This document details the testing strategy and implementation for the radbot agent framework.
 
 ## Testing Strategy
 
-The testing approach for RaderBot follows a comprehensive strategy that includes:
+The testing approach for radbot follows a comprehensive strategy that includes:
 
 1. **Unit Tests**: Testing individual components in isolation
 2. **Integration Tests**: Testing interactions between components
@@ -56,11 +56,11 @@ from unittest.mock import MagicMock, patch
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 
-from raderbot.agent import RaderBotAgent, create_agent
+from radbot.agent import radbotAgent, create_agent
 
 
-class TestRaderBotAgent(unittest.TestCase):
-    """Unit tests for the RaderBotAgent class."""
+class TestradbotAgent(unittest.TestCase):
+    """Unit tests for the radbotAgent class."""
     
     def setUp(self):
         """Set up test fixtures."""
@@ -70,8 +70,8 @@ class TestRaderBotAgent(unittest.TestCase):
         self.mock_runner = MagicMock()
         
         # Create patches
-        self.agent_patch = patch('raderbot.agent.Agent', return_value=self.mock_root_agent)
-        self.runner_patch = patch('raderbot.agent.Runner', return_value=self.mock_runner)
+        self.agent_patch = patch('radbot.agent.Agent', return_value=self.mock_root_agent)
+        self.runner_patch = patch('radbot.agent.Runner', return_value=self.mock_runner)
         
         # Start patches
         self.mock_agent = self.agent_patch.start()
@@ -86,7 +86,7 @@ class TestRaderBotAgent(unittest.TestCase):
     def test_init(self):
         """Test agent initialization."""
         # Create agent
-        agent = RaderBotAgent(
+        agent = radbotAgent(
             session_service=self.mock_session_service,
             tools=["mock_tool"]
         )
@@ -95,7 +95,7 @@ class TestRaderBotAgent(unittest.TestCase):
         self.mock_agent.assert_called_once()
         self.mock_runner_class.assert_called_once_with(
             agent=self.mock_root_agent,
-            app_name="raderbot",
+            app_name="radbot",
             session_service=self.mock_session_service
         )
         
@@ -106,7 +106,7 @@ class TestRaderBotAgent(unittest.TestCase):
     def test_add_tool(self):
         """Test adding a tool to the agent."""
         # Create agent
-        agent = RaderBotAgent(session_service=self.mock_session_service)
+        agent = radbotAgent(session_service=self.mock_session_service)
         
         # Mock agent tools
         self.mock_root_agent.tools = []
@@ -121,7 +121,7 @@ class TestRaderBotAgent(unittest.TestCase):
     def test_add_tools(self):
         """Test adding multiple tools to the agent."""
         # Create agent
-        agent = RaderBotAgent(session_service=self.mock_session_service)
+        agent = radbotAgent(session_service=self.mock_session_service)
         
         # Mock agent tools
         self.mock_root_agent.tools = []
@@ -136,7 +136,7 @@ class TestRaderBotAgent(unittest.TestCase):
     def test_process_message(self):
         """Test processing a user message."""
         # Create agent
-        agent = RaderBotAgent(session_service=self.mock_session_service)
+        agent = radbotAgent(session_service=self.mock_session_service)
         
         # Mock runner response
         mock_event1 = MagicMock()
@@ -160,7 +160,7 @@ class TestRaderBotAgent(unittest.TestCase):
     def test_process_message_no_response(self):
         """Test processing a message with no text response."""
         # Create agent
-        agent = RaderBotAgent(session_service=self.mock_session_service)
+        agent = radbotAgent(session_service=self.mock_session_service)
         
         # Mock runner response with no text event
         mock_event = MagicMock()
@@ -177,7 +177,7 @@ class TestRaderBotAgent(unittest.TestCase):
     def test_add_sub_agent(self):
         """Test adding a sub-agent to the main agent."""
         # Create agent
-        agent = RaderBotAgent(session_service=self.mock_session_service)
+        agent = radbotAgent(session_service=self.mock_session_service)
         
         # Mock agent sub_agents
         self.mock_root_agent.sub_agents = []
@@ -193,9 +193,9 @@ class TestRaderBotAgent(unittest.TestCase):
 class TestCreateAgent(unittest.TestCase):
     """Unit tests for the create_agent factory function."""
     
-    @patch('raderbot.agent.RaderBotAgent')
-    @patch('raderbot.agent.config_manager')
-    def test_create_agent(self, mock_config_manager, mock_raderbot_agent):
+    @patch('radbot.agent.radbotAgent')
+    @patch('radbot.agent.config_manager')
+    def test_create_agent(self, mock_config_manager, mock_radbot_agent):
         """Test creating an agent with the factory function."""
         # Mock config manager
         mock_config_manager.get_main_model.return_value = "mock-model"
@@ -217,7 +217,7 @@ class TestCreateAgent(unittest.TestCase):
         mock_config_manager.get_instruction.assert_called_once_with("custom_instruction")
         
         # Verify agent was created with correct parameters
-        mock_raderbot_agent.assert_called_once_with(
+        mock_radbot_agent.assert_called_once_with(
             session_service=mock_session_service,
             tools=mock_tools,
             model="custom-model",
@@ -225,7 +225,7 @@ class TestCreateAgent(unittest.TestCase):
         )
         
         # Verify the returned agent
-        self.assertEqual(agent, mock_raderbot_agent.return_value)
+        self.assertEqual(agent, mock_radbot_agent.return_value)
 ```
 
 ### Tool Unit Tests (`tests/unit/test_tools.py`)
@@ -241,14 +241,14 @@ import unittest
 from unittest.mock import MagicMock, patch
 from datetime import datetime
 
-from raderbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic_tools import get_current_time, get_weather
 
 
 class TestTimeTool(unittest.TestCase):
     """Unit tests for the time tool."""
     
-    @patch('raderbot.tools.basic_tools.ZoneInfo')
-    @patch('raderbot.tools.basic_tools.datetime')
+    @patch('radbot.tools.basic_tools.ZoneInfo')
+    @patch('radbot.tools.basic_tools.datetime')
     def test_get_time_success(self, mock_datetime, mock_zoneinfo):
         """Test getting the current time successfully."""
         # Mock datetime
@@ -280,7 +280,7 @@ class TestTimeTool(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("UnknownCity", result["error_message"])
     
-    @patch('raderbot.tools.basic_tools.ZoneInfo')
+    @patch('radbot.tools.basic_tools.ZoneInfo')
     def test_get_time_exception(self, mock_zoneinfo):
         """Test handling exceptions in the time tool."""
         # Mock ZoneInfo to raise exception
@@ -323,7 +323,7 @@ class TestWeatherTool(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("UnknownCity", result["error_message"])
     
-    @patch('raderbot.tools.basic_tools.mock_weather', {})
+    @patch('radbot.tools.basic_tools.mock_weather', {})
     def test_get_weather_empty_data(self):
         """Test weather tool with empty mock data."""
         # Call the tool
@@ -347,8 +347,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 import uuid
 
-from raderbot.memory.qdrant_memory import QdrantMemoryService
-from raderbot.memory.embedding import EmbeddingModel, embed_text
+from radbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.memory.embedding import EmbeddingModel, embed_text
 
 
 class TestQdrantMemoryService(unittest.TestCase):
@@ -360,8 +360,8 @@ class TestQdrantMemoryService(unittest.TestCase):
         self.mock_client = MagicMock()
         
         # Create patches
-        self.client_patch = patch('raderbot.memory.qdrant_memory.QdrantClient', return_value=self.mock_client)
-        self.embed_patch = patch('raderbot.memory.qdrant_memory.embed_text')
+        self.client_patch = patch('radbot.memory.qdrant_memory.QdrantClient', return_value=self.mock_client)
+        self.embed_patch = patch('radbot.memory.qdrant_memory.embed_text')
         
         # Start patches
         self.mock_client_class = self.client_patch.start()
@@ -372,7 +372,7 @@ class TestQdrantMemoryService(unittest.TestCase):
         self.mock_model.vector_size = 768
         
         # Mock get_embedding_model
-        self.model_patch = patch('raderbot.memory.qdrant_memory.get_embedding_model', return_value=self.mock_model)
+        self.model_patch = patch('radbot.memory.qdrant_memory.get_embedding_model', return_value=self.mock_model)
         self.mock_get_model = self.model_patch.start()
         
     def tearDown(self):
@@ -434,7 +434,7 @@ class TestQdrantMemoryService(unittest.TestCase):
         self.assertEqual(result.payload["text"], "Test memory")
         self.assertEqual(result.payload["memory_type"], "test")
     
-    @patch('raderbot.memory.qdrant_memory.uuid.uuid4')
+    @patch('radbot.memory.qdrant_memory.uuid.uuid4')
     def test_search_memory(self, mock_uuid):
         """Test searching memory."""
         # Set up mock UUID
@@ -458,7 +458,7 @@ class TestQdrantMemoryService(unittest.TestCase):
         
         # Call search_memory
         results = service.search_memory(
-            app_name="raderbot",
+            app_name="radbot",
             user_id="user123",
             query="Test query",
             limit=5
@@ -493,9 +493,9 @@ from unittest.mock import MagicMock, patch
 import tempfile
 import os
 
-from raderbot.agent_factory import create_memory_enabled_agent
-from raderbot.memory.qdrant_memory import QdrantMemoryService
-from raderbot.tools.memory_tools import search_past_conversations
+from radbot.agent_factory import create_memory_enabled_agent
+from radbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.tools.memory_tools import search_past_conversations
 
 
 class TestAgentMemoryIntegration(unittest.TestCase):
@@ -507,7 +507,7 @@ class TestAgentMemoryIntegration(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         
         # Create patches
-        self.qdrant_client_patch = patch('raderbot.memory.qdrant_memory.QdrantClient')
+        self.qdrant_client_patch = patch('radbot.memory.qdrant_memory.QdrantClient')
         
         # Start patches
         self.mock_qdrant_client = self.qdrant_client_patch.start()
@@ -532,11 +532,11 @@ class TestAgentMemoryIntegration(unittest.TestCase):
         self.mock_client.search.return_value = [mock_result]
         
         # Mock embedding
-        self.embed_patch = patch('raderbot.memory.embedding.embed_text', return_value=[0.1] * 768)
+        self.embed_patch = patch('radbot.memory.embedding.embed_text', return_value=[0.1] * 768)
         self.mock_embed = self.embed_patch.start()
         
         # Mock embedding model
-        self.model_patch = patch('raderbot.memory.embedding.get_embedding_model')
+        self.model_patch = patch('radbot.memory.embedding.get_embedding_model')
         self.mock_get_model = self.model_patch.start()
         
         mock_model = MagicMock()
@@ -843,8 +843,8 @@ ADK includes an evaluation framework that allows testing agent behavior using pr
 ```json
 {
   "evalset": {
-    "name": "RaderBot Core Functionality",
-    "description": "Basic tests for RaderBot agent functionality",
+    "name": "radbot Core Functionality",
+    "description": "Basic tests for radbot agent functionality",
     "eval_cases": [
       {
         "name": "time_query",
@@ -927,7 +927,7 @@ ADK includes an evaluation framework that allows testing agent behavior using pr
 To run evaluation tests with ADK:
 
 ```bash
-adk eval --evalset tests/eval/simple.evalset.json --agent-file raderbot/agent.py --agent-name main_agent
+adk eval --evalset tests/eval/simple.evalset.json --agent-file radbot/agent.py --agent-name main_agent
 ```
 
 ## End-to-End Testing
@@ -938,7 +938,7 @@ For end-to-end testing, we test complete workflows:
 # tests/e2e/test_workflows.py
 
 """
-End-to-end tests for RaderBot workflows.
+End-to-end tests for radbot workflows.
 """
 
 import unittest
@@ -946,8 +946,8 @@ from unittest.mock import MagicMock, patch
 import os
 import tempfile
 
-from raderbot.agent_factory import create_memory_enabled_agent
-from raderbot.tools.mcp_tools import home_assistant_mcp
+from radbot.agent_factory import create_memory_enabled_agent
+from radbot.tools.mcp_tools import home_assistant_mcp
 
 
 class TestAgentWorkflows(unittest.TestCase):
@@ -956,10 +956,10 @@ class TestAgentWorkflows(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         # Create patches
-        self.qdrant_patch = patch('raderbot.memory.qdrant_memory.QdrantClient')
-        self.embed_patch = patch('raderbot.memory.embedding.embed_text', return_value=[0.1] * 768)
-        self.model_patch = patch('raderbot.memory.embedding.get_embedding_model')
-        self.mcp_patch = patch('raderbot.tools.mcp_tools.MCPToolset')
+        self.qdrant_patch = patch('radbot.memory.qdrant_memory.QdrantClient')
+        self.embed_patch = patch('radbot.memory.embedding.embed_text', return_value=[0.1] * 768)
+        self.model_patch = patch('radbot.memory.embedding.get_embedding_model')
+        self.mcp_patch = patch('radbot.tools.mcp_tools.MCPToolset')
         
         # Start patches
         self.mock_qdrant = self.qdrant_patch.start()
@@ -1107,7 +1107,7 @@ pytest tests/
 pytest tests/unit/test_agent.py
 
 # Running a specific test
-pytest tests/unit/test_agent.py::TestRaderBotAgent::test_init
+pytest tests/unit/test_agent.py::TestradbotAgent::test_init
 ```
 
 ## CI/CD Integration
@@ -1140,7 +1140,7 @@ jobs:
         pip install pytest pytest-cov
     - name: Run tests
       run: |
-        python -m pytest --cov=raderbot tests/
+        python -m pytest --cov=radbot tests/
     - name: Upload coverage report
       uses: codecov/codecov-action@v1
 ```

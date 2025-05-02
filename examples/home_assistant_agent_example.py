@@ -10,10 +10,10 @@ import uuid
 import logging
 from dotenv import load_dotenv
 
-from raderbot.tools.basic_tools import get_current_time, get_weather
-from raderbot.tools.mcp_tools import create_home_assistant_toolset, create_ha_mcp_enabled_agent
-from raderbot.tools.mcp_utils import test_home_assistant_connection, list_home_assistant_domains
-from raderbot.agent.agent import AgentFactory
+from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.mcp_tools import create_home_assistant_toolset, create_ha_mcp_enabled_agent
+from radbot.tools.mcp_utils import test_home_assistant_connection, list_home_assistant_domains
+from radbot.agent.agent import AgentFactory
 
 # Set up logging
 logging.basicConfig(

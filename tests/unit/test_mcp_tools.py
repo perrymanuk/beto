@@ -6,12 +6,12 @@ Tests the functionality of the Home Assistant MCP integration tools.
 import pytest
 from unittest.mock import patch, MagicMock, ANY
 
-from raderbot.tools.mcp_tools import create_home_assistant_toolset, create_ha_mcp_enabled_agent
+from radbot.tools.mcp_tools import create_home_assistant_toolset, create_ha_mcp_enabled_agent
 
 
 class TestCreateHomeAssistantToolset:
-    @patch('raderbot.tools.mcp_tools.os.getenv')
-    @patch('raderbot.tools.mcp_tools.MCPToolset')
+    @patch('radbot.tools.mcp_tools.os.getenv')
+    @patch('radbot.tools.mcp_tools.MCPToolset')
     def test_create_home_assistant_toolset_success(self, mock_mcp_toolset, mock_getenv):
         """Test successful creation of Home Assistant MCPToolset."""
         # Setup environment variables
@@ -33,7 +33,7 @@ class TestCreateHomeAssistantToolset:
         mock_getenv.assert_any_call("HA_MCP_SSE_URL")
         mock_getenv.assert_any_call("HA_AUTH_TOKEN")
     
-    @patch('raderbot.tools.mcp_tools.os.getenv')
+    @patch('radbot.tools.mcp_tools.os.getenv')
     def test_missing_url_environment_variable(self, mock_getenv):
         """Test handling of missing Home Assistant MCP URL environment variable."""
         # Setup missing HA_MCP_SSE_URL
@@ -49,7 +49,7 @@ class TestCreateHomeAssistantToolset:
         assert result is None
         mock_getenv.assert_any_call("HA_MCP_SSE_URL")
     
-    @patch('raderbot.tools.mcp_tools.os.getenv')
+    @patch('radbot.tools.mcp_tools.os.getenv')
     def test_missing_token_environment_variable(self, mock_getenv):
         """Test handling of missing Home Assistant auth token environment variable."""
         # Setup missing HA_AUTH_TOKEN
@@ -66,8 +66,8 @@ class TestCreateHomeAssistantToolset:
         mock_getenv.assert_any_call("HA_MCP_SSE_URL")
         mock_getenv.assert_any_call("HA_AUTH_TOKEN")
     
-    @patch('raderbot.tools.mcp_tools.os.getenv')
-    @patch('raderbot.tools.mcp_tools.MCPToolset')
+    @patch('radbot.tools.mcp_tools.os.getenv')
+    @patch('radbot.tools.mcp_tools.MCPToolset')
     def test_exception_handling(self, mock_mcp_toolset, mock_getenv):
         """Test exception handling during toolset creation."""
         # Setup environment variables
@@ -89,7 +89,7 @@ class TestCreateHomeAssistantToolset:
 
 
 class TestCreateHaMcpEnabledAgent:
-    @patch('raderbot.tools.mcp_tools.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_tools.create_home_assistant_toolset')
     def test_create_agent_with_ha_toolset(self, mock_create_ha_toolset):
         """Test creating an agent with Home Assistant toolset."""
         # Setup
@@ -107,7 +107,7 @@ class TestCreateHaMcpEnabledAgent:
         mock_create_ha_toolset.assert_called_once()
         mock_factory.assert_called_once_with(tools=[*base_tools, mock_toolset])
     
-    @patch('raderbot.tools.mcp_tools.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_tools.create_home_assistant_toolset')
     def test_create_agent_without_ha_toolset(self, mock_create_ha_toolset):
         """Test creating an agent when Home Assistant toolset is not available."""
         # Setup
@@ -124,7 +124,7 @@ class TestCreateHaMcpEnabledAgent:
         mock_create_ha_toolset.assert_called_once()
         mock_factory.assert_called_once_with(tools=base_tools)
     
-    @patch('raderbot.tools.mcp_tools.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_tools.create_home_assistant_toolset')
     def test_create_agent_with_no_base_tools(self, mock_create_ha_toolset):
         """Test creating an agent with no base tools."""
         # Setup
@@ -141,7 +141,7 @@ class TestCreateHaMcpEnabledAgent:
         mock_create_ha_toolset.assert_called_once()
         mock_factory.assert_called_once_with(tools=[mock_toolset])
     
-    @patch('raderbot.tools.mcp_tools.create_home_assistant_toolset')
+    @patch('radbot.tools.mcp_tools.create_home_assistant_toolset')
     def test_exception_handling(self, mock_create_ha_toolset):
         """Test exception handling during agent creation."""
         # Setup

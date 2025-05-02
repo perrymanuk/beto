@@ -1,6 +1,6 @@
 # Speech Subsystem Implementation
 
-This document details the implementation of a speech subsystem for the RaderBot framework, enabling voice-based interaction through Speech-to-Text (STT) and Text-to-Speech (TTS) capabilities.
+This document details the implementation of a speech subsystem for the radbot framework, enabling voice-based interaction through Speech-to-Text (STT) and Text-to-Speech (TTS) capabilities.
 
 ## Component Overview
 
@@ -15,7 +15,7 @@ The speech subsystem consists of three primary elements:
 ### Speech Subsystem Class
 
 ```python
-# raderbot/speech/speech_system.py
+# radbot/speech/speech_system.py
 
 import logging
 import os
@@ -167,12 +167,12 @@ class SpeechProcessingError(Exception):
 
 ### Integration with Agent Framework
 
-To integrate the speech subsystem with the RaderBot agent framework, add an input processing method:
+To integrate the speech subsystem with the radbot agent framework, add an input processing method:
 
 ```python
-# raderbot/agent.py (extension)
+# radbot/agent.py (extension)
 
-class RaderBotAgent:
+class radbotAgent:
     # Existing code...
     
     async def process_voice_input(self, audio_path: str) -> str:
@@ -188,7 +188,7 @@ class RaderBotAgent:
         try:
             # Create speech system if not already initialized
             if not hasattr(self, 'speech_system'):
-                from raderbot.speech.speech_system import SpeechSystem
+                from radbot.speech.speech_system import SpeechSystem
                 self.speech_system = SpeechSystem()
                 
             # Transcribe speech to text
@@ -215,7 +215,7 @@ class RaderBotAgent:
         try:
             # Create speech system if not already initialized
             if not hasattr(self, 'speech_system'):
-                from raderbot.speech.speech_system import SpeechSystem
+                from radbot.speech.speech_system import SpeechSystem
                 self.speech_system = SpeechSystem()
                 
             # Synthesize speech
@@ -232,7 +232,7 @@ class RaderBotAgent:
 For web application integration, add FastAPI endpoints:
 
 ```python
-# raderbot/api/speech_endpoints.py
+# radbot/api/speech_endpoints.py
 
 from fastapi import APIRouter, File, UploadFile, HTTPException
 import base64
@@ -241,7 +241,7 @@ import tempfile
 import logging
 from typing import Dict, Any, Optional
 
-from raderbot.agent import create_agent
+from radbot.agent import create_agent
 
 router = APIRouter()
 
@@ -372,7 +372,7 @@ async def process_voice(file: UploadFile = File(...)) -> Dict[str, Any]:
 To enable voice interaction in web clients, implement a JavaScript interface:
 
 ```javascript
-// raderbot-client.js
+// radbot-client.js
 
 class VoiceInterface {
     constructor(apiUrl) {
@@ -551,7 +551,7 @@ class VoiceInterface {
 For optimal performance on different hardware, implement model selection:
 
 ```python
-# raderbot/speech/model_optimizer.py
+# radbot/speech/model_optimizer.py
 
 import torch
 import logging
@@ -648,7 +648,7 @@ def optimize_whisper_model(model: Any, device: Optional[str] = None) -> Any:
 ## Package Structure
 
 ```
-raderbot/
+radbot/
 ├── speech/
 │   ├── __init__.py
 │   ├── speech_system.py       # Main speech system implementation
@@ -663,7 +663,7 @@ raderbot/
 
 The speech subsystem integrates with:
 
-1. **Agent Framework**: Through the extended `RaderBotAgent` methods
+1. **Agent Framework**: Through the extended `radbotAgent` methods
 2. **API Layer**: With FastAPI endpoints for web applications
 3. **Web Client**: Through the JavaScript `VoiceInterface` class
 
@@ -684,7 +684,7 @@ import pytest
 import os
 import tempfile
 import numpy as np
-from raderbot.speech.speech_system import SpeechSystem, SpeechProcessingError
+from radbot.speech.speech_system import SpeechSystem, SpeechProcessingError
 
 @pytest.fixture
 async def speech_system():
