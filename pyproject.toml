@@ -32,7 +32,10 @@ dependencies = [
     "requests>=2.31.0",     # Required for Crawl4AI API calls
     "pymilvus>=2.4.0",      # Milvus client for vector database
     "sentence-transformers>=2.5.0",  # For generating embeddings
-    "websockets>=12.0.0",   # Required for Home Assistant WebSocket client
+    "websockets>=12.0.0",   # Required for Home Assistant WebSocket client and ElevenLabs API
+    "fastapi>=0.110.0",     # For the WebSocket backend server
+    "uvicorn>=0.27.0",      # ASGI server for FastAPI
+    "httpx>=0.27.0",        # HTTP client for async requests
 ]
 
 [project.optional-dependencies]
