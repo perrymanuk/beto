@@ -117,7 +117,8 @@ This file tracks development tasks for the radbot project.
 
 ## Voice & Audio
 
-- [ ] Implement bidirectional voice chat for the agent
-- [ ] Set up ElevenLabs TTS integration
-- [ ] Create WebSocket backend for audio streaming
-- [ ] Implement client-side audio handling
+- [x] Implement ElevenLabs TTS integration
+- [x] Replace ElevenLabs with Google Cloud TTS implementation
+- [x] Create TTS service for ADK web interface
+- [x] Implement JavaScript extension for voice capabilities
+- [x] Document voice implementation
