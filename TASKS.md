@@ -30,6 +30,10 @@ This file tracks development tasks for the radbot project.
 - [x] Add memory status commands to CLI interface
 - [x] Fix memory_tools.py to handle memory_type parameter
 - [x] Add memory statistics retrieval functionality
+- [x] Implement Enhanced Memory System with multi-layered approach
+- [x] Create memory detector for keyword-triggered storage
+- [x] Implement custom tagging with beto_ prefix
+- [x] Create enhanced memory agent with automatic memory detection
 
 ## External Integration
 
@@ -122,6 +126,7 @@ This file tracks development tasks for the radbot project.
 - [x] Document memory system architecture
 - [x] Add help target to Makefile
 - [x] Document MCP fileserver implementation
+- [x] Document enhanced memory system implementation
 
 ## CLI & Interfaces
 
