@@ -8,33 +8,28 @@ storing content for later retrieval and search.
 Features:
 - Single URL ingestion
 - Multiple URL batch processing
-- Configurable crawl depth for deeper content extraction
 - Vector storage integration for semantic search
 """
 
 import logging
 import requests
 import asyncio
-from typing import Dict, Any, Optional, List, Union, Iterable
+from typing import Dict, Any, Optional, List, Union
 
 from .utils import run_async_safely, get_crawl4ai_config
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-async def _call_crawl4ai_ingest_api(url: str, crawl_depth: int = 0, content_selectors: Optional[List[str]] = None, return_content: bool = True, include_external: bool = False, max_pages: Optional[int] = None):
+async def _call_crawl4ai_ingest_api(url: str, content_selectors: Optional[List[str]] = None, return_content: bool = True):
     """Internal function to call the Crawl4AI ingest API.
     
     Args:
         url: The URL to crawl
-        crawl_depth: How many levels deep to crawl (default: 0)
         content_selectors: CSS selectors to target specific content
         return_content: Whether to return content in the response (default: True)
-        include_external: Whether to follow links to external domains (default: False)
-        max_pages: Maximum number of pages to crawl (safeguard for deep crawling)
     """
     # Print input for debugging
-    print(f"DEBUG - Crawl4AI ingest API call with URL: '{url}', depth: {crawl_depth}")
     logger.info(f"Crawl4AI processing URL: {url}")
     
     # Validate URL parameter
@@ -52,7 +47,6 @@ async def _call_crawl4ai_ingest_api(url: str, crawl_depth: int = 0, content_sele
     
     # Build the request 
     # Using the '/md' endpoint which directly produces markdown
-    # This matches the example at https://github.com/unclecode/crawl4ai/blob/main/docs/examples/llm_markdown_generator.py
     md_url = f"{api_url}/md"
     headers = {
         "Content-Type": "application/json"
@@ -63,26 +57,11 @@ async def _call_crawl4ai_ingest_api(url: str, crawl_depth: int = 0, content_sele
         headers["Authorization"] = f"Bearer {api_token}"
     
     # Structure payload according to crawl4ai API requirements
-    # Following the official example for markdown generation
     payload = {
         "url": url,
         "filter_type": "all",
         "markdown_flavor": "github"
     }
-    
-    # Add depth if specified
-    if crawl_depth > 0:
-        # Configure deep crawling settings
-        payload["depth"] = crawl_depth
-        
-        # Add additional deep crawling parameters
-        if include_external is not None:
-            payload["include_external"] = include_external
-        
-        if max_pages is not None:
-            payload["max_pages"] = max_pages
-            
-        logger.info(f"Deep crawling enabled with depth={crawl_depth}, include_external={include_external}, max_pages={max_pages}")
     
     # Add selectors if provided
     if content_selectors:
@@ -110,9 +89,6 @@ async def _call_crawl4ai_ingest_api(url: str, crawl_depth: int = 0, content_sele
             content_length = len(markdown_content)
             logger.info(f"Successfully generated markdown for {url} ({content_length} chars)")
             
-            # Store the markdown for later use - this is crucial for searching
-            # In a production system, we would store this in a database or vector store
-            
             if return_content:
                 # Include the content in the response for immediate use
                 logger.info(f"Returning {content_length} chars of markdown content to LLM")
@@ -125,7 +101,6 @@ async def _call_crawl4ai_ingest_api(url: str, crawl_depth: int = 0, content_sele
                 }
             else:
                 # Don't return the content to avoid filling context window
-                # In a real system, we would store this for later search
                 logger.info(f"Content generated ({content_length} chars) but not returned to LLM")
                 return {
                     "success": True,
@@ -162,16 +137,13 @@ async def _call_crawl4ai_ingest_api(url: str, crawl_depth: int = 0, content_sele
             "error": str(e)
         }
 
-async def _batch_process_urls(urls: List[str], crawl_depth: int = 0, content_selectors: Optional[List[str]] = None, return_content: bool = True, include_external: bool = False, max_pages: Optional[int] = None) -> List[Dict[str, Any]]:
+async def _batch_process_urls(urls: List[str], content_selectors: Optional[List[str]] = None, return_content: bool = True) -> List[Dict[str, Any]]:
     """Process multiple URLs in batch mode.
     
     Args:
         urls: List of URLs to process
-        crawl_depth: How many levels of links to follow (0 means only the provided URLs)
         content_selectors: Optional CSS selectors to target specific content
         return_content: Whether to return content in the response
-        include_external: Whether to follow links to external domains when deep crawling
-        max_pages: Maximum number of pages to crawl (safeguard for deep crawling)
         
     Returns:
         List of processing results, one for each URL
@@ -187,11 +159,8 @@ async def _batch_process_urls(urls: List[str], crawl_depth: int = 0, content_sel
             try:
                 return await _call_crawl4ai_ingest_api(
                     url=url,
-                    crawl_depth=crawl_depth,
                     content_selectors=content_selectors,
-                    return_content=return_content,
-                    include_external=include_external,
-                    max_pages=max_pages
+                    return_content=return_content
                 )
             except Exception as e:
                 logger.error(f"Error processing {url}: {str(e)}")
@@ -218,7 +187,7 @@ async def _batch_process_urls(urls: List[str], crawl_depth: int = 0, content_sel
     
     return results
 
-def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool = False, max_pages: Optional[int] = None, content_selectors: Optional[List[str]] = None) -> Dict[str, Any]:
+def crawl4ai_ingest_url(url: str, content_selectors: Optional[List[str]] = None, chunk_size: int = 800) -> Dict[str, Any]:
     """
     Ingest one or more URLs with Crawl4AI for later searching (content NOT returned).
     
@@ -231,7 +200,6 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
     1. Use this function to store content without viewing it: 
        - Single URL: crawl4ai_ingest_url(url="https://example.com/docs")
        - Multiple URLs: crawl4ai_ingest_url(url="https://example.com/docs,https://example.com/about")
-       - With deep crawling: crawl4ai_ingest_url(url="https://example.com/docs", crawl_depth=2)
     2. Then search that content with: crawl4ai_query("my search terms")
     
     Note: If you want to both view AND store content, use crawl4ai_ingest_and_read instead,
@@ -239,10 +207,8 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
     
     Args:
         url: URL or comma-separated list of URLs to crawl (e.g. 'https://example.com' or 'https://example.com,https://example.org')
-        crawl_depth: How many levels of links to follow (0 means only the provided URLs)
-        include_external: Whether to follow links to external domains (default: False to stay within same site)
-        max_pages: Maximum number of pages to crawl, acts as a safeguard for deep crawling
         content_selectors: Optional CSS selectors to target specific content
+        chunk_size: Maximum size of each chunk in characters for vector storage (default: 800)
         
     Returns:
         A dictionary containing success/failure information
@@ -251,12 +217,12 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
     if ',' in url:
         url_list = [u.strip() for u in url.split(',') if u.strip()]
         multi_url_mode = True
-        print(f"DEBUG: Processing multiple URLs ({len(url_list)}): {url_list}")
+        logger.info(f"Processing multiple URLs ({len(url_list)}): {url_list}")
     else:
         url_list = [url]
         multi_url_mode = False
-        print(f"DEBUG: Processing single URL: {url}")
-    
+        logger.info(f"Processing single URL: {url}")
+        
     # Input validation
     if not url_list:
         return {
@@ -266,20 +232,17 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
             "status": "failed"
         }
     
-    print(f"🔍 Crawl4AI ingesting {len(url_list)} URL(s) to knowledge base with crawl_depth={crawl_depth}")
+    logger.info(f"🔍 Crawl4AI ingesting {len(url_list)} URL(s) to knowledge base")
     
     # Process URLs and get content for vector storage
     try:
         results = run_async_safely(_batch_process_urls(
             urls=url_list,
-            crawl_depth=crawl_depth,
             content_selectors=content_selectors,
-            return_content=True,  # Need content for vector database
-            include_external=include_external,
-            max_pages=max_pages
+            return_content=True  # Need content for vector database
         ))
     except Exception as e:
-        print(f"Error during batch processing: {str(e)}")
+        logger.error(f"Error during batch processing: {str(e)}")
         return {
             "success": False,
             "message": f"Failed to process URLs: {str(e)}",
@@ -292,9 +255,7 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
         # Make sure we have a valid result
         result = results[0]
         
-        # Only proceed if the result is a dictionary (not an error)
-        
-        # If we successfully got content, store it in the vector database
+        # Handle single URL results
         if result.get("success") and result.get("content"):
             try:
                 # Import here to avoid circular imports
@@ -303,16 +264,25 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                 # Get vector store instance
                 vector_store = get_crawl4ai_vector_store()
                 
+                # Content from the API
+                content = result.get("content", "")
+                if not content:
+                    return {
+                        "success": False,
+                        "message": f"No content found to store for {url}",
+                        "url": url,
+                        "error": "No content available",
+                        "status": "failed"
+                    }
+                
                 # Store the content in the vector store
                 title = result.get("message", "").replace("Successfully generated markdown for ", "")
                 if not title:
                     title = result.get("url", url).split("/")[-1] if "/" in result.get("url", url) else result.get("url", url)
                 
                 # Add a maximum content size check before sending to vector store
-                # If content is too large, chunk it into smaller pieces
-                content = result["content"]
                 if len(content) > 30000:  # Keep well under the 36000 byte limit
-                    print(f"Content size ({len(content)} bytes) exceeds recommended limit. Chunking content...")
+                    logger.info(f"Content size ({len(content)} bytes) exceeds recommended limit. Chunking content...")
                     # Simple chunking by paragraphs
                     paragraphs = content.split('\n\n')
                     chunks = []
@@ -330,7 +300,7 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                     if current_chunk:
                         chunks.append(current_chunk)
                     
-                    print(f"Split content into {len(chunks)} chunks")
+                    logger.info(f"Split content into {len(chunks)} chunks")
                     
                     # Process each chunk separately
                     chunk_results = []
@@ -339,7 +309,8 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                         chunk_result = vector_store.add_document(
                             url=result.get("url", url),
                             title=chunk_title,
-                            content=chunk
+                            content=chunk,
+                            chunk_size=chunk_size
                         )
                         chunk_results.append(chunk_result)
                     
@@ -358,7 +329,8 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                     vector_result = vector_store.add_document(
                         url=result.get("url", url),
                         title=title,
-                        content=content
+                        content=content,
+                        chunk_size=chunk_size
                     )
                 
                 # Create a new response that doesn't include the content
@@ -376,7 +348,7 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                 return response
                 
             except Exception as e:
-                print(f"⚠️ Error storing content in vector database: {str(e)}")
+                logger.error(f"⚠️ Error storing content in vector database: {str(e)}")
                 return {
                     "success": False,
                     "message": f"Failed to ingest content: {str(e)}",
@@ -421,10 +393,9 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                 if not title:
                     title = result.get("url", "").split("/")[-1] if "/" in result.get("url", "") else result.get("url", "")
                 
-                # Add a maximum content size check before sending to vector store
+                # Process content with chunking if needed
                 content = result["content"]
-                if len(content) > 30000:  # Keep well under the 36000 byte limit
-                    print(f"Content size ({len(content)} bytes) exceeds recommended limit. Chunking content...")
+                if len(content) > 30000:
                     # Simple chunking by paragraphs
                     paragraphs = content.split('\n\n')
                     chunks = []
@@ -442,7 +413,7 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                     if current_chunk:
                         chunks.append(current_chunk)
                     
-                    print(f"Split content into {len(chunks)} chunks")
+                    logger.info(f"Split content into {len(chunks)} chunks")
                     
                     # Process each chunk separately
                     chunk_results = []
@@ -451,7 +422,8 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                         chunk_result = vector_store.add_document(
                             url=result.get("url", ""),
                             title=chunk_title,
-                            content=chunk
+                            content=chunk,
+                            chunk_size=chunk_size
                         )
                         chunk_results.append(chunk_result)
                     
@@ -473,7 +445,8 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                     vector_result = vector_store.add_document(
                         url=result.get("url", ""),
                         title=title,
-                        content=content
+                        content=content,
+                        chunk_size=chunk_size
                     )
                     
                     if vector_result["success"]:
@@ -490,10 +463,10 @@ def crawl4ai_ingest_url(url: str, crawl_depth: int = 0, include_external: bool =
                     "error": str(e)
                 })
         else:
-            # Add failed URL to the list
+            # No content available
             failed_details.append({
                 "url": result.get("url", ""),
-                "error": result.get("error", "Unknown processing error")
+                "error": "No content available to store"
             })
     
     # Create a comprehensive response

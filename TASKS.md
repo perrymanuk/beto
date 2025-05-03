@@ -97,6 +97,20 @@ This file tracks development tasks for the radbot project.
 - [x] Fix crawl4ai_ingest_url to extract content from "markdown" field
 - [x] Pin qdrant-client version for better compatibility
 - [x] Create validation scripts for crawl4ai and Qdrant fixes
+- [x] Fix recursive depth crawling to properly follow links at each level
+- [x] Create DeepCrawl class for efficient breadth-first recursive crawling
+- [x] Update crawl4ai_ingest_url.py to use proper depth handling
+- [x] Add crawl4ai dependency to pyproject.toml
+- [x] Document improved crawl4ai depth implementation
+- [x] Create test script for validating depth crawling functionality
+- [x] Implement staged crawling for more efficient web content processing
+- [x] Add depth limiting as default strategy for crawl4ai
+- [x] Document staged crawling implementation
+- [x] Document depth limiting implementation
+- [x] Implement two-step crawling to avoid Playwright dependency
+- [x] Create documentation for two-step crawling approach
+- [x] Revert crawl4ai_ingest_url tool to basic URL ingestion without link crawling
+- [x] Fix crawl4ai_two_step_crawl and crawl4ai_ingest_and_read to match the reverted crawl4ai_ingest_url
 
 ## Testing & Documentation
 

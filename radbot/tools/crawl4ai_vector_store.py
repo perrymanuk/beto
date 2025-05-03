@@ -136,7 +136,7 @@ class Crawl4AIVectorStore:
             logger.error(f"Failed to initialize Qdrant collection: {str(e)}")
             raise
     
-    def split_into_chunks(self, markdown_text: str, max_chunk_size: int = 1000) -> List[str]:
+    def split_into_chunks(self, markdown_text: str, max_chunk_size: int = 800) -> List[str]:
         """
         Split markdown text into chunks based on headings.
         
@@ -161,25 +161,80 @@ class Crawl4AIVectorStore:
                     processed_chunks.append(current_chunk)
                 current_chunk = chunk
             else:
-                current_chunk += chunk
-                
-                # Check if chunk is getting too large
-                if len(current_chunk) > max_chunk_size:
-                    processed_chunks.append(current_chunk)
-                    current_chunk = ""
+                # If adding this chunk would make the current chunk too large
+                if len(current_chunk) + len(chunk) > max_chunk_size:
+                    # If current chunk is not empty, add it to processed_chunks
+                    if current_chunk:
+                        processed_chunks.append(current_chunk)
+                    
+                    # If the new chunk is too large on its own, split it by paragraphs
+                    if len(chunk) > max_chunk_size:
+                        paragraphs = chunk.split('\n\n')
+                        temp_chunk = ""
+                        
+                        for paragraph in paragraphs:
+                            if len(temp_chunk) + len(paragraph) + 2 <= max_chunk_size:  # +2 for '\n\n'
+                                temp_chunk += paragraph + ("\n\n" if temp_chunk else "")
+                            else:
+                                if temp_chunk:
+                                    processed_chunks.append(temp_chunk)
+                                
+                                # If a single paragraph is too large, split by sentences
+                                if len(paragraph) > max_chunk_size:
+                                    sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+                                    temp_chunk = ""
+                                    
+                                    for sentence in sentences:
+                                        if len(temp_chunk) + len(sentence) + 1 <= max_chunk_size:  # +1 for space
+                                            temp_chunk += sentence + (" " if temp_chunk else "")
+                                        else:
+                                            if temp_chunk:
+                                                processed_chunks.append(temp_chunk)
+                                            
+                                            # If a single sentence is still too large, just truncate it
+                                            if len(sentence) > max_chunk_size:
+                                                # Split into chunks of max_chunk_size
+                                                for i in range(0, len(sentence), max_chunk_size):
+                                                    processed_chunks.append(sentence[i:i+max_chunk_size])
+                                            else:
+                                                temp_chunk = sentence
+                                    
+                                    if temp_chunk:
+                                        processed_chunks.append(temp_chunk)
+                                else:
+                                    temp_chunk = paragraph
+                        
+                        if temp_chunk:
+                            processed_chunks.append(temp_chunk)
+                        
+                        current_chunk = ""
+                    else:
+                        current_chunk = chunk
+                else:
+                    current_chunk += chunk
         
         # Add the last chunk if it exists
         if current_chunk:
             processed_chunks.append(current_chunk)
         
-        return processed_chunks
+        # Final validation to ensure no chunk exceeds max_chunk_size
+        final_chunks = []
+        for chunk in processed_chunks:
+            if len(chunk) > max_chunk_size:
+                # Split by paragraphs as a last resort
+                for i in range(0, len(chunk), max_chunk_size):
+                    final_chunks.append(chunk[i:i+max_chunk_size])
+            else:
+                final_chunks.append(chunk)
+        
+        return final_chunks
 
     def add_document(
         self, 
         url: str, 
         title: str, 
         content: str, 
-        chunk_size: int = 1000
+        chunk_size: int = 800
     ) -> Dict[str, Any]:
         """
         Add a document to the vector store.
