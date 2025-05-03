@@ -38,6 +38,7 @@ from radbot.tools.memory_tools import search_past_conversations, store_important
 from radbot.tools.web_search_tools import create_tavily_search_tool
 from radbot.tools.mcp_fileserver_client import create_fileserver_toolset
 from radbot.tools.mcp_crawl4ai_client import create_crawl4ai_toolset, test_crawl4ai_connection
+from radbot.tools.shell_tool import get_shell_tool  # ADK-compatible tool function
 
 # Import Home Assistant REST API tools
 from radbot.tools.ha_tools_impl import (
@@ -231,6 +232,57 @@ def create_agent(tools: Optional[List[Any]] = None):
         except Exception as e:
             logger.error(f"Failed to create fallback web search tool: {str(e)}")
     
+    # Add Shell Command Execution tool
+    try:
+        # Check for shell command execution flag in environment
+        enable_shell = os.environ.get("RADBOT_ENABLE_SHELL", "strict").lower()
+        
+        if enable_shell in ["true", "1", "yes", "enable", "all", "allow"]:
+            # Allow all mode (SECURITY RISK)
+            logger.warning(
+                "SECURITY WARNING: Adding shell command execution in ALLOW ALL mode. "
+                "This allows execution of ANY command without restrictions!"
+            )
+            # Note: get_shell_tool now returns an ADK-compatible FunctionTool
+            shell_tool = get_shell_tool(strict_mode=False)
+            basic_tools.append(shell_tool)
+            logger.info("Added shell command execution tool in ALLOW ALL mode")
+        elif enable_shell in ["strict", "restricted", "secure"]:
+            # Strict mode (only allow-listed commands)
+            logger.info("Adding shell command execution tool in STRICT mode (only allow-listed commands)")
+            # Note: get_shell_tool now returns an ADK-compatible FunctionTool
+            shell_tool = get_shell_tool(strict_mode=True)
+            basic_tools.append(shell_tool)
+            logger.info("Added shell command execution tool in STRICT mode")
+        else:
+            logger.info("Shell command execution is disabled")
+            
+        # Add instruction about shell command execution if enabled
+        if enable_shell in ["true", "1", "yes", "enable", "all", "allow", "strict", "restricted", "secure"]:
+            shell_instruction = """
+            You can execute shell commands using the execute_shell_command tool.
+            
+            Usage:
+            - execute_shell_command(command="command_name", arguments=["arg1", "arg2"], timeout=30)
+            
+            Examples:
+            - execute_shell_command(command="ls", arguments=["-la"])
+            - execute_shell_command(command="cat", arguments=["/etc/hostname"])
+            
+            Always tell the user what command you're executing and what the results are.
+            Never execute potentially destructive commands like rm, dd, or anything that could
+            modify or delete important files.
+            """
+            
+            if enable_shell in ["strict", "restricted", "secure"]:
+                from radbot.tools.shell_command import ALLOWED_COMMANDS
+                allowed_cmds = ", ".join(sorted(list(ALLOWED_COMMANDS)))
+                shell_instruction += f"\n\nNOTE: You can only execute these allowed commands: {allowed_cmds}"
+                
+    except Exception as e:
+        logger.warning(f"Failed to create shell command execution tool: {str(e)}")
+        logger.debug(f"Shell command tool creation error details:", exc_info=True)
+    
     # Add any additional tools if provided
     all_tools = list(basic_tools) + memory_tools
     if tools:
@@ -291,6 +343,32 @@ def create_agent(tools: Optional[List[Any]] = None):
             """
             instruction += "\n\n" + ha_instruction
             logger.info("Added detailed Home Assistant REST API instructions to agent instruction")
+            
+        # Add Shell Command Execution instructions if available
+        if any("shell" in str(tool).lower() or "command" in str(tool).lower() or "execute" in str(tool).lower()):
+            enable_shell = os.environ.get("RADBOT_ENABLE_SHELL", "strict").lower()
+            shell_instruction = """
+            You can execute shell commands using the execute_shell_command tool.
+            
+            Usage:
+            - execute_shell_command(command="command_name", arguments=["arg1", "arg2"], timeout=30)
+            
+            Examples:
+            - execute_shell_command(command="ls", arguments=["-la"])
+            - execute_shell_command(command="cat", arguments=["/etc/hostname"])
+            
+            Always tell the user what command you're executing and what the results are.
+            Never execute potentially destructive commands like rm, dd, or anything that could
+            modify or delete important files.
+            """
+            
+            if enable_shell in ["strict", "restricted", "secure"]:
+                from radbot.tools.shell_command import ALLOWED_COMMANDS
+                allowed_cmds = ", ".join(sorted(list(ALLOWED_COMMANDS)))
+                shell_instruction += f"\n\nNOTE: You can only execute these allowed commands: {allowed_cmds}"
+                
+            instruction += "\n\n" + shell_instruction
+            logger.info("Added shell command execution instructions to agent instruction")
     except Exception as e:
         logger.warning(f"Failed to load main_agent instruction: {str(e)}")
         instruction = """You are a helpful assistant. Your goal is to understand the user's request and fulfill it by using available tools."""

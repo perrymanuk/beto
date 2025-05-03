@@ -18,6 +18,7 @@ This file tracks development tasks for the radbot project.
 - [x] Implement ConfigManager for centralized configuration
 - [x] Implement basic tools (time, weather)
 - [x] Create Runner and Session service setup
+- [x] Implement shell command execution with security controls
 
 ## Memory System
 
@@ -115,6 +116,19 @@ This file tracks development tasks for the radbot project.
 - [x] Create documentation for two-step crawling approach
 - [x] Revert crawl4ai_ingest_url tool to basic URL ingestion without link crawling
 - [x] Fix crawl4ai_two_step_crawl and crawl4ai_ingest_and_read to match the reverted crawl4ai_ingest_url
+
+## Shell Command Execution
+
+- [x] Implement secure shell command execution function with subprocess
+- [x] Create dual-mode system (strict and allow-all modes)
+- [x] Implement command allow-listing for strict mode
+- [x] Add basic argument validation to prevent command injection
+- [x] Create Google Agent SDK tool registration
+- [x] Implement comprehensive error handling and logging
+- [x] Create unit tests for shell command execution
+- [x] Document implementation in docs/implementation
+- [ ] Integrate with agent factories for CLI and web interfaces
+- [ ] Create additional command-specific argument validation rules
 
 ## Testing & Documentation
 
