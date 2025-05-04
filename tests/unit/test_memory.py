@@ -12,7 +12,7 @@ from qdrant_client import QdrantClient, models
 
 from radbot.memory.embedding import EmbeddingModel, embed_text
 from radbot.memory.qdrant_memory import QdrantMemoryService
-from radbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.tools.memory.memory_tools import search_past_conversations, store_important_information
 
 
 class TestEmbedding:

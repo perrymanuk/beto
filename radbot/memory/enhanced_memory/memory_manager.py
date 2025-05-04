@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Optional, Callable
 from google.adk.tools.tool_context import ToolContext
 
 from radbot.memory.enhanced_memory.memory_detector import MemoryDetector
-from radbot.tools.memory_tools import store_important_information
+from radbot.tools.memory.memory_tools import store_important_information
 
 # Set up logging
 logger = logging.getLogger(__name__)

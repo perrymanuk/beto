@@ -214,6 +214,8 @@ This file tracks development tasks for the radbot project.
 - [x] Document research agent implementation
 - [x] Add scout.md custom prompt for our subagent "scout"
 - [x] Document prompt caching implementation
+- [x] Fix failing tests after code restructuring (updated import paths)
+- [x] Fix scout agent transfer back to main agent
 
 ## CLI & Interfaces
 

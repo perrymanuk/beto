@@ -110,7 +110,7 @@ class TestMemoryManager(unittest.TestCase):
         self.detector = MemoryDetector()
         self.memory_manager = EnhancedMemoryManager(memory_detector=self.detector)
     
-    @patch('radbot.memory.enhanced_memory.memory_manager.store_important_information')
+    @patch('radbot.tools.memory.memory_tools.store_important_information')
     def test_process_message_with_trigger(self, mock_store):
         """Test processing a message with a memory trigger."""
         # Mock the store_important_information function
@@ -130,7 +130,7 @@ class TestMemoryManager(unittest.TestCase):
         self.assertEqual(len(self.memory_manager.conversation_history), 1)
         self.assertEqual(self.memory_manager.conversation_history[0]['content'], message)
     
-    @patch('radbot.memory.enhanced_memory.memory_manager.store_important_information')
+    @patch('radbot.tools.memory.memory_tools.store_important_information')
     def test_process_message_no_trigger(self, mock_store):
         """Test processing a message without a memory trigger."""
         message = "How's the project going?"
