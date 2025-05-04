@@ -180,26 +180,12 @@ def create_tavily_search_tool(
         
         # Set the function name explicitly for better LLM understanding
         web_search.__name__ = "web_search"
-        web_search.__doc__ = """
-        Search the web for information on a topic.
-        
-        Args:
-            query: The search query
-            
-        Returns:
-            Search results as text
-        """
         
         # Wrap the function with FunctionTool for ADK compatibility
         if FunctionTool:
             try:
-                # ADK 0.3.0+ approach - create the FunctionTool with our function
+                # ADK 0.3.0+ approach
                 search_tool = FunctionTool(web_search)
-                
-                # For ADK 0.3.0, we need to define a better name/description
-                search_tool.name = "web_search"
-                search_tool.description = "Search the web for information on a topic."
-                
                 logger.info("Successfully created FunctionTool for web_search")
                 return search_tool
             except Exception as e:

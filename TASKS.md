@@ -85,6 +85,10 @@ This file tracks development tasks for the radbot project.
 - [x] Create example script for web search agent
 - [x] Update root_agent to include web search capabilities
 - [x] Test web search integration
+- [x] Fix Tavily search tool not being attached or loaded correctly in the agent
+- [x] Add better error handling and debugging for Tavily search tool
+- [x] Create diagnostic script for testing Tavily search tool functionality
+- [x] Document Tavily search tool fix implementation
 
 ## Crawl4AI & Vector Search
 

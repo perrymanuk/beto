@@ -1,4 +1,4 @@
-.PHONY: help setup test test-unit test-integration lint format run-cli run-web run-scheduler clean
+.PHONY: help setup setup-web test test-unit test-integration lint format run-cli run-web run-scheduler clean
 
 # Use uv for Python package management
 PYTHON := python
@@ -12,13 +12,14 @@ help:
 	@echo "radbot Makefile Targets:"
 	@echo "=========================="
 	@echo "setup          : Install development dependencies using uv"
+	@echo "setup-web      : Install web-specific dependencies (Tavily, LangChain)"
 	@echo "test           : Run all tests"
 	@echo "test-unit      : Run only unit tests"
 	@echo "test-integration: Run only integration tests"
 	@echo "lint           : Run all linting checks (flake8, mypy, black, isort)"
 	@echo "format         : Auto-format code with black and isort"
 	@echo "run-cli        : Start the radbot CLI interface"
-	@echo "run-web        : Start the radbot web interface using ADK (with MCP fileserver support)"
+	@echo "run-web        : Start the radbot web interface using ADK (with MCP fileserver and web search support)"
 	@echo "run-scheduler  : Run the scheduler with optional arguments (use ARGS=\"--your-args\")"
 	@echo "clean          : Remove build artifacts and cache files"
 	@echo ""
@@ -35,6 +36,10 @@ help:
 setup:
 	$(UV) pip install -e ".[dev]"
 	$(UV) pip install --upgrade pip
+
+setup-web:
+	$(UV) pip install -e ".[web]"
+	@echo "Web dependencies installed successfully"
 
 test:
 	$(PYTEST)
@@ -58,7 +63,7 @@ format:
 run-cli:
 	$(PYTHON) -m radbot.cli.main
 
-run-web: setup
+run-web: setup setup-web
 	$(ADK) web
 
 run-scheduler:
