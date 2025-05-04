@@ -76,19 +76,19 @@ This file tracks development tasks for the radbot project.
 
 ## Prompt Caching System
 
-- [ ] Create base PromptCache class for caching LLM responses
-- [ ] Implement cache key generation for LLM requests
-- [ ] Create before_model_callback for checking cache before LLM calls
-- [ ] Create after_model_callback for storing responses in cache
-- [ ] Implement CacheTelemetry class for tracking performance metrics
-- [ ] Create MultiLevelCache for session-specific and global caching
-- [ ] Add optional Redis integration for cross-session caching
-- [ ] Implement cache_status.py command-line utility
-- [ ] Add configuration options via environment variables
-- [ ] Integrate caching system with agent.py
-- [ ] Create unit tests for caching components
-- [ ] Add performance evaluation tools
-- [ ] Implement selective caching based on request content
+- [x] Create base PromptCache class for caching LLM responses
+- [x] Implement cache key generation for LLM requests
+- [x] Create before_model_callback for checking cache before LLM calls
+- [x] Create after_model_callback for storing responses in cache
+- [x] Implement CacheTelemetry class for tracking performance metrics
+- [x] Create MultiLevelCache for session-specific and global caching
+- [x] Add optional Redis integration for cross-session caching
+- [x] Implement cache_status.py command-line utility
+- [x] Add configuration options via environment variables
+- [x] Integrate caching system with agent.py
+- [x] Create unit tests for caching components
+- [x] Add performance evaluation tools
+- [x] Implement selective caching based on request content
 
 ## Home Assistant Integration
 
