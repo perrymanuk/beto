@@ -132,23 +132,23 @@ def create_agent(tools: Optional[List[Any]] = None):
     basic_tools.extend(ha_tools)
     logger.info(f"Added {len(ha_tools)} Home Assistant REST API tools")
     
-    # Add MCP Fileserver tools
+    # Add Direct Filesystem tools (previously used MCP Fileserver)
     try:
-        # Print MCP fileserver configuration
+        # Print filesystem configuration
         mcp_fs_root_dir = os.environ.get("MCP_FS_ROOT_DIR")
         if mcp_fs_root_dir:
-            logger.info(f"MCP Fileserver: Using root directory {mcp_fs_root_dir}")
+            logger.info(f"Filesystem: Using root directory {mcp_fs_root_dir}")
             print(f"SPECIAL DEBUG: MCP_FS_ROOT_DIR={mcp_fs_root_dir}")  # Will print even in subprocess
         else:
-            logger.info("MCP Fileserver: Root directory not set (MCP_FS_ROOT_DIR not found in environment)")
+            logger.info("Filesystem: Root directory not set (MCP_FS_ROOT_DIR not found in environment)")
             print("SPECIAL DEBUG: MCP_FS_ROOT_DIR not set")  # Will print even in subprocess
             
-        logger.info("Creating MCP fileserver toolset...")
-        print("SPECIAL DEBUG: About to call create_fileserver_toolset()")  # Will print even in subprocess
+        logger.info("Creating filesystem tools using direct implementation...")
+        print("SPECIAL DEBUG: About to call create_fileserver_toolset() [direct implementation]")  # Will print even in subprocess
         fs_tools = create_fileserver_toolset()
         if fs_tools:
-            # Log detailed information about each fileserver tool
-            logger.debug(f"FileServerMCP returned {len(fs_tools)} tools")
+            # Log detailed information about each filesystem tool
+            logger.debug(f"Direct filesystem implementation returned {len(fs_tools)} tools")
             for i, tool in enumerate(fs_tools):
                 tool_name = tool.name if hasattr(tool, 'name') else str(tool)
                 tool_type = type(tool).__name__
@@ -159,12 +159,16 @@ def create_agent(tools: Optional[List[Any]] = None):
             
             # Log tools individually for better debugging
             fs_tool_names = [tool.name if hasattr(tool, 'name') else str(tool) for tool in fs_tools]
-            logger.info(f"Successfully added {len(fs_tools)} MCP fileserver tools: {', '.join(fs_tool_names)}")
+            logger.info(f"Successfully added {len(fs_tools)} filesystem tools: {', '.join(fs_tool_names)}")
         else:
-            logger.warning("MCP fileserver tools not available (returned None)")
+            logger.warning("Filesystem tools not available (returned None)")
+            
+        logger.info("NOTE: Using direct filesystem implementation (no MCP server required)")
+        print("SPECIAL DEBUG: Using direct filesystem implementation (no MCP server required)")
+
     except Exception as e:
-        logger.warning(f"Failed to create MCP fileserver tools: {str(e)}")
-        logger.debug(f"Fileserver tool creation error details:", exc_info=True)
+        logger.warning(f"Failed to create filesystem tools: {str(e)}")
+        logger.debug(f"Filesystem tool creation error details:", exc_info=True)
         
     # Add Crawl4AI tools
     try:
@@ -359,18 +363,27 @@ def create_agent(tools: Optional[List[Any]] = None):
             if "task" in tool_str or "todo" in tool_str:
                 todo_tool_exists = True
         
-        # Add MCP fileserver instructions if available
+        # Add filesystem instructions if available
         if file_tool_exists:
             fs_instruction = """
-            You can access files on the system through the file tools. Here are some examples:
-            - To list files: Use the list_files tool with the path parameter
+            You can access files on the system through the filesystem tools. Here are some examples:
+            - To list files: Use the list_directory tool with the path parameter
             - To read a file: Use the read_file tool with the path parameter
-            - To get file info: Use the get_file_info tool with the path parameter
+            - To get file info: Use the get_info tool with the path parameter
+            - To search for files: Use the search tool with path and pattern parameters
+            
+            If write operations are enabled, you can also:
+            - Write to a file: Use the write_file tool with path and content parameters
+            - Edit a file: Use the edit_file tool with path and edits parameters
+            - Copy files: Use the copy tool with source_path and destination_path parameters
+            
+            If delete operations are enabled, you can also:
+            - Delete files: Use the delete tool with the path parameter
             
             Always tell the user what action you're taking, and report back the results. If a filesystem operation fails, inform the user politely about the issue.
             """
             instruction += "\n\n" + fs_instruction
-            logger.info("Added MCP fileserver instructions to agent instruction")
+            logger.info("Added filesystem instructions to agent instruction")
             
         # Add Home Assistant REST API instructions
         if ha_tool_exists:

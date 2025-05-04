@@ -93,7 +93,15 @@ async def _create_fileserver_toolset_async() -> List[FunctionTool]:
         )
         
         # Create and initialize the client session
-        client_transport = await exit_stack.enter_async_context(stdio_client(StdioServerParameters(command='python')))
+        # Use a different command for stdio_client to avoid starting a Python process
+        # that might interfere with our existing server
+        client_transport = await exit_stack.enter_async_context(
+            stdio_client(StdioServerParameters(
+                command='/bin/cat',  # Simple command that will be replaced by the server's stdio
+                args=[],
+                env={}
+            ))
+        )
         client = await exit_stack.enter_async_context(ClientSession(*client_transport))
         await client.initialize()
         
@@ -102,17 +110,31 @@ async def _create_fileserver_toolset_async() -> List[FunctionTool]:
             if _global_exit_stack is None:
                 _global_exit_stack = exit_stack
         
-        # Convert MCP tools to FunctionTool
+        # Create wrapper functions for each tool
         tools = []
-        for tool in await client.list_tools():
-            if isinstance(tool, MCPTool):
-                tools.append(
-                    FunctionTool(
-                        name=tool.name,
-                        description=tool.description,
-                        parameters=tool.parameters_schema,
-                    )
-                )
+        mcp_tools = await client.list_tools()
+        
+        for mcp_tool in mcp_tools.tools:
+            # Capture tool name in closure
+            tool_name = mcp_tool.name
+            
+            # Create a wrapper function for this specific tool
+            def make_tool_func(tool_name):
+                # Use variable number of keyword arguments to handle any parameter schema
+                def tool_func(**kwargs):
+                    # Forward the call to our handler
+                    return handle_fileserver_tool_call(tool_name, kwargs).function_call_event
+                
+                # Set the docstring based on the tool description
+                tool_func.__doc__ = mcp_tool.description
+                # Set the name to match the original tool
+                tool_func.__name__ = tool_name
+                
+                return tool_func
+            
+            # Create a FunctionTool from our wrapper function
+            func = make_tool_func(tool_name)
+            tools.append(FunctionTool(func=func))
         
         logger.info(f"Successfully created MCP fileserver toolset with {len(tools)} tools")
         return tools
@@ -126,8 +148,17 @@ async def _create_fileserver_toolset_async() -> List[FunctionTool]:
 
 def run_async_in_thread(coro):
     """Run an asynchronous coroutine in a separate thread."""
+    # Create a new event loop for the executor to prevent conflicts
+    def run_with_new_loop(coro):
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        try:
+            return new_loop.run_until_complete(coro)
+        finally:
+            new_loop.close()
+            
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(asyncio.run, coro)
+        future = executor.submit(run_with_new_loop, coro)
         return future.result()
 
 
@@ -139,8 +170,76 @@ def create_fileserver_toolset() -> List[FunctionTool]:
             asyncio.get_running_loop()
             logger.warning("SPECIAL DEBUG: Running in existing event loop, cannot create fileserver in async context")
             logger.warning("This likely means you're using this in an async context")
-            # Run in a separate thread to avoid event loop conflicts
-            return run_async_in_thread(_create_fileserver_toolset_async())
+            # Instead of using the complex async method in a thread, which can hang,
+            # let's create a simplified set of tool stubs with proper descriptions
+            # These will be replaced with the actual implementation when called
+            logger.info("Creating simplified MCP fileserver tool stubs")
+            
+            # For ADK 0.3.0+, we need to use the function-based constructor, not keyword arguments
+            # Create wrapper functions for each tool type
+            
+            def list_files_func(path: str = "") -> dict:
+                """List files and directories in a path."""
+                return handle_fileserver_tool_call("list_files", {"path": path}).function_call_event
+                
+            def read_file_func(path: str) -> dict:
+                """Read the contents of a file."""
+                return handle_fileserver_tool_call("read_file", {"path": path}).function_call_event
+                
+            def get_file_info_func(path: str) -> dict:
+                """Get information about a file or directory."""
+                return handle_fileserver_tool_call("get_file_info", {"path": path}).function_call_event
+            
+            # Create the basic tools
+            tools = [
+                FunctionTool(func=list_files_func),
+                FunctionTool(func=read_file_func),
+                FunctionTool(func=get_file_info_func)
+            ]
+            
+            # Add write operations if enabled
+            root_dir, allow_write, allow_delete = get_mcp_fileserver_config()
+            if allow_write:
+                # Add write tool functions
+                def write_file_func(path: str, content: str, append: bool = False) -> dict:
+                    """Write content to a file."""
+                    return handle_fileserver_tool_call("write_file", {
+                        "path": path, 
+                        "content": content,
+                        "append": append
+                    }).function_call_event
+                    
+                def copy_file_func(source: str, destination: str) -> dict:
+                    """Copy a file or directory."""
+                    return handle_fileserver_tool_call("copy_file", {
+                        "source": source, 
+                        "destination": destination
+                    }).function_call_event
+                    
+                def move_file_func(source: str, destination: str) -> dict:
+                    """Move or rename a file or directory."""
+                    return handle_fileserver_tool_call("move_file", {
+                        "source": source, 
+                        "destination": destination
+                    }).function_call_event
+                
+                # Add the write tools
+                tools.extend([
+                    FunctionTool(func=write_file_func),
+                    FunctionTool(func=copy_file_func),
+                    FunctionTool(func=move_file_func)
+                ])
+            
+            # Add delete operations if enabled
+            if allow_delete:
+                def delete_file_func(path: str) -> dict:
+                    """Delete a file or directory."""
+                    return handle_fileserver_tool_call("delete_file", {"path": path}).function_call_event
+                
+                tools.append(FunctionTool(func=delete_file_func))
+            
+            logger.info(f"Created {len(tools)} MCP fileserver tool stubs")
+            return tools
         except RuntimeError:
             # No event loop running, we can create our own
             return asyncio.run(_create_fileserver_toolset_async())

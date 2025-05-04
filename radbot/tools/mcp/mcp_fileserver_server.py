@@ -678,6 +678,7 @@ def setup_mcp_server(root_dir: str, allow_write: bool = False, allow_delete: boo
     return app, fs
 
 async def start_server_async(
+    exit_stack,
     root_dir: str, 
     allow_write: bool = False, 
     allow_delete: bool = False
@@ -686,27 +687,37 @@ async def start_server_async(
     Start the MCP server asynchronously.
     
     Args:
+        exit_stack: AsyncExitStack for resource management
         root_dir: Root directory for filesystem operations
         allow_write: Allow write operations
         allow_delete: Allow delete operations
+    
+    Returns:
+        The server process
     """
     app, _ = setup_mcp_server(root_dir, allow_write, allow_delete)
     
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        logger.info("MCP Server starting...")
-        await app.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name=app.name,
-                server_version="0.1.0",
-                capabilities=app.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
-        logger.info("MCP Server stopped")
+    stdio_server_context = await exit_stack.enter_async_context(mcp.server.stdio.stdio_server())
+    read_stream, write_stream = stdio_server_context
+    
+    logger.info("MCP Server starting...")
+    # Start the server
+    init_options = InitializationOptions(
+        server_name=app.name,
+        server_version="0.1.0",
+        capabilities=app.get_capabilities(
+            notification_options=NotificationOptions(),
+            experimental_capabilities={},
+        ),
+    )
+    
+    # Run the server in a task to avoid blocking
+    server_task = asyncio.create_task(
+        app.run(read_stream, write_stream, init_options)
+    )
+    
+    # Return the task so it can be managed externally
+    return server_task
 
 def start_server(
     root_dir: str, 
@@ -722,7 +733,15 @@ def start_server(
         allow_delete: Allow delete operations
     """
     try:
-        asyncio.run(start_server_async(root_dir, allow_write, allow_delete))
+        # Create an exit stack for standalone mode
+        async def run_standalone():
+            from contextlib import AsyncExitStack
+            async with AsyncExitStack() as exit_stack:
+                await start_server_async(exit_stack, root_dir, allow_write, allow_delete)
+                # Block indefinitely (or until interrupted)
+                await asyncio.Future()
+                
+        asyncio.run(run_standalone())
     except KeyboardInterrupt:
         logger.info("MCP Server interrupted by user")
     except Exception as e:

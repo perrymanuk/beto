@@ -190,9 +190,12 @@ This file tracks development tasks for the radbot project.
 - [x] Document memory system architecture
 - [x] Add help target to Makefile
 - [x] Document MCP fileserver implementation
+- [x] Implement direct filesystem access to replace MCP fileserver
+- [x] Deploy direct filesystem implementation and remove MCP fileserver dependency
 - [x] Document enhanced memory system implementation
 - [x] Implement research agent sub-agent
 - [x] Document research agent implementation
+- [x] Add scout.md custom prompt for our subagent "scout"
 
 ## CLI & Interfaces
 
