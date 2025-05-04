@@ -1,81 +1,86 @@
 """
-Tools package for the radbot agent framework.
+Tools package for Radbot.
+
+This package provides various tools for the Radbot agent.
 """
 
-from radbot.tools.basic_tools import get_current_time, get_weather as get_mock_weather
-from radbot.tools.memory_tools import search_past_conversations, store_important_information
-from radbot.tools.mcp_tools import (
-    create_home_assistant_toolset,
-    create_ha_mcp_enabled_agent
+# Re-export tools from subpackages
+from radbot.tools.basic import get_current_time, get_weather, get_weather_details
+from radbot.tools.homeassistant import (
+    get_ha_client,
+    HomeAssistantRESTClient,
+    search_ha_entities,
+    list_ha_entities,
+    get_ha_entity_state,
+    turn_on_ha_entity,
+    turn_off_ha_entity,
+    toggle_ha_entity,
 )
-from radbot.tools.mcp_utils import (
-    test_home_assistant_connection,
-    check_home_assistant_entity,
-    list_home_assistant_domains
+from radbot.tools.memory import search_past_conversations, store_important_information
+from radbot.tools.mcp import (
+    create_fileserver_toolset,
+    FileServerMCP,
+    get_available_mcp_tools,
+    convert_to_adk_tool,
 )
-from radbot.tools.weather_connector import (
-    WeatherConnector,
-    get_weather,
-    get_forecast,
-    format_weather_response,
-    format_forecast_response
-)
-from radbot.tools.web_search_tools import (
-    create_tavily_search_tool,
-    create_tavily_search_enabled_agent
-)
-from radbot.tools.mcp_crawl4ai_client import (
+from radbot.tools.crawl4ai import (
     create_crawl4ai_toolset,
-    create_crawl4ai_enabled_agent,
-    test_crawl4ai_connection
+    test_crawl4ai_connection,
+    get_crawl4ai_vector_store,
+    Crawl4AIVectorStore,
+    crawl4ai_two_step,
 )
-from radbot.tools.todo.todo_tools import (
-    ALL_TOOLS as TODO_TOOLS,
-    add_task_tool,
-    list_tasks_tool,
-    complete_task_tool,
-    remove_task_tool,
-    init_database as init_todo_database
+from radbot.tools.shell import execute_shell_command, ALLOWED_COMMANDS, get_shell_tool
+from radbot.tools.web_search import (
+    create_tavily_search_tool,
+    create_tavily_search_enabled_agent,
+    TavilySearchResults,
+    HAVE_TAVILY,
 )
 
-# Export tools for easy import
+# Keep todo tools as-is since they're already in a directory
+
 __all__ = [
     # Basic tools
-    'get_current_time', 
-    'get_mock_weather',
-    'get_weather',
+    "get_current_time",
+    "get_weather",
+    "get_weather_details",
+    
+    # Home Assistant tools
+    "get_ha_client",
+    "HomeAssistantRESTClient",
+    "search_ha_entities",
+    "list_ha_entities",
+    "get_ha_entity_state",
+    "turn_on_ha_entity",
+    "turn_off_ha_entity",
+    "toggle_ha_entity",
     
     # Memory tools
-    'search_past_conversations',
-    'store_important_information',
+    "search_past_conversations",
+    "store_important_information",
     
     # MCP tools
-    'create_home_assistant_toolset',
-    'create_ha_mcp_enabled_agent',
-    'test_home_assistant_connection',
-    'check_home_assistant_entity',
-    'list_home_assistant_domains',
-    
-    # Web search tools
-    'create_tavily_search_tool',
-    'create_tavily_search_enabled_agent',
-    
-    # Weather connector
-    'WeatherConnector',
-    'get_forecast',
-    'format_weather_response',
-    'format_forecast_response',
+    "create_fileserver_toolset",
+    "FileServerMCP",
+    "get_available_mcp_tools", 
+    "convert_to_adk_tool",
     
     # Crawl4AI tools
-    'create_crawl4ai_toolset',
-    'create_crawl4ai_enabled_agent',
-    'test_crawl4ai_connection',
+    "create_crawl4ai_toolset",
+    "test_crawl4ai_connection",
+    "get_crawl4ai_vector_store",
+    "Crawl4AIVectorStore",
+    "crawl4ai_two_step",
     
-    # Todo tools
-    'TODO_TOOLS',
-    'add_task_tool',
-    'list_tasks_tool',
-    'complete_task_tool',
-    'remove_task_tool',
-    'init_todo_database',
+    # Shell tools
+    "execute_shell_command",
+    "ALLOWED_COMMANDS",
+    "get_shell_tool",
+    
+    # Web search tools
+    "create_tavily_search_tool",
+    "create_tavily_search_enabled_agent",
+    "TavilySearchResults",
+    "HAVE_TAVILY",
 ]

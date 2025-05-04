@@ -10,7 +10,7 @@ import time
 from typing import Dict, Any, List, Optional, Union
 
 # Import the client singleton
-from radbot.tools.ha_client_singleton import get_ha_client
+from radbot.tools.homeassistant.ha_client_singleton import get_ha_client
 
 logger = logging.getLogger(__name__)
 

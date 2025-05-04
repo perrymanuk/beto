@@ -14,7 +14,7 @@ SessionService = InMemorySessionService  # Type alias for backward compatibility
 
 from radbot.agent.agent import RadBotAgent
 from radbot.memory.qdrant_memory import QdrantMemoryService
-from radbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.tools.memory import search_past_conversations, store_important_information
 from radbot.config import config_manager
 
 # Load environment variables

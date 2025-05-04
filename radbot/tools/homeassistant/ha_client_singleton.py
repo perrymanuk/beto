@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 from dotenv import load_dotenv
 
-from radbot.tools.ha_rest_client import HomeAssistantClient
+from radbot.tools.homeassistant.ha_rest_client import HomeAssistantRESTClient
 
 # Load environment variables
 load_dotenv()
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Singleton client instance
 _ha_client = None
 
-def get_ha_client() -> Optional[HomeAssistantClient]:
+def get_ha_client() -> Optional[HomeAssistantRESTClient]:
     """
     Get or initialize the Home Assistant client.
     
@@ -41,7 +41,7 @@ def get_ha_client() -> Optional[HomeAssistantClient]:
         return None
         
     try:
-        _ha_client = HomeAssistantClient(ha_url, ha_token)
+        _ha_client = HomeAssistantRESTClient(ha_url, ha_token)
         
         # Test connection
         if not _ha_client.get_api_status():

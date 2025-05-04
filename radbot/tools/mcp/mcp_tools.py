@@ -19,6 +19,65 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+def get_available_mcp_tools() -> List[Any]:
+    """
+    Get a list of all available MCP tools.
+    
+    This function returns a consolidated list of all available MCP tools
+    including Home Assistant, FileServer, and other MCP integrations.
+    
+    Returns:
+        List of available MCP tools
+    """
+    tools = []
+    
+    # Try to get Home Assistant tools
+    try:
+        ha_tools = create_home_assistant_toolset()
+        if ha_tools:
+            if isinstance(ha_tools, list):
+                tools.extend(ha_tools)
+                logger.info(f"Added {len(ha_tools)} Home Assistant MCP tools")
+            else:
+                tools.append(ha_tools)
+                logger.info("Added Home Assistant MCP toolset")
+    except Exception as e:
+        logger.warning(f"Failed to get Home Assistant MCP tools: {str(e)}")
+    
+    # Try to get FileServer tools if available
+    try:
+        # Import here to avoid circular imports
+        from radbot.tools.mcp.mcp_fileserver_client import create_fileserver_toolset
+        fs_tools = create_fileserver_toolset()
+        if fs_tools:
+            if isinstance(fs_tools, list):
+                tools.extend(fs_tools)
+                logger.info(f"Added {len(fs_tools)} FileServer MCP tools")
+            else:
+                tools.append(fs_tools)
+                logger.info("Added FileServer MCP toolset")
+    except Exception as e:
+        logger.warning(f"Failed to get FileServer MCP tools: {str(e)}")
+        
+    # Try to get Crawl4AI tools if available
+    try:
+        # Import here to avoid circular imports
+        from radbot.tools.mcp.mcp_crawl4ai_client import create_crawl4ai_toolset
+        crawl4ai_tools = create_crawl4ai_toolset()
+        if crawl4ai_tools:
+            if isinstance(crawl4ai_tools, list):
+                tools.extend(crawl4ai_tools)
+                logger.info(f"Added {len(crawl4ai_tools)} Crawl4AI MCP tools")
+            else:
+                tools.append(crawl4ai_tools)
+                logger.info("Added Crawl4AI MCP toolset")
+    except Exception as e:
+        logger.warning(f"Failed to get Crawl4AI MCP tools: {str(e)}")
+    
+    # Add other MCP tools as they become available
+    
+    return tools
+
 async def _create_home_assistant_toolset_async() -> Tuple[List[Any], Optional[AsyncExitStack]]:
     """
     Async function to create an MCPToolset for Home Assistant's MCP Server using ADK 0.3.0 API.
@@ -137,7 +196,7 @@ def create_home_assistant_toolset() -> List[Any]:
 def create_find_ha_entities_tool():
     """Create a function tool to search for Home Assistant entities."""
     import logging
-    from radbot.tools.mcp_utils import find_home_assistant_entities
+    from radbot.tools.mcp.mcp_utils import find_home_assistant_entities
     
     logger = logging.getLogger(__name__)
     
@@ -278,7 +337,7 @@ def search_home_assistant_entities(search_term: str, domain_filter: Optional[str
     logger = logging.getLogger(__name__)
     
     logger.info(f"Entity search called with term: '{search_term}', domain_filter: '{domain_filter}'")
-    from radbot.tools.mcp_utils import find_home_assistant_entities
+    from radbot.tools.mcp.mcp_utils import find_home_assistant_entities
     
     try:
         result = find_home_assistant_entities(search_term, domain_filter)

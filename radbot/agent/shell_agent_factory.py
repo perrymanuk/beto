@@ -12,7 +12,7 @@ from google.adk.agents import Agent
 
 from radbot.agent.agent import AgentFactory, RadBotAgent, create_agent
 from radbot.config.settings import ConfigManager
-from radbot.tools.shell_tool import get_shell_tool
+from radbot.tools.shell import get_shell_tool
 
 logger = logging.getLogger(__name__)
 

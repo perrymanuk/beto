@@ -410,3 +410,38 @@ def format_forecast_response(forecast_data: Dict[str, Any], detailed: bool = Fal
     """
     connector = WeatherConnector()
     return connector.format_forecast_response(forecast_data, detailed)
+
+def get_weather_details(city: str, include_forecast: bool = False) -> Dict[str, Any]:
+    """
+    Get detailed weather information for a city, optionally including forecast.
+    
+    Args:
+        city: City name
+        include_forecast: Whether to include forecast data
+        
+    Returns:
+        Dictionary with weather details and optionally forecast
+    """
+    try:
+        # Get current weather
+        weather_data = get_weather(city)
+        
+        # Create detailed response
+        details = {
+            "current_weather": weather_data,
+            "detailed_response": format_weather_response(weather_data)
+        }
+        
+        # Include forecast if requested
+        if include_forecast:
+            forecast_data = get_forecast(city, days=3)
+            details["forecast"] = forecast_data
+            details["forecast_response"] = format_forecast_response(forecast_data)
+            
+        return details
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in get_weather_details: {str(e)}")
+        return {"error": str(e)}

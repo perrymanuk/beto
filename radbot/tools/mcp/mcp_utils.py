@@ -8,11 +8,12 @@ import os
 import logging
 import json
 import re
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Callable
 
 from dotenv import load_dotenv
+from google.adk.tools import FunctionTool
 
-from radbot.tools.mcp_tools import create_home_assistant_toolset
+from radbot.tools.mcp.mcp_tools import create_home_assistant_toolset
 
 # Load environment variables
 load_dotenv()
@@ -116,7 +117,7 @@ async def _check_home_assistant_entity_async(entity_id: str) -> Dict[str, Any]:
         Dictionary with entity information or error details
     """
     # Import here to avoid circular imports
-    from radbot.tools.mcp_tools import _create_home_assistant_toolset_async
+    from radbot.tools.mcp.mcp_tools import _create_home_assistant_toolset_async
     
     # Initialize the Home Assistant MCP
     ha_tools, exit_stack = await _create_home_assistant_toolset_async()
@@ -229,7 +230,7 @@ async def _list_home_assistant_domains_async() -> Dict[str, Any]:
         Dictionary with domain information or error details
     """
     # Import here to avoid circular imports
-    from radbot.tools.mcp_tools import _create_home_assistant_toolset_async
+    from radbot.tools.mcp.mcp_tools import _create_home_assistant_toolset_async
     
     # Initialize the Home Assistant MCP
     ha_tools, exit_stack = await _create_home_assistant_toolset_async()
@@ -342,7 +343,7 @@ async def _find_home_assistant_entities_async(search_term: str, domain_filter: O
         Dictionary with entity information or error details
     """
     # Import here to avoid circular imports
-    from radbot.tools.mcp_tools import _create_home_assistant_toolset_async
+    from radbot.tools.mcp.mcp_tools import _create_home_assistant_toolset_async
     
     # Initialize the Home Assistant MCP
     ha_tools, exit_stack = await _create_home_assistant_toolset_async()
@@ -585,3 +586,62 @@ def find_home_assistant_entities(search_term: str, domain_filter: Optional[str] 
             "error": str(e),
             "matches": []
         }
+
+
+def convert_to_adk_tool(function: Callable, name: Optional[str] = None, description: Optional[str] = None) -> FunctionTool:
+    """
+    Convert a function to an ADK-compatible FunctionTool.
+    
+    This utility helps convert standard functions to ADK-compatible tools
+    with appropriate schema information.
+    
+    Args:
+        function: The function to convert
+        name: Optional name for the tool (defaults to function name)
+        description: Optional description for the tool
+        
+    Returns:
+        The converted FunctionTool
+    """
+    # Get the function name if not provided
+    if not name:
+        name = function.__name__
+        
+    # Get description from docstring if not provided
+    if not description and function.__doc__:
+        description = function.__doc__.split('\n')[0].strip()
+    elif not description:
+        description = f"{name} function"
+    
+    try:
+        # Try to create a tool using ADK 0.3.0+ style
+        tool = FunctionTool(
+            function=function,
+            function_schema={
+                "name": name,
+                "description": description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        )
+        logger.info(f"Created tool {name} using ADK 0.3.0+ style")
+    except TypeError:
+        # Fall back to older ADK versions
+        tool = FunctionTool(
+            function,
+            {
+                "name": name,
+                "description": description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        )
+        logger.info(f"Created tool {name} using legacy FunctionTool style")
+    
+    return tool

@@ -52,6 +52,10 @@ This file tracks development tasks for the radbot project.
 - [x] Add MCP fileserver tools to main agent
 - [x] Create test script for MCP fileserver operations
 - [ ] Implement additional MCP servers as needed
+- [x] Fix MCP fileserver import error after code restructuring
+- [x] Fix MCP missing functions error after code restructuring
+- [x] Fix MCP relative import paths after code restructuring
+- [x] Fix MCP parent package re-exports after code restructuring
 
 ## Home Assistant Integration
 
@@ -180,8 +184,9 @@ This file tracks development tasks for the radbot project.
 
 ## Voice & Audio
 
-- [x] Implement ElevenLabs TTS integration
-- [x] Replace ElevenLabs with Google Cloud TTS implementation
-- [x] Create TTS service for ADK web interface
-- [x] Implement JavaScript extension for voice capabilities
-- [x] Document voice implementation
+- [x] ~~Implement ElevenLabs TTS integration~~ (Removed due to implementation issues)
+- [x] ~~Replace ElevenLabs with Google Cloud TTS implementation~~ (Removed due to implementation issues)
+- [x] ~~Create TTS service for ADK web interface~~ (Removed due to implementation issues)
+- [x] ~~Implement JavaScript extension for voice capabilities~~ (Removed due to implementation issues)
+- [x] ~~Document voice implementation~~ (Removed due to implementation issues)
+- [x] Remove broken voice implementation and related dependencies

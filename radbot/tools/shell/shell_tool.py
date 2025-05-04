@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional
 from google.ai.generativelanguage import Tool, FunctionDeclaration, Schema, Type
 from google.adk.tools import FunctionTool
 
-from radbot.tools.shell_command import execute_shell_command, ALLOWED_COMMANDS
+from radbot.tools.shell.shell_command import execute_shell_command, ALLOWED_COMMANDS
 
 logger = logging.getLogger(__name__)
 

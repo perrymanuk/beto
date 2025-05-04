@@ -12,9 +12,9 @@ from google.adk import Agent
 
 from radbot.config.settings import ConfigManager
 # Import tools directly, but separately to avoid circular imports
-from radbot.tools.ha_tools_impl import list_ha_entities, get_ha_entity_state
-from radbot.tools.ha_tools_impl import turn_on_ha_entity, turn_off_ha_entity, toggle_ha_entity
-from radbot.tools.ha_state_cache import search_ha_entities
+from radbot.tools.homeassistant import list_ha_entities, get_ha_entity_state
+from radbot.tools.homeassistant import turn_on_ha_entity, turn_off_ha_entity, toggle_ha_entity
+from radbot.tools.homeassistant import search_ha_entities
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ def create_home_assistant_enabled_agent(
     # Add memory tools if requested
     if ensure_memory_tools:
         try:
-            from radbot.tools.memory_tools import search_past_conversations, store_important_information
+            from radbot.tools.memory import search_past_conversations, store_important_information
             
             # Check if memory tools are already in tools list
             memory_tools = [search_past_conversations, store_important_information]

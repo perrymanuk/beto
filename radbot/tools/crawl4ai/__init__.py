@@ -13,6 +13,7 @@ from .mcp_crawl4ai_client import (
 )
 
 from .crawl4ai_two_step_crawl import crawl4ai_two_step
+from .crawl4ai_vector_store import get_crawl4ai_vector_store, Crawl4AIVectorStore
 
 __all__ = [
     'create_crawl4ai_toolset',
@@ -20,4 +21,6 @@ __all__ = [
     'test_crawl4ai_connection',
     'get_crawl4ai_config',
     'crawl4ai_two_step',
+    'get_crawl4ai_vector_store',
+    'Crawl4AIVectorStore',
 ]

@@ -33,16 +33,16 @@ logger.info(f"Environment RADBOT_MAIN_MODEL: '{os.environ.get('RADBOT_MAIN_MODEL
 logger.info(f"Using Vertex AI: {config_manager.is_using_vertex_ai()}")
 
 # Import tools
-from radbot.tools.basic_tools import get_current_time, get_weather
-from radbot.tools.memory_tools import search_past_conversations, store_important_information
-from radbot.tools.web_search_tools import create_tavily_search_tool
-from radbot.tools.mcp_fileserver_client import create_fileserver_toolset
-from radbot.tools.mcp_crawl4ai_client import create_crawl4ai_toolset, test_crawl4ai_connection
-from radbot.tools.shell_tool import get_shell_tool  # ADK-compatible tool function
+from radbot.tools.basic import get_current_time, get_weather
+from radbot.tools.memory import search_past_conversations, store_important_information
+from radbot.tools.web_search import create_tavily_search_tool
+from radbot.tools.mcp import create_fileserver_toolset
+from radbot.tools.mcp import create_crawl4ai_toolset, test_crawl4ai_connection
+from radbot.tools.shell import get_shell_tool  # ADK-compatible tool function
 from radbot.tools.todo import ALL_TOOLS, init_database  # Todo tools
 
 # Import Home Assistant REST API tools
-from radbot.tools.ha_tools_impl import (
+from radbot.tools.homeassistant import (
     list_ha_entities,
     get_ha_entity_state,
     turn_on_ha_entity,
@@ -52,7 +52,7 @@ from radbot.tools.ha_tools_impl import (
 )
 
 # Ensure the Home Assistant client is properly initialized
-from radbot.tools.ha_client_singleton import get_ha_client
+from radbot.tools.homeassistant import get_ha_client
 
 # Import Home Assistant integration
 from radbot.agent.home_assistant_agent_factory import create_home_assistant_agent_factory
@@ -210,7 +210,7 @@ def create_agent(tools: Optional[List[Any]] = None):
             # Define a simple function without decorators
             def web_search(query: str) -> str:
                 """Search the web for current information on a topic."""
-                from radbot.tools.web_search_tools import HAVE_TAVILY, TavilySearchResults
+                from radbot.tools.web_search import HAVE_TAVILY, TavilySearchResults
                 
                 logger.info(f"Running fallback web search for query: {query}")
                 
@@ -285,7 +285,7 @@ def create_agent(tools: Optional[List[Any]] = None):
             """
             
             if enable_shell in ["strict", "restricted", "secure"]:
-                from radbot.tools.shell_command import ALLOWED_COMMANDS
+                from radbot.tools.shell import ALLOWED_COMMANDS
                 allowed_cmds = ", ".join(sorted(list(ALLOWED_COMMANDS)))
                 shell_instruction += f"\n\nNOTE: You can only execute these allowed commands: {allowed_cmds}"
                 
@@ -402,7 +402,7 @@ def create_agent(tools: Optional[List[Any]] = None):
             """
             
             if enable_shell in ["strict", "restricted", "secure"]:
-                from radbot.tools.shell_command import ALLOWED_COMMANDS
+                from radbot.tools.shell import ALLOWED_COMMANDS
                 allowed_cmds = ", ".join(sorted(list(ALLOWED_COMMANDS)))
                 shell_instruction += f"\n\nNOTE: You can only execute these allowed commands: {allowed_cmds}"
                 

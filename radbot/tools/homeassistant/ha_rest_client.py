@@ -13,7 +13,7 @@ from requests.exceptions import RequestException, Timeout, ConnectionError, HTTP
 # Set up logging
 logger = logging.getLogger(__name__)
 
-class HomeAssistantClient:
+class HomeAssistantRESTClient:
     """
     A client for interacting with the Home Assistant REST API.
     """

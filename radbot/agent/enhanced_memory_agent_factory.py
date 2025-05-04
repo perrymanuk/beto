@@ -16,7 +16,7 @@ from google.adk.tools.tool_context import ToolContext
 
 from radbot.agent.agent import RadBotAgent
 from radbot.memory.qdrant_memory import QdrantMemoryService
-from radbot.tools.memory_tools import search_past_conversations, store_important_information
+from radbot.tools.memory import search_past_conversations, store_important_information
 from radbot.memory.enhanced_memory import EnhancedMemoryManager, create_enhanced_memory_manager
 from radbot.config import config_manager
 

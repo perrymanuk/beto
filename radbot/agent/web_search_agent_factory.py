@@ -12,7 +12,7 @@ from google.adk.agents import Agent
 
 from radbot.agent.agent import AgentFactory, RadBotAgent, create_agent
 from radbot.config.settings import ConfigManager
-from radbot.tools.web_search_tools import (
+from radbot.tools.web_search import (
     create_tavily_search_tool,
     create_tavily_search_enabled_agent
 )
