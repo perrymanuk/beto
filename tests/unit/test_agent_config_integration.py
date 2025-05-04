@@ -12,8 +12,9 @@ from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 
+# Import from the current module location
 from radbot.agent.agent import (
-    radbotAgent, 
+    RadBotAgent as radbotAgent,  # Use the class name with a lowercase alias for backward compatibility
     AgentFactory, 
     create_agent, 
     create_runner,
