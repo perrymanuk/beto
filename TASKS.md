@@ -35,6 +35,7 @@ This file tracks development tasks for the radbot project.
 - [x] Updated MCP implementation to work with ADK 0.3.0 without compatibility
 - [x] Fixed MCP client import issues by updating to use ClientSession from mcp.client.session
 - [x] Fixed MCP Tool import error by updating import path from mcp.server.lowlevel.tool to mcp.types
+- [x] Upgrade ADK from 0.3.0 to 0.4.0
 
 ## Memory System
 
@@ -72,6 +73,22 @@ This file tracks development tasks for the radbot project.
 - [x] Fix MCP missing functions error after code restructuring
 - [x] Fix MCP relative import paths after code restructuring
 - [x] Fix MCP parent package re-exports after code restructuring
+
+## Prompt Caching System
+
+- [ ] Create base PromptCache class for caching LLM responses
+- [ ] Implement cache key generation for LLM requests
+- [ ] Create before_model_callback for checking cache before LLM calls
+- [ ] Create after_model_callback for storing responses in cache
+- [ ] Implement CacheTelemetry class for tracking performance metrics
+- [ ] Create MultiLevelCache for session-specific and global caching
+- [ ] Add optional Redis integration for cross-session caching
+- [ ] Implement cache_status.py command-line utility
+- [ ] Add configuration options via environment variables
+- [ ] Integrate caching system with agent.py
+- [ ] Create unit tests for caching components
+- [ ] Add performance evaluation tools
+- [ ] Implement selective caching based on request content
 
 ## Home Assistant Integration
 
@@ -196,12 +213,14 @@ This file tracks development tasks for the radbot project.
 - [x] Implement research agent sub-agent
 - [x] Document research agent implementation
 - [x] Add scout.md custom prompt for our subagent "scout"
+- [x] Document prompt caching implementation
 
 ## CLI & Interfaces
 
 - [x] Implement CLI interface
 - [ ] Create scheduler for background tasks
 - [x] Add logging system
+- [ ] Create cache status command-line utility
 
 ## Voice & Audio
 

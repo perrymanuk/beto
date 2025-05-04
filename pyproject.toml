@@ -20,8 +20,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "google-adk>=0.3.0",
-    "google-generativeai>=0.8.5",
+    "google-adk>=0.4.0",
+    "google-genai>=1.11.0",  # New recommended Google GenAI SDK
     "qdrant-client==1.7.0",  # Pinned to a version that works well with our implementation
     "modelcontextprotocol>=0.1.0",
     "zoneinfo; python_version < '3.9'",
@@ -38,6 +38,7 @@ dependencies = [
     "beautifulsoup4>=4.12.0", # Required for HTML parsing during crawling
     "aiohttp>=3.9.0",       # Required for async HTTP requests in crawling
     "psycopg2-binary>=2.9.9",  # Required for PostgreSQL database connections
+    "redis>=5.0.1",         # Optional for cross-session caching with Redis
 ]
 
 [project.optional-dependencies]
