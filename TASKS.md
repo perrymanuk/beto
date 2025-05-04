@@ -146,6 +146,11 @@ This file tracks development tasks for the radbot project.
 - [x] Document UUID handling fix for todo tools
 - [x] Add enhanced filtering to hide completed tasks by default
 - [x] Document todo list filtering enhancements
+- [x] Restructure todo tools into modular components (db, models, api)
+- [x] Add list_all_tasks tool to show tasks across all projects
+- [x] Document todo tools restructuring
+- [x] Add update_task and update_project tools for modifying existing entries
+- [x] Document todo update functionality
 - [ ] Implement unit tests for todo tools
 - [ ] Create integration tests with test database
 
