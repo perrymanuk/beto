@@ -1,7 +1,7 @@
 # Radbot: Peronal AI Agent
 (Beto)
 
-An AI agent designed with a unique '90s SoCal influence. Beto blends practical functionality with a laid-back, knowledgeable persona. It can manage smart home devices via Home Assistant, access external information using various tools, and retain context from past interactions. While capable and efficient, it occasionally reflects a nostalgic appreciation for '90s tech and culture, adding a distinct-yet-subtle character to interactions.
+An AI agent designed with a unique '90s SoCal influence. Beto blends practical functionality with a laid-back, knowledgeable persona. It can manage smart home devices via Home Assistant, access external information using various tools, and retain context from past interactions. While capable and efficient, it occasionally reflects a nostalgic appreciation for '90s tech and culture, adding a distinct character to interactions.
 
 <p align="center">
   <img src="img/radbot.png" alt="RadBot">
