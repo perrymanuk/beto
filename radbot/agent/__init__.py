@@ -37,6 +37,7 @@ from radbot.agent.shell_agent_factory import (
     create_shell_agent,
     create_shell_enabled_root_agent
 )
+from radbot.agent.todo_agent_factory import create_todo_agent
 
 # Import the root_agent from the root-level agent.py module
 logger.info("Importing root_agent from the root-level agent.py module")
@@ -73,5 +74,6 @@ __all__ = [
     'create_home_assistant_agent_factory',
     'create_shell_agent',
     'create_shell_enabled_root_agent',
+    'create_todo_agent',
     'root_agent'  # Export this for ADK web to use
 ]

@@ -29,6 +29,14 @@ from radbot.tools.mcp_crawl4ai_client import (
     create_crawl4ai_enabled_agent,
     test_crawl4ai_connection
 )
+from radbot.tools.todo.todo_tools import (
+    ALL_TOOLS as TODO_TOOLS,
+    add_task_tool,
+    list_tasks_tool,
+    complete_task_tool,
+    remove_task_tool,
+    init_database as init_todo_database
+)
 
 # Export tools for easy import
 __all__ = [
@@ -62,4 +70,12 @@ __all__ = [
     'create_crawl4ai_toolset',
     'create_crawl4ai_enabled_agent',
     'test_crawl4ai_connection',
+    
+    # Todo tools
+    'TODO_TOOLS',
+    'add_task_tool',
+    'list_tasks_tool',
+    'complete_task_tool',
+    'remove_task_tool',
+    'init_todo_database',
 ]

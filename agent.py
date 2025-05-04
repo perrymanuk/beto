@@ -39,6 +39,7 @@ from radbot.tools.web_search_tools import create_tavily_search_tool
 from radbot.tools.mcp_fileserver_client import create_fileserver_toolset
 from radbot.tools.mcp_crawl4ai_client import create_crawl4ai_toolset, test_crawl4ai_connection
 from radbot.tools.shell_tool import get_shell_tool  # ADK-compatible tool function
+from radbot.tools.todo import ALL_TOOLS, init_database  # Todo tools
 
 # Import Home Assistant REST API tools
 from radbot.tools.ha_tools_impl import (
@@ -84,6 +85,15 @@ def create_agent(tools: Optional[List[Any]] = None):
     # Always include memory tools
     memory_tools = [search_past_conversations, store_important_information]
     logger.info(f"Including memory tools: {[t.__name__ for t in memory_tools]}")
+    
+    # Initialize Todo Database
+    try:
+        logger.info("Initializing Todo database schema...")
+        init_database()
+        logger.info("Todo database schema initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Todo database: {str(e)}")
+        logger.error("Todo functionality will not be available")
     
     # Add Home Assistant REST API integration
     logger.info("Using Home Assistant REST API integration in agent creation")
@@ -283,6 +293,15 @@ def create_agent(tools: Optional[List[Any]] = None):
         logger.warning(f"Failed to create shell command execution tool: {str(e)}")
         logger.debug(f"Shell command tool creation error details:", exc_info=True)
     
+    # Add Todo Tools
+    try:
+        logger.info("Adding Todo tools to agent...")
+        basic_tools.extend(ALL_TOOLS)
+        logger.info(f"Added {len(ALL_TOOLS)} Todo tools to agent")
+    except Exception as e:
+        logger.warning(f"Failed to add Todo tools: {str(e)}")
+        logger.debug(f"Todo tool addition error details:", exc_info=True)
+    
     # Add any additional tools if provided
     all_tools = list(basic_tools) + memory_tools
     if tools:
@@ -304,8 +323,28 @@ def create_agent(tools: Optional[List[Any]] = None):
     try:
         instruction = config_manager.get_instruction("main_agent")
         
+        # Safely check tools (avoiding errors with None values)
+        file_tool_exists = False
+        ha_tool_exists = False
+        shell_tool_exists = False
+        todo_tool_exists = False
+        
+        for tool in all_tools:
+            if tool is None:
+                continue
+                
+            tool_str = str(tool).lower()
+            if "file" in tool_str:
+                file_tool_exists = True
+            if "home_assistant" in tool_str:
+                ha_tool_exists = True
+            if "shell" in tool_str or "command" in tool_str or "execute" in tool_str:
+                shell_tool_exists = True
+            if "task" in tool_str or "todo" in tool_str:
+                todo_tool_exists = True
+        
         # Add MCP fileserver instructions if available
-        if any("file" in str(tool).lower() for tool in all_tools):
+        if file_tool_exists:
             fs_instruction = """
             You can access files on the system through the file tools. Here are some examples:
             - To list files: Use the list_files tool with the path parameter
@@ -318,7 +357,7 @@ def create_agent(tools: Optional[List[Any]] = None):
             logger.info("Added MCP fileserver instructions to agent instruction")
             
         # Add Home Assistant REST API instructions
-        if any("home_assistant" in str(tool).lower() for tool in all_tools):
+        if ha_tool_exists:
             ha_instruction = """
             You have access to Home Assistant smart home control tools through the REST API integration.
             
@@ -345,7 +384,7 @@ def create_agent(tools: Optional[List[Any]] = None):
             logger.info("Added detailed Home Assistant REST API instructions to agent instruction")
             
         # Add Shell Command Execution instructions if available
-        if any("shell" in str(tool).lower() or "command" in str(tool).lower() or "execute" in str(tool).lower()):
+        if shell_tool_exists:
             enable_shell = os.environ.get("RADBOT_ENABLE_SHELL", "strict").lower()
             shell_instruction = """
             You can execute shell commands using the execute_shell_command tool.
@@ -369,6 +408,40 @@ def create_agent(tools: Optional[List[Any]] = None):
                 
             instruction += "\n\n" + shell_instruction
             logger.info("Added shell command execution instructions to agent instruction")
+            
+        # Add Todo Tools instructions if available
+        if todo_tool_exists:
+            todo_instruction = """
+            You can manage a persistent todo list using these todo tools:
+            
+            - add_task(description, project_id, category, origin, related_info): Creates a new task in the database
+              description: The main text content describing the task (Required)
+              project_id: Can be a UUID or a simple project name like 'home' or 'work' (Required)
+              category: An optional label to categorize the task (e.g., 'work', 'personal')
+              origin: An optional string indicating the source of the task (e.g., 'chat', 'email')
+              related_info: An optional dictionary for storing supplementary structured data
+            
+            - list_tasks(project_id, status_filter): Retrieves tasks for a specific project
+              project_id: Can be a UUID or a simple project name like 'home' or 'work' (Required)
+              status_filter: Optional filter for task status ('backlog', 'inprogress', 'done')
+            
+            - list_projects(): Lists all available projects with their UUIDs and names
+              Use this to show the user what projects are available
+            
+            - complete_task(task_id): Marks a specific task as 'done'
+              task_id: The UUID identifier of the task to mark as completed (Required)
+            
+            - remove_task(task_id): Permanently deletes a task from the database
+              task_id: The UUID identifier of the task to delete (Required)
+            
+            You don't need to generate UUIDs for projects - simply use common names like 'home', 'work', or any name the user
+            chooses for their projects. The system will handle creating and mapping UUIDs internally.
+            
+            Always confirm actions before executing them and provide helpful feedback about the results of todo operations.
+            Keep track of task IDs for the user so they don't need to remember them.
+            """
+            instruction += "\n\n" + todo_instruction
+            logger.info("Added Todo tools instructions to agent instruction")
     except Exception as e:
         logger.warning(f"Failed to load main_agent instruction: {str(e)}")
         instruction = """You are a helpful assistant. Your goal is to understand the user's request and fulfill it by using available tools."""

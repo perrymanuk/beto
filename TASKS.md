@@ -130,6 +130,25 @@ This file tracks development tasks for the radbot project.
 - [ ] Integrate with agent factories for CLI and web interfaces
 - [ ] Create additional command-specific argument validation rules
 
+## PostgreSQL Todo List Feature
+
+- [x] Create Pydantic models for todo list data validation and serialization
+- [x] Implement PostgreSQL database connection with psycopg2 and connection pooling
+- [x] Create database schema with UUID primary keys and enum type for task status
+- [x] Implement database interaction layer for CRUD operations
+- [x] Create ADK FunctionTools with consistent error handling
+- [x] Update environment configuration for PostgreSQL connection
+- [x] Add todo agent factory for easy integration
+- [x] Create example script demonstrating the todo agent
+- [x] Improve user experience by supporting project names instead of requiring UUIDs
+- [x] Fix UUID handling issues in todo_tools with proper psycopg2 adapter registration
+- [x] Fix task removal functionality with improved error handling
+- [x] Document UUID handling fix for todo tools
+- [x] Add enhanced filtering to hide completed tasks by default
+- [x] Document todo list filtering enhancements
+- [ ] Implement unit tests for todo tools
+- [ ] Create integration tests with test database
+
 ## Testing & Documentation
 
 - [x] Create unit tests for basic tools
