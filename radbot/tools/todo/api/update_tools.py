@@ -103,7 +103,7 @@ def update_task(task_id: str, description: Optional[str] = None,
             if success:
                 # Get the updated task data
                 updated_task = db_get_task(conn, task_uuid)
-                # Create response with string UUID and task data
+                # Updated task data already has all datetime and UUID values converted to strings by db_get_task
                 return {
                     "status": "success",
                     "task_id": str(task_uuid),
@@ -181,7 +181,7 @@ def update_project(project_id: str, name: str) -> Dict[str, Any]:
                 if success:
                     # Get the updated project data
                     updated_project = db_get_project(conn, project_uuid)
-                    # Create response
+                    # Updated project data already has datetime and UUID converted to strings by db_get_project
                     return {
                         "status": "success",
                         "project_id": str(project_uuid),

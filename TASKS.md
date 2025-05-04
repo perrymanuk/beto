@@ -151,6 +151,8 @@ This file tracks development tasks for the radbot project.
 - [x] Document todo tools restructuring
 - [x] Add update_task and update_project tools for modifying existing entries
 - [x] Document todo update functionality
+- [x] Fix JSON serialization issue with datetime objects in todo tools
+- [x] Fix dictionary serialization issue in update_task and add_task functions
 - [ ] Implement unit tests for todo tools
 - [ ] Create integration tests with test database
 

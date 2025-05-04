@@ -113,3 +113,52 @@ agent.tools.update_project(
 5. **Response Format**:
    - Success responses include both the ID and the full updated entity
    - Error responses include a descriptive message
+
+## JSON Serialization Fixes
+
+### 1. Datetime and UUID Serialization
+
+The update tools initially encountered a serialization issue with datetime objects when returning task and project data. This has been fixed by:
+
+1. Adding datetime and UUID serialization in the `get_task` and `get_project` functions:
+   - Converting `datetime` objects to ISO format strings
+   - Converting `UUID` objects to string representation
+
+2. This ensures that all data returned by the tools is JSON-serializable and can be properly processed by the agent.
+
+Example of the fix (in the `get_project` function):
+
+```python
+# Convert datetime to ISO format string
+if 'created_at' in project_dict and project_dict['created_at']:
+    project_dict['created_at'] = project_dict['created_at'].isoformat()
+    
+# Convert UUID to string
+if 'project_id' in project_dict and project_dict['project_id']:
+    project_dict['project_id'] = str(project_dict['project_id'])
+```
+
+### 2. Dictionary Serialization
+
+We encountered and fixed an issue with dictionary serialization when updating tasks. The error was:
+
+```
+Failed to update task: can't adapt type 'dict'
+```
+
+This occurred because PostgreSQL needs dictionaries to be explicitly converted to JSON strings with proper casting to JSONB type. The fix involved:
+
+1. **Explicit JSON Serialization**: Converting Python dictionaries to JSON strings:
+   ```python
+   # Convert dict to JSON string for PostgreSQL
+   related_info = json.dumps(related_info)
+   ```
+
+2. **SQL Type Casting**: Adding explicit type casting in the SQL query:
+   ```sql
+   VALUES (%s, %s, %s, %s, %s::jsonb)
+   ```
+
+3. **Consistent Implementation**: Applied the same approach to both `add_task` and `update_task` functions to ensure consistent handling of dictionary data.
+
+These fixes ensure that the tools can reliably handle all types of data without serialization errors.

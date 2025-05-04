@@ -9,6 +9,7 @@ import logging
 import psycopg2
 import psycopg2.extras  # For RealDictCursor
 import uuid
+import json
 from typing import List, Dict, Optional, Any
 
 from .connection import get_db_cursor
@@ -76,10 +77,14 @@ def add_task(conn: psycopg2.extensions.connection, description: str, project_id:
     """Inserts a new task into the database and returns its UUID."""
     sql = """
         INSERT INTO tasks (description, project_id, category, origin, related_info)
-        VALUES (%s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s::jsonb)
         RETURNING task_id;
     """
-    # psycopg2 automatically handles JSON serialization for related_info if it's a dict
+    # Convert related_info dict to JSON string if it exists
+    if related_info is not None:
+        related_info = json.dumps(related_info)
+        
+    # Set up parameters for query
     params = (description, project_id, category, origin, related_info)
     try:
         with get_db_cursor(conn, commit=True) as cursor:
@@ -140,8 +145,9 @@ def update_task(conn: psycopg2.extensions.connection, task_id: uuid.UUID,
         params.append(origin)
     
     if related_info is not None:
-        update_fields.append("related_info = %s")
-        params.append(related_info)
+        update_fields.append("related_info = %s::jsonb")
+        # Convert dict to JSON string for PostgreSQL
+        params.append(json.dumps(related_info))
     
     # If no fields to update, return early
     if not update_fields:
@@ -281,7 +287,17 @@ def get_task(conn: psycopg2.extensions.connection, task_id: uuid.UUID) -> Option
             cursor.execute(sql, params)
             result = cursor.fetchone()
             if result:
-                return dict(result)
+                # Convert result to a regular dict and handle datetime serialization
+                task_dict = dict(result)
+                # Convert datetime to ISO format string
+                if 'created_at' in task_dict and task_dict['created_at']:
+                    task_dict['created_at'] = task_dict['created_at'].isoformat()
+                # Convert UUID fields to strings
+                if 'task_id' in task_dict and task_dict['task_id']:
+                    task_dict['task_id'] = str(task_dict['task_id'])
+                if 'project_id' in task_dict and task_dict['project_id']:
+                    task_dict['project_id'] = str(task_dict['project_id'])
+                return task_dict
             return None
     except psycopg2.Error as e:
         logger.error(f"Database error getting task {task_id}: {e}")
@@ -306,7 +322,15 @@ def get_project(conn: psycopg2.extensions.connection, project_id: uuid.UUID) -> 
             cursor.execute(sql, params)
             result = cursor.fetchone()
             if result:
-                return dict(result)
+                # Convert result to a regular dict and handle datetime serialization
+                project_dict = dict(result)
+                # Convert datetime to ISO format string
+                if 'created_at' in project_dict and project_dict['created_at']:
+                    project_dict['created_at'] = project_dict['created_at'].isoformat()
+                # Convert UUID to string
+                if 'project_id' in project_dict and project_dict['project_id']:
+                    project_dict['project_id'] = str(project_dict['project_id'])
+                return project_dict
             return None
     except psycopg2.Error as e:
         logger.error(f"Database error getting project {project_id}: {e}")
