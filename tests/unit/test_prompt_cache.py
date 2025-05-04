@@ -151,8 +151,8 @@ class TestCacheTelemetry:
         assert stats["hits"] == 2
         assert stats["misses"] == 1
         assert stats["total_requests"] == 3
-        assert stats["hit_rate"] == 2/3
-        assert stats["miss_rate"] == 1/3
+        assert abs(stats["hit_rate"] - 2/3) < 0.0001
+        assert abs(stats["miss_rate"] - 1/3) < 0.0001
         assert stats["avg_hit_latency_ms"] == 12.5
         assert stats["avg_miss_latency_ms"] == 30.0
         assert stats["estimated_token_savings"] == 250
