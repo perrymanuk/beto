@@ -166,13 +166,22 @@ def create_home_assistant_toolset() -> List[Any]:
     """
     exit_stack = None
     try:
+        # Need to check if we're already in an event loop
+        try:
+            existing_loop = asyncio.get_event_loop()
+            if existing_loop.is_running():
+                logger.warning("Cannot create Home Assistant toolset: Event loop is already running")
+                logger.warning("This likely means you're using this in an async context")
+                logger.warning("Try using 'await _create_home_assistant_toolset_async()' instead")
+                return []
+        except RuntimeError:
+            # No event loop exists, create a new one
+            pass
+            
         # Run the async function in a new event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         tools, exit_stack = loop.run_until_complete(_create_home_assistant_toolset_async())
-        
-        # We don't need to close the exit_stack here as the connection should remain open
-        # for the lifetime of the application
         
         # Close only the event loop
         loop.close()

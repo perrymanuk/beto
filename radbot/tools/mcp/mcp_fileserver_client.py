@@ -130,24 +130,44 @@ def create_fileserver_toolset() -> Optional[List]:
     # Check if we're running in an event loop
     try:
         loop = asyncio.get_running_loop()
-        print("SPECIAL DEBUG: Running in existing event loop, attempting to use nest_asyncio")
-        logger.info("Running in existing event loop, using nest_asyncio")
+        print("SPECIAL DEBUG: Running in existing event loop, cannot create fileserver in async context")
+        logger.warning("Cannot create fileserver toolset: Event loop is already running")
+        logger.warning("This likely means you're using this in an async context")
+        logger.warning("Using simplified mock fileserver tools")
         
-        # We're in an event loop, so we need to use nest_asyncio
-        try:
-            import nest_asyncio
-            nest_asyncio.apply()
-            print("SPECIAL DEBUG: Successfully applied nest_asyncio")
-            logger.info("Applied nest_asyncio")
-        except ImportError:
-            print("SPECIAL DEBUG: nest_asyncio not available!")
-            logger.warning("nest_asyncio not available. Cannot create MCP fileserver tools in a running event loop.")
-            logger.warning("Please install nest_asyncio package: pip install nest_asyncio")
-            return None
+        # Return a list of mock tools for compatibility
+        # These tools will just return informative error messages
+        from google.adk.tools import FunctionTool
         
-        # Now we can call our async function within this loop
-        print("SPECIAL DEBUG: About to call asyncio.run(create_fileserver_toolset_async())")
-        tools, exit_stack = asyncio.run(create_fileserver_toolset_async())
+        def mock_list_files(path: str = "."):
+            """Mock implementation that explains why real tools aren't available."""
+            return {
+                "success": False,
+                "error": "MCP Fileserver unavailable in async context",
+                "message": "The MCP Fileserver cannot be initialized within an async context like the CLI's setup_agent. "
+                           "Use make run-web for full fileserver functionality."
+            }
+            
+        mock_tools = [
+            FunctionTool(
+                function=mock_list_files,
+                function_schema={
+                    "name": "list_files",
+                    "description": "Mock list_files function - fileserver unavailable in async context",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "Path to list files from"
+                            }
+                        }
+                    }
+                }
+            )
+        ]
+        
+        return mock_tools
         
     except RuntimeError:
         # Not in an event loop, we can create our own

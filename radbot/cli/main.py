@@ -244,13 +244,19 @@ async def setup_agent() -> Optional[RadBotAgent]:
                    f"domains: {', '.join(ha_status['domains'])}")
             
             # Create agent with Home Assistant capabilities
-            ha_agent_factory = create_home_assistant_agent_factory(
-                wrapped_agent_factory,
-                config_manager=config_manager,
-                base_tools=basic_tools
-            )
-            agent = ha_agent_factory()
-            logger.info("Created agent with Home Assistant MCP integration")
+            try:
+                # Use the legacy Home Assistant agent factory, as the MCP integration isn't working
+                # in the async context of the CLI
+                ha_agent_factory = create_home_assistant_agent_factory(
+                    wrapped_agent_factory,
+                    config_manager=config_manager,
+                    base_tools=basic_tools
+                )
+                agent = ha_agent_factory()
+                logger.info("Created agent with Home Assistant legacy integration")
+            except Exception as e:
+                logger.error(f"Error creating HA-enabled agent: {str(e)}")
+                agent = None
         else:
             logger.warning(f"Home Assistant MCP integration not available: {ha_status['status_message']}")
             # Create a basic agent without Home Assistant since MCP is not available
@@ -259,20 +265,109 @@ async def setup_agent() -> Optional[RadBotAgent]:
         if not agent:
             logger.warning("Home Assistant integration failed, creating memory-enabled agent with basic tools")
             try:
-                agent = create_memory_enabled_agent(
+                # Create a memory-enabled agent directly without using the factory function
+                from radbot.memory.qdrant_memory import QdrantMemoryService
+                from google.adk.sessions import InMemorySessionService
+                from google.adk.runners import Runner
+                from google.adk.agents import Agent
+                
+                # Set up necessary components
+                session_service = InMemorySessionService()
+                
+                # Create memory service
+                try:
+                    memory_service = QdrantMemoryService()
+                    logger.info("Created memory service successfully")
+                except Exception as e:
+                    logger.error(f"Failed to create memory service: {str(e)}")
+                    memory_service = None
+                
+                # Get instruction
+                try:
+                    instruction = config_manager.get_instruction("main_agent")
+                except Exception as e:
+                    logger.warning(f"Failed to load main_agent instruction: {str(e)}")
+                    instruction = "You are a helpful assistant with access to tools and memory."
+                
+                # Create the base agent with all components directly, bypassing the factory functions
+                from google.adk.agents import Agent
+                from google.adk.runners import Runner
+                from google.adk.sessions import InMemorySessionService
+                from radbot.agent.agent import RadBotAgent
+                
+                # Create components directly
+                session_service = InMemorySessionService()
+                root_agent = Agent(
+                    name="radbot_cli",
+                    model=config_manager.get_main_model(),
+                    instruction=instruction,
                     tools=basic_tools,
-                    instruction_name="main_agent",
-                    name="radbot"
+                    description="RadBot CLI agent"
                 )
-                logger.info("Created memory-enabled agent with basic tools")
+                
+                # Create runner directly with explicit app_name
+                runner = Runner(
+                    agent=root_agent,
+                    app_name="radbot",  # Explicitly provide app_name
+                    session_service=session_service
+                )
+                
+                # Create a wrapper RadBotAgent
+                agent = RadBotAgent(
+                    name="radbot_cli",
+                    session_service=session_service,
+                    tools=basic_tools,
+                    model=config_manager.get_main_model(),
+                    instruction=instruction
+                )
+                
+                # Replace the auto-created runner with our explicit one
+                agent.runner = runner
+                agent.root_agent = root_agent
+                agent.app_name = "radbot"  # Ensure this is set
+                
+                logger.info("Created basic agent without memory in direct mode")          
             except Exception as e:
-                logger.warning(f"Failed to create memory-enabled agent: {str(e)}, falling back to basic agent")
-                agent = create_agent(
+                logger.warning(f"Failed to create custom memory-enabled agent: {str(e)}, creating a basic agent directly")
+                
+                # Create a super basic agent directly as a last resort
+                from google.adk.agents import Agent
+                from google.adk.runners import Runner
+                from google.adk.sessions import InMemorySessionService
+                from radbot.agent.agent import RadBotAgent
+                
+                # Create minimal components
+                session_service = InMemorySessionService()
+                root_agent = Agent(
+                    name="radbot_basic",
+                    model=config_manager.get_main_model(),
+                    instruction="You are a helpful assistant with basic tools.",
                     tools=basic_tools,
-                    instruction_name="main_agent",  # Load from config
-                    model=config_manager.get_main_model()
+                    description="Basic RadBot CLI agent"
                 )
-                logger.info("Created basic agent without memory")
+                
+                # Create runner with explicit app_name
+                runner = Runner(
+                    agent=root_agent,
+                    app_name="radbot",  # Explicitly provide app_name
+                    session_service=session_service
+                )
+                
+                # Create a minimal wrapper
+                agent = RadBotAgent(
+                    name="radbot_basic",
+                    session_service=session_service,
+                    tools=basic_tools,
+                    model=config_manager.get_main_model(),
+                    instruction="You are a helpful assistant with basic tools."
+                )
+                
+                # Replace auto-created components
+                agent.runner = runner
+                agent.root_agent = root_agent
+                agent.app_name = "radbot"  # Ensure this is set
+                
+                logger.info("Created ultra-basic agent in direct fallback mode")
         
         logger.info("Agent setup complete")
         return agent

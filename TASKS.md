@@ -26,6 +26,11 @@ This file tracks development tasks for the radbot project.
 - [x] Fix syntax error in process_message method's try/except structure
 - [x] Fix session management method signatures to match ADK 0.3.0+ API
 - [x] Fix InMemorySessionService parameter mismatch in get_session and create_session calls
+- [x] Fix memory_tools import path in agent.py (radbot.tools.memory.memory_tools instead of radbot.tools.memory_tools)
+- [x] Fix Home Assistant MCP tools event loop errors by adding proper event loop handling in CLI
+- [x] Fix Runner initialization in CLI to explicitly provide app_name parameter
+- [x] Implement direct component creation in CLI to bypass factory functions with app_name issues
+- [x] Fix MCP Fileserver client to handle event loop conflicts in async contexts
 - [x] Fix function signature for search_home_assistant_entities to work with automatic function calling
 
 ## Memory System

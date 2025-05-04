@@ -523,7 +523,7 @@ def create_agent(
     # Include memory tools if requested
     if include_memory_tools:
         try:
-            from radbot.tools.memory_tools import search_past_conversations, store_important_information
+            from radbot.tools.memory.memory_tools import search_past_conversations, store_important_information
             memory_tools = [search_past_conversations, store_important_information]
             
             # Add memory tools if they're not already included
