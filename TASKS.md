@@ -32,6 +32,9 @@ This file tracks development tasks for the radbot project.
 - [x] Implement direct component creation in CLI to bypass factory functions with app_name issues
 - [x] Fix MCP Fileserver client to handle event loop conflicts in async contexts
 - [x] Fix function signature for search_home_assistant_entities to work with automatic function calling
+- [x] Updated MCP implementation to work with ADK 0.3.0 without compatibility
+- [x] Fixed MCP client import issues by updating to use ClientSession from mcp.client.session
+- [x] Fixed MCP Tool import error by updating import path from mcp.server.lowlevel.tool to mcp.types
 
 ## Memory System
 
@@ -188,6 +191,8 @@ This file tracks development tasks for the radbot project.
 - [x] Add help target to Makefile
 - [x] Document MCP fileserver implementation
 - [x] Document enhanced memory system implementation
+- [x] Implement research agent sub-agent
+- [x] Document research agent implementation
 
 ## CLI & Interfaces
 

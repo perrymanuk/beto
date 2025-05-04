@@ -10,6 +10,9 @@ import sys
 import logging
 import asyncio
 import requests
+import threading
+import concurrent.futures
+import atexit
 from typing import Dict, Any, List, Optional, Tuple
 from contextlib import AsyncExitStack
 
@@ -38,6 +41,32 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
+
+# Global variables for thread management
+_thread_local = threading.local()
+_thread_lock = threading.Lock()
+
+def run_async_in_thread(coro):
+    """
+    Run an async coroutine in a separate thread with its own event loop.
+    
+    Args:
+        coro: The coroutine to run
+        
+    Returns:
+        The result of the coroutine
+    """
+    def wrapper():
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        try:
+            return new_loop.run_until_complete(coro)
+        finally:
+            new_loop.close()
+    
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(wrapper)
+        return future.result()
 
 async def create_crawl4ai_toolset_async() -> Tuple[List[Any], Optional[AsyncExitStack]]:
     """
@@ -205,6 +234,7 @@ async def create_crawl4ai_toolset_async() -> Tuple[List[Any], Optional[AsyncExit
                 read_url_tool = crawl4ai_ingest_and_read
                 ingest_url_tool = crawl4ai_ingest_url
                 query_tool = crawl4ai_query
+                two_step_tool = crawl4ai_two_step
             
             logger.info("Created crawl4ai ingest and query tools")
             
@@ -267,33 +297,77 @@ def create_crawl4ai_toolset() -> List[Any]:
     Returns:
         List[MCPTool]: List of Crawl4AI tools, or empty list if configuration fails
     """
-    exit_stack = None
+    # Initialize thread local storage if needed
+    with _thread_lock:
+        if not hasattr(_thread_local, 'crawl4ai_exit_stacks'):
+            _thread_local.crawl4ai_exit_stacks = []
+    
+    # Check if we're running in an event loop
     try:
-        # Run the async function in a new event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        tools, exit_stack = loop.run_until_complete(create_crawl4ai_toolset_async())
+        # Try to get the running loop - this will raise RuntimeError if none exists
+        loop = asyncio.get_running_loop()
+        logger.info("Running in existing event loop, using thread-based approach")
         
-        # We don't need to close the exit_stack here as it's minimal
-        # and doesn't have resources that need cleanup
+        # Run in a separate thread with its own event loop
+        result = run_async_in_thread(create_crawl4ai_toolset_async())
         
-        # Close only the event loop
-        loop.close()
-        
-        return tools
-    except Exception as e:
-        logger.error(f"Error creating Crawl4AI tools: {str(e)}")
-        if exit_stack:
-            try:
-                # We need to close the exit stack if an error occurred
-                # Create a new event loop for this
-                cleanup_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(cleanup_loop)
-                cleanup_loop.run_until_complete(exit_stack.aclose())
-                cleanup_loop.close()
-            except Exception as cleanup_error:
-                logger.error(f"Error during cleanup: {str(cleanup_error)}")
+        if result and result[0]:
+            tools, exit_stack = result
+            # Store the exit stack in thread-local storage
+            if exit_stack:
+                with _thread_lock:
+                    _thread_local.crawl4ai_exit_stacks.append(exit_stack)
+            return tools
         return []
+    
+    except RuntimeError:
+        # No event loop is running, we can create our own
+        logger.info("No event loop running, creating new one")
+        try:
+            # Create and set a new event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Run the async function directly
+            tools, exit_stack = loop.run_until_complete(create_crawl4ai_toolset_async())
+            
+            # Store the exit stack if we got one
+            if exit_stack:
+                with _thread_lock:
+                    _thread_local.crawl4ai_exit_stacks.append(exit_stack)
+            
+            # Return the tools
+            return tools if tools else []
+            
+        except Exception as e:
+            logger.error(f"Error creating Crawl4AI tools: {str(e)}")
+            return []
+        finally:
+            # Don't close the loop as it might be needed by the caller
+            pass
+
+def cleanup_crawl4ai():
+    """Clean up Crawl4AI resources on exit."""
+    try:
+        with _thread_lock:
+            if hasattr(_thread_local, 'crawl4ai_exit_stacks'):
+                for stack in _thread_local.crawl4ai_exit_stacks:
+                    try:
+                        # Run cleanup in a separate thread with its own event loop
+                        async def close_async(s):
+                            if hasattr(s, "aclose"):
+                                await s.aclose()
+                            elif hasattr(s, "close"):
+                                s.close()
+                        
+                        run_async_in_thread(close_async(stack))
+                    except Exception as e:
+                        logger.error(f"Error cleaning up Crawl4AI connection: {str(e)}")
+                
+                # Clear the list
+                _thread_local.crawl4ai_exit_stacks = []
+    except Exception as e:
+        logger.error(f"Error in cleanup_crawl4ai: {str(e)}")
 
 def test_crawl4ai_connection() -> Dict[str, Any]:
     """
@@ -373,6 +447,9 @@ def create_crawl4ai_enabled_agent(agent_factory, base_tools=None, **kwargs):
         logger.error(f"Error creating agent with Crawl4AI tools: {str(e)}")
         # Create agent without Crawl4AI tools as fallback
         return agent_factory(tools=base_tools, **kwargs)
+
+# Register cleanup function
+atexit.register(cleanup_crawl4ai)
 
 def main():
     """Command line entry point for testing."""

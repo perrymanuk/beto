@@ -25,6 +25,8 @@ load_dotenv()
 # Import ADK components
 from google.adk.agents import Agent
 from radbot.config import config_manager
+# Import the ADK's built-in transfer_to_agent tool
+from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
 
 # Log configuration
 logger.info(f"Config manager loaded. Model config: {config_manager.model_config}")
@@ -58,6 +60,9 @@ from radbot.tools.homeassistant import get_ha_client
 from radbot.agent.home_assistant_agent_factory import create_home_assistant_agent_factory
 from radbot.config.settings import ConfigManager
 
+# Import Research Agent
+from radbot.agent.research_agent import create_research_agent
+
 # Log startup
 logger.info("ROOT agent.py loaded - this is the main implementation loaded by ADK web")
 print(f"SPECIAL DEBUG: agent.py loaded with MCP_FS_ROOT_DIR={os.environ.get('MCP_FS_ROOT_DIR', 'Not set')}")
@@ -79,7 +84,7 @@ def create_agent(tools: Optional[List[Any]] = None):
     """
     logger.info("Creating agent for ADK web interface")
     
-    # Start with basic tools
+    # Start with basic tools - added back get_weather as requested
     basic_tools = [get_current_time, get_weather]
     
     # Always include memory tools
@@ -302,6 +307,17 @@ def create_agent(tools: Optional[List[Any]] = None):
         logger.warning(f"Failed to add Todo tools: {str(e)}")
         logger.debug(f"Todo tool addition error details:", exc_info=True)
     
+    # Add the ADK's built-in transfer_to_agent tool
+    try:
+        # Create a FunctionTool wrapper around the transfer_to_agent function
+        from google.adk.tools import FunctionTool
+        transfer_tool = FunctionTool(transfer_to_agent)
+        basic_tools.append(transfer_tool)
+        logger.info("Added transfer_to_agent tool for agent-to-agent communication")
+    except Exception as e:
+        logger.warning(f"Failed to add transfer_to_agent tool: {str(e)}")
+        logger.debug(f"Transfer tool addition error details:", exc_info=True)
+    
     # Add any additional tools if provided
     all_tools = list(basic_tools) + memory_tools
     if tools:
@@ -494,6 +510,88 @@ def create_agent(tools: Optional[List[Any]] = None):
             logger.info("Stored Crawl4AI API token in global ToolContext")
     except Exception as e:
         logger.warning(f"Failed to initialize memory service: {str(e)}")
+    
+    # Add research agent as a subagent if available
+    try:
+        logger.info("Creating research agent as a subagent")
+        
+        # Collect tools for the research agent
+        research_tools = []
+        
+        # NEW APPROACH: Include ALL tools EXCEPT Home Assistant tools
+        logger.info("USING NEW DIRECT APPROACH: Include all tools except HA tools")
+        
+        # Copy all tools except Home Assistant tools
+        for tool in all_tools:
+            # Get the tool name
+            tool_name = None
+            if hasattr(tool, 'name'):
+                tool_name = tool.name
+            elif hasattr(tool, '__name__'):
+                tool_name = tool.__name__
+            else:
+                tool_name = str(tool)
+            
+            # Skip Home Assistant tools
+            ha_keywords = ["ha_", "home_assistant", "entity", "entities", "turn_on_ha", "turn_off_ha", "toggle_ha", "list_ha", "get_ha"]
+            if any(ha_kw in str(tool_name).lower() for ha_kw in ha_keywords):
+                logger.info(f"Skipping Home Assistant tool: {tool_name}")
+                continue
+            
+            # Add all other tools (including get_weather tool)
+            research_tools.append(tool)
+            logger.info(f"Added tool to research agent: {tool_name}")
+        
+        # Create the research agent with all collected tools
+        research_agent = create_research_agent(
+            name="scout",
+            model=model_name,
+            tools=research_tools,
+            as_subagent=False  # Get the ADK agent directly
+        )
+        
+        # Log the final list of tools assigned to the research agent
+        logger.info("========== RESEARCH AGENT TOOLS ===========")
+        logger.info(f"Total tools assigned to research agent: {len(research_tools)}")
+        for i, tool in enumerate(research_tools):
+            tool_name = "Unknown"
+            
+            if hasattr(tool, 'name'):
+                tool_name = tool.name
+            elif hasattr(tool, '__name__'):
+                tool_name = tool.__name__
+            else:
+                tool_name = str(tool)
+                
+            logger.info(f"Research Tool {i+1}: {tool_name}")
+        logger.info("===========================================")
+        
+        # Add the research agent as a subagent to the main agent
+        agent.sub_agents.append(research_agent)
+        logger.info("Successfully added research agent as a subagent")
+        
+        # Add instruction for research agent delegation
+        research_agent_instruction = """
+        If the user has a technical research question or wants to discuss a design/architecture,
+        you can transfer the conversation to scout by using the
+        transfer_to_agent function. Example: transfer_to_agent(agent_name='scout')
+        
+        The scout is specialized for:
+        1. Technical research using web search, internal knowledge, and GitHub
+        2. Design discussions (rubber duck debugging) to help think through technical designs
+        
+        Before transferring, make sure you've fully understood what the user wants to research
+        or discuss, then use session.state to pass the context to the research agent.
+        
+        The research agent can transfer control back to you using the same function:
+        transfer_to_agent(agent_name='radbot_web')
+        """
+        instruction += "\n\n" + research_agent_instruction
+        agent.instruction = instruction
+        logger.info("Added research agent delegation instructions to main agent")
+    except Exception as e:
+        logger.warning(f"Failed to add research agent as a subagent: {str(e)}")
+        logger.debug("Research agent creation error details:", exc_info=True)
     
     logger.info(f"Created ADK BaseAgent for web UI with {len(all_tools)} tools")
     return agent
