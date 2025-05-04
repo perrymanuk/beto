@@ -69,7 +69,8 @@ except Exception as e:
 
 # Now import our own Tavily tool implementation
 try:
-    from radbot.tools.web_search_tools import (
+    # The correct import path based on the current project structure
+    from radbot.tools.web_search.web_search_tools import (
         create_tavily_search_tool, 
         HAVE_TAVILY
     )
