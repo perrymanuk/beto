@@ -11,10 +11,10 @@ Our tool implementations follow these key principles:
 3. **Consistent Error Handling**: Tools return structured dictionaries with status information and error messages.
 4. **Modularity**: Each tool is implemented as a standalone function that can be tested independently.
 
-## Basic Tools Module (`tools/basic_tools.py`)
+## Basic Tools Module (`tools/basic/basic_tools.py`)
 
 ```python
-# radbot/tools/basic_tools.py
+# radbot/tools/basic/basic_tools.py
 
 """
 Basic utility tools for the radbot agent framework.
@@ -185,7 +185,7 @@ def fahrenheit_to_celsius(fahrenheit: float) -> float:
 Tools package for the radbot agent framework.
 """
 
-from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic import get_current_time, get_weather
 
 # Export the tools for easy import
 __all__ = ['get_current_time', 'get_weather']
@@ -204,7 +204,7 @@ Tool registration functions for the radbot agent framework.
 
 from typing import List, Any
 
-from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic import get_current_time, get_weather
 from radbot.agent import radbotAgent
 
 def register_basic_tools(agent: radbotAgent) -> None:
@@ -334,7 +334,7 @@ Unit tests should be created to verify the tool functionality:
 
 import unittest
 from unittest.mock import MagicMock
-from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic import get_current_time, get_weather
 
 class TestBasicTools(unittest.TestCase):
     def test_get_current_time_success(self):

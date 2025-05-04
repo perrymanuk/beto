@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from radbot.agent.agent import RadBotAgent, create_agent
 from radbot.config import config_manager
-from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic import get_current_time, get_weather
 
 # Set up logging
 logging.basicConfig(
@@ -34,7 +34,7 @@ def check_home_assistant_status() -> dict:
     Returns:
         Dictionary with status information
     """
-    from radbot.tools.mcp_utils import test_home_assistant_connection, list_home_assistant_domains
+    from radbot.tools.mcp.mcp_utils import test_home_assistant_connection, list_home_assistant_domains
     
     result = {
         "connected": False,
@@ -64,7 +64,7 @@ def check_home_assistant_status() -> dict:
     
     return result
 
-def search_home_assistant_entities(search_term: str, domain_filter=None):
+def search_home_assistant_entities(search_term: str, domain_filter: Optional[str] = None):
     """
     Search for Home Assistant entities matching search term.
     
@@ -79,7 +79,7 @@ def search_home_assistant_entities(search_term: str, domain_filter=None):
     
     try:
         # Try to import and use the real function
-        from radbot.tools.mcp_utils import find_home_assistant_entities
+        from radbot.tools.mcp.mcp_utils import find_home_assistant_entities
         return find_home_assistant_entities(search_term, domain_filter)
     except Exception as e:
         logger.error(f"Error in direct entity search: {str(e)}")
@@ -118,7 +118,7 @@ def HassTurnOn(entity_id: str):
     
     try:
         # Try to use the real Home Assistant tools if available
-        from radbot.tools.mcp_tools import create_home_assistant_toolset
+        from radbot.tools.mcp.mcp_tools import create_home_assistant_toolset
         ha_tools = create_home_assistant_toolset()
         
         for tool in ha_tools:
@@ -159,7 +159,7 @@ def HassTurnOff(entity_id: str):
     
     try:
         # Try to use the real Home Assistant tools if available
-        from radbot.tools.mcp_tools import create_home_assistant_toolset
+        from radbot.tools.mcp.mcp_tools import create_home_assistant_toolset
         ha_tools = create_home_assistant_toolset()
         
         for tool in ha_tools:
@@ -186,16 +186,16 @@ def HassTurnOff(entity_id: str):
             "error": str(e)
         }
 
-async def setup_agent() -> Optional[radbotAgent]:
+async def setup_agent() -> Optional[RadBotAgent]:
     """Set up and configure the agent with tools and memory.
     
     Returns:
-        Configured radbotAgent instance or None if setup fails
+        Configured RadBotAgent instance or None if setup fails
     """
     try:
         # Import the Home Assistant agent factory and memory agent factory
         from radbot.agent.home_assistant_agent_factory import create_home_assistant_agent_factory
-        from radbot.tools.mcp_tools import create_ha_mcp_enabled_agent
+        from radbot.tools.mcp.mcp_tools import create_ha_mcp_enabled_agent
         from radbot.agent.agent import AgentFactory
         from radbot.agent.memory_agent_factory import create_memory_enabled_agent
         from radbot.config.settings import ConfigManager
@@ -410,7 +410,7 @@ def process_commands(command: str, agent: RadBotAgent, user_id: str) -> bool:
                 print(f"Tools count: {ha_status['tools_count']}")
                 
             # Try to get a detailed tool list
-            from radbot.tools.mcp_utils import test_home_assistant_connection
+            from radbot.tools.mcp.mcp_utils import test_home_assistant_connection
             try:
                 details = test_home_assistant_connection()
                 if details.get("success") and details.get("tools"):

@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-# SessionService is now just InMemorySessionService in recent ADK versions
 SessionService = InMemorySessionService  # Type alias for backward compatibility
 
 from radbot.config import config_manager
@@ -65,6 +64,9 @@ class RadBotAgent:
         # Use provided session service or create an in-memory one
         self.session_service = session_service or InMemorySessionService()
         
+        # Store app_name for use with session service
+        self.app_name = "radbot"
+        
         # Determine the model to use
         self.model = model or self.config.get_main_model()
         
@@ -116,7 +118,6 @@ class RadBotAgent:
         if self._memory_service:
             self.runner = Runner(
                 agent=self.root_agent,
-                app_name="radbot",
                 session_service=self.session_service,
                 memory_service=self._memory_service
             )
@@ -160,15 +161,17 @@ class RadBotAgent:
         Args:
             user_id: Unique identifier for the user
             message: The user's message
-            
+                
         Returns:
             The agent's response as a string
         """
-        # Log available tools to help debug
+        # Import logging and other necessary modules
         import logging
+        from google.genai.types import Content, Part
+        
         logger = logging.getLogger(__name__)
         
-        # Log tools information
+        # Log available tools to help debug
         if self.root_agent and self.root_agent.tools:
             tool_names = []
             for tool in self.root_agent.tools:
@@ -186,68 +189,93 @@ class RadBotAgent:
         else:
             logger.warning("No tools available to the agent!")
         
-        # For ADK 0.3.0, we need to use different method of running the agent
         try:
-            # Try different approaches based on ADK version
+            # Get or create a session with a stable session ID derived from user_id
+            session_id = f"session_{user_id[:8]}"
+            logger.info(f"Using session ID: {session_id}")
+            
             try:
-                # Check if we can create a session directly with the session service
-                session = self.session_service.create_session(
-                    user_id=user_id, 
-                    app_name="radbot"  # ADK 0.3.0 requires app_name
+                session = self.session_service.get_session(
+                    app_name=self.app_name,
+                    user_id=user_id,
+                    session_id=session_id
                 )
-                logger.info(f"Created session for user {user_id}")
-                
-                # Try to run the agent directly instead of using runner
-                response = self.root_agent.process(message)
-                return response
-            except (TypeError, AttributeError):
-                # If that doesn't work, try using the runner with different parameters
-                try:
-                    # Method 1: Use "query" parameter instead of "message"
-                    events = list(self.runner.run(user_id=user_id, query=message))
-                except TypeError:
-                    try:
-                        # Method 2: Try to import and use Message object
-                        try:
-                            from google.adk.chat.message import Message, MessageType
-                            query = Message(content=message, type=MessageType.HUMAN)
-                            events = list(self.runner.run(user_id=user_id, query=query))
-                        except ImportError:
-                            # Method 3: Old style dict format
-                            events = list(self.runner.run(user_id=user_id, text=message))
-                    except TypeError:
-                        # Final fallback - try direct process method on root_agent
-                        return self.root_agent.process(message)
+                if not session:
+                    session = self.session_service.create_session(
+                        app_name=self.app_name,
+                        user_id=user_id,
+                        session_id=session_id
+                    )
+                    logger.info(f"Created new session for user {user_id} with ID {session_id}")
+                else:
+                    logger.info(f"Using existing session for user {user_id} with ID {session_id}")
+            except Exception as session_error:
+                logger.warning(f"Error getting/creating session: {str(session_error)}. Creating new session.")
+                session = self.session_service.create_session(
+                    app_name=self.app_name,
+                    user_id=user_id,
+                    session_id=session_id
+                )
+                logger.info(f"Created new session for user {user_id} with ID {session_id}")
+            
+            # Create Content object with the user's message
+            user_message = Content(
+                parts=[Part(text=message)],
+                role="user"
+            )
+            
+            # Use the runner to process the message
+            logger.info(f"Running agent with message: {message[:50]}{'...' if len(message) > 50 else ''}")
+            events = list(self.runner.run(
+                user_id=user_id,
+                session_id=session.id,  # Include the session ID
+                new_message=user_message
+            ))
             
             # Extract the agent's text response from the events
             logger.info(f"Received {len(events)} events from runner")
             
-            for i, event in enumerate(events):
-                logger.info(f"Event {i}: {type(event).__name__}")
+            # Find the final response event
+            final_response = None
+            for event in events:
+                # Log the event type for debugging
+                logger.debug(f"Event type: {type(event).__name__}")
                 
-                # Log tool calls
-                if hasattr(event, 'tool_calls') and event.tool_calls:
-                    for call in event.tool_calls:
-                        logger.info(f"Tool call: {call.tool_name} with params: {call.parameters}")
+                # Method 1: Check if it's a final response
+                if hasattr(event, 'is_final_response') and event.is_final_response():
+                    logger.debug("Found final response event")
+                    if hasattr(event, 'content') and event.content:
+                        if hasattr(event.content, 'parts') and event.content.parts:
+                            for part in event.content.parts:
+                                if hasattr(part, 'text') and part.text:
+                                    final_response = part.text
+                                    break
+                                
+                # Method 2: Check for content directly
+                if final_response is None and hasattr(event, 'content'):
+                    logger.debug("Checking event.content for text")
+                    if hasattr(event.content, 'text') and event.content.text:
+                        final_response = event.content.text
+                        
+                # Method 3: Check for message attribute
+                if final_response is None and hasattr(event, 'message'):
+                    logger.debug("Checking event.message for content")
+                    if hasattr(event.message, 'content'):
+                        final_response = event.message.content
+                        
+                # Break once we have a final response
+                if final_response:
+                    break
+            
+            if final_response:
+                return final_response
+            else:
+                logger.warning("No text response found in events")
+                return "I apologize, but I couldn't generate a response."
                 
-                # Return the first message content
-                if hasattr(event, 'message') and event.message:
-                    return event.message.content
-            
-            # Fallback if no text response was found
-            return "I apologize, but I couldn't generate a response."
-            
         except Exception as e:
-            # Log the error and provide a fallback response
-            logger.error(f"Error processing message: {str(e)}", exc_info=True)
-            
-            # Try one last approach - direct processing with the root agent
-            try:
-                # Try direct processing with the root agent
-                return self.root_agent.process(message)
-            except Exception as e2:
-                logger.error(f"Final fallback also failed: {str(e2)}", exc_info=True)
-                return f"I apologize, but I encountered an error processing your message. Please try again. Error: {str(e)}"
+            logger.error(f"Error in process_message: {str(e)}", exc_info=True)
+            return f"I apologize, but I encountered an error processing your message. Please try again. Error: {str(e)}"
 
     def add_sub_agent(self, sub_agent: Agent) -> None:
         """
@@ -319,7 +347,21 @@ class RadBotAgent:
         Args:
             user_id: The user ID to reset
         """
-        self.session_service.delete(user_id)
+        # Generate a stable session ID from user_id
+        session_id = f"session_{user_id[:8]}"
+        
+        try:
+            # Delete the specific session
+            self.session_service.delete_session(
+                app_name=self.app_name,
+                user_id=user_id,
+                session_id=session_id
+            )
+            import logging
+            logging.getLogger(__name__).info(f"Reset session for user {user_id} with ID {session_id}")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Error resetting session: {str(e)}")
 
 
 class AgentFactory:
@@ -435,6 +477,10 @@ def create_runner(
     """
     # Use provided session service or create an in-memory one
     sess_service = session_service or InMemorySessionService()
+    
+    # Make sure the session service knows about the app_name
+    # This is for internal reference, as methods like get_session and create_session
+    # require app_name as a parameter
     
     # Create and return the runner
     return Runner(

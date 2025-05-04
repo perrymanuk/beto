@@ -4,7 +4,7 @@ Unit tests for basic tools.
 import pytest
 from unittest.mock import MagicMock
 
-from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic import get_current_time, get_weather
 
 
 class TestGetCurrentTime:

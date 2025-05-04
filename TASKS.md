@@ -19,6 +19,14 @@ This file tracks development tasks for the radbot project.
 - [x] Implement basic tools (time, weather)
 - [x] Create Runner and Session service setup
 - [x] Implement shell command execution with security controls
+- [x] Fix import error for basic_tools module
+- [x] Fix class name and import path errors in CLI
+- [x] Update agent's process_message method to be compatible with ADK 0.3.0+
+- [x] Fix session management and parameter errors in Runner.run()
+- [x] Fix syntax error in process_message method's try/except structure
+- [x] Fix session management method signatures to match ADK 0.3.0+ API
+- [x] Fix InMemorySessionService parameter mismatch in get_session and create_session calls
+- [x] Fix function signature for search_home_assistant_entities to work with automatic function calling
 
 ## Memory System
 
