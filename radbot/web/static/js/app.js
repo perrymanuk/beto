@@ -214,27 +214,27 @@ function setStatus(status) {
     
     switch (status) {
         case 'ready':
-            statusText.innerHTML = `<span style="color: var(--tron-green);">■</span> SYSTEM READY | ${timestamp} | CONNECTION: ACTIVE`;
+            statusText.innerHTML = `system: online | time: ${timestamp} | memory: 64mb | connection: active`;
             sendButton.disabled = false;
             chatInput.disabled = false;
             break;
         case 'thinking':
-            statusText.innerHTML = `<span style="color: var(--tron-yellow);">■</span> PROCESSING QUERY | ${timestamp} | PLEASE STAND BY...`;
+            statusText.innerHTML = `system: processing | time: ${timestamp} | cpu: 99% | please wait...`;
             sendButton.disabled = true;
             break;
         case 'disconnected':
-            statusText.innerHTML = `<span style="color: var(--tron-red);">■</span> CONNECTION LOST | ${timestamp} | ATTEMPTING RECONNECT...`;
+            statusText.innerHTML = `system: error | time: ${timestamp} | connection lost | attempting reconnect...`;
             break;
         case 'error':
-            statusText.innerHTML = `<span style="color: var(--tron-red);">■</span> SYSTEM ERROR | ${timestamp} | REFRESH REQUIRED`;
+            statusText.innerHTML = `system: failure | time: ${timestamp} | segmentation fault | refresh required`;
             break;
         default:
             if (status.startsWith('error:')) {
-                statusText.innerHTML = `<span style="color: var(--tron-red);">■</span> ERROR CODE ${Math.floor(Math.random() * 9000) + 1000} | ${timestamp} | ${status.replace('error:', '')}`;
+                statusText.innerHTML = `system: error | time: ${timestamp} | errno: ${Math.floor(Math.random() * 255)} | ${status.replace('error:', '')}`;
                 sendButton.disabled = false;
                 chatInput.disabled = false;
             } else {
-                statusText.innerHTML = `<span style="color: var(--tron-bright-cyan);">■</span> INFORMATION | ${timestamp} | ${status}`;
+                statusText.innerHTML = `system: info | time: ${timestamp} | ${status}`;
             }
     }
 }
@@ -255,7 +255,7 @@ async function resetConversation() {
             messages[i].remove();
         }
         
-        addMessage('system', 'Conversation has been reset.');
+        addMessage('system', 'Session cleared. New terminal started.');
     } catch (error) {
         console.error('Error resetting conversation:', error);
         addMessage('system', 'Error: Could not reset conversation.');
