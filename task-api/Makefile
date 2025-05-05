@@ -2,7 +2,7 @@
 
 # Run the API locally
 run:
-	uvicorn app.main:app --reload
+	uvicorn app.main:app --reload --port $${API_PORT:-8001}
 
 # Install dependencies
 install:

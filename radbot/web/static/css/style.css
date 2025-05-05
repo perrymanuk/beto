@@ -73,12 +73,13 @@ body {
 /* App container for layout */
 .app-container {
     display: flex;
-    width: 100%;
-    height: 100vh;
+    width: calc(100% - 30px);
+    height: calc(100vh - 30px);
     max-width: 1800px;
-    margin: 0 auto;
+    margin: 15px auto;
     position: relative;
     z-index: 2;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 body::before {
@@ -118,7 +119,7 @@ body::after {
     margin: 0;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
     position: relative;
     z-index: 2;
     border: 1px solid var(--term-text);
@@ -272,6 +273,23 @@ body::after {
     line-height: 1.5;
     font-size: 0.95rem;
     font-family: "Monaco", "Courier New", monospace;
+}
+
+/* Emoji styling */
+.message-content img.joypixels {
+    display: inline-block;
+    margin: 0 0.1rem;
+    width: 1.2em;
+    height: 1.2em;
+    vertical-align: middle;
+}
+
+/* Native emoji styling */
+.message-content .emoji {
+    font-size: 1.2em;
+    line-height: 1;
+    vertical-align: middle;
+    margin: 0 0.05em;
 }
 
 .message.user .message-content {
@@ -510,6 +528,73 @@ body::after {
     box-shadow: none;
 }
 
+.emoji-reference {
+    font-size: 0.7rem;
+    color: rgba(51, 255, 51, 0.6);
+    margin-top: 0.3rem;
+    text-align: right;
+    font-style: italic;
+}
+
+/* Emoji suggestions dropdown */
+.chat-input-wrapper {
+    position: relative;
+}
+
+.emoji-suggestions {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    width: 300px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: var(--term-gray);
+    border: 1px solid var(--term-text);
+    box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    margin-bottom: 5px;
+    padding: 0;
+    border-radius: 2px;
+}
+
+.emoji-suggestions.hidden {
+    display: none;
+}
+
+.emoji-suggestion-item {
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 0.85rem;
+}
+
+.emoji-suggestion-item:hover,
+.emoji-suggestion-item.active {
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.emoji-suggestion-emoji {
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+    margin-right: 8px;
+    font-size: 1.2em;
+}
+
+.emoji-suggestion-shortcode {
+    color: var(--term-text);
+    margin-right: 8px;
+}
+
+.emoji-suggestion-description {
+    color: rgba(245, 245, 220, 0.6);
+    font-size: 0.8em;
+    margin-left: auto;
+}
+
 /* Custom terminal cursor effect */
 @keyframes cursor-blink {
     0% { opacity: 1; }
@@ -623,11 +708,12 @@ body::after {
     text-decoration: underline;
 }
 
-/* Events Panel Styles */
-.events-panel {
+/* Side Panels - Common Styles */
+.events-panel,
+.tasks-panel {
     flex: 0 0 400px;
     width: 400px;
-    height: 100vh;
+    height: 100%;
     border-left: 1px solid var(--term-text);
     background-color: var(--term-panel-bg);
     display: flex;
@@ -637,13 +723,20 @@ body::after {
     overflow: hidden;
 }
 
-.events-panel.hidden {
+.events-panel.hidden,
+.tasks-panel.hidden {
     transform: translateX(400px);
     opacity: 0;
     overflow: hidden;
     position: absolute;
     right: 0;
     z-index: 1;
+}
+
+/* Specific positioning for when both panels are shown */
+.events-panel:not(.hidden) + .tasks-panel:not(.hidden) {
+    transform: translateX(-400px);
+    right: 400px;
 }
 
 .events-header {
@@ -862,6 +955,15 @@ body::after {
     margin: 0.5rem 0;
     max-height: 300px;
     overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 0.75rem;
+    background-color: rgba(0, 0, 0, 0.4);
+    font-size: 0.8rem;
+    font-family: "Monaco", "Courier New", monospace;
+    border: 1px solid rgba(51, 255, 51, 0.2);
+    color: var(--term-text);
+    border-radius: 0;
 }
 
 /* Tool Call and Agent Transfer specific styles */
@@ -881,6 +983,440 @@ body::after {
     border-left: 3px solid var(--term-beige);
 }
 
+/* Tasks Panel Specific Styles */
+.tasks-header {
+    padding: 0.75rem 1rem;
+    background-color: var(--term-gray);
+    color: var(--term-text);
+    border-bottom: 1px solid var(--term-text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tasks-header h2 {
+    font-size: 0.9rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    color: var(--term-amber);
+    letter-spacing: 1px;
+    margin: 0;
+    font-family: "Monaco", "Courier New", monospace;
+}
+
+.tasks-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.tasks-controls button {
+    background: var(--term-gray);
+    border: 1px solid var(--term-text);
+    color: var(--term-text);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.tasks-controls button:hover {
+    background: var(--term-text);
+    color: var(--term-bg);
+}
+
+.tasks-filter {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid rgba(51, 255, 51, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.filter-group select,
+.search-group input {
+    background-color: var(--term-bg);
+    color: var(--term-text);
+    border: 1px solid var(--term-text);
+    padding: 0.4rem;
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 0.8rem;
+    outline: none;
+    flex: 1;
+}
+
+.tasks-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--term-text) var(--term-bg);
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.tasks-container::-webkit-scrollbar {
+    width: 6px;
+    background-color: var(--term-bg);
+}
+
+.tasks-container::-webkit-scrollbar-thumb {
+    background-color: var(--term-text);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.task-item {
+    padding: 0.6rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid rgba(51, 255, 51, 0.3);
+    background-color: rgba(0, 0, 0, 0.4);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.task-item:hover {
+    border-color: var(--term-text);
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.task-status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid var(--term-text);
+    background-color: transparent;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.task-status-indicator.backlog {
+    background-color: var(--term-amber);
+}
+
+.task-status-indicator.inprogress {
+    background-color: var(--term-blue);
+}
+
+.task-status-indicator.done {
+    background-color: var(--term-bright-green);
+}
+
+.task-view-icon {
+    margin-left: auto;
+    color: var(--term-text);
+    opacity: 0.5;
+    font-size: 0.85rem;
+    padding: 0 0.3rem;
+    transition: opacity 0.2s;
+}
+
+.task-item:hover .task-view-icon {
+    opacity: 1;
+}
+
+.task-content {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-item.done .task-content {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+.task-project {
+    font-size: 0.7rem;
+    color: var(--term-amber);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.1rem 0.3rem;
+    border-radius: 2px;
+    margin-left: auto;
+}
+
+/* Task Details View Styles */
+.task-details-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--term-panel-bg);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.task-details-view.hidden {
+    display: none;
+}
+
+.task-details-header {
+    padding: 0.75rem 1rem;
+    background-color: var(--term-gray);
+    border-bottom: 1px solid var(--term-text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-details-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--term-amber);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    color: var(--term-text);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.task-details-content {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    scrollbar-width: thin;
+    scrollbar-color: var(--term-text) var(--term-bg);
+}
+
+.task-details-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid rgba(51, 255, 51, 0.2);
+    background-color: rgba(0, 0, 0, 0.3);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.task-details-footer button {
+    padding: 0.5rem 1rem;
+    background-color: var(--term-bg);
+    border: 1px solid var(--term-text);
+    color: var(--term-text);
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.task-details-footer button:hover {
+    background-color: var(--term-text);
+    color: var(--term-bg);
+}
+
+.task-field {
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(51, 255, 51, 0.1);
+    padding-bottom: 0.75rem;
+}
+
+.task-field:last-child {
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.task-field-label {
+    font-size: 0.8rem;
+    color: var(--term-amber);
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.task-field-value {
+    color: var(--term-text);
+}
+
+.task-field-value.description {
+    font-size: 1rem;
+    white-space: pre-wrap;
+    margin-bottom: 1rem;
+}
+
+.task-field-value.related-info {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 0.75rem;
+    border: 1px solid rgba(51, 255, 51, 0.2);
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.tasks-empty-state {
+    padding: 2rem;
+    text-align: center;
+    color: rgba(245, 245, 220, 0.5);
+    font-style: italic;
+}
+
+.task-input-container {
+    display: flex;
+    padding: 0.75rem;
+    border-top: 1px solid rgba(51, 255, 51, 0.2);
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.task-input-container input {
+    flex: 1;
+    background-color: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--term-text);
+    color: var(--term-beige);
+    padding: 0.5rem;
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.task-input-container button {
+    padding: 0 1rem;
+    background-color: var(--term-bg);
+    border: 1px solid var(--term-text);
+    border-left: none;
+    color: var(--term-text);
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.task-input-container button:hover {
+    background-color: var(--term-text);
+    color: var(--term-bg);
+}
+
+/* Task status indicators */
+.task-item.backlog {
+    border-left: 3px solid var(--term-amber);
+}
+
+.task-item.inprogress {
+    border-left: 3px solid var(--term-blue);
+}
+
+.task-item.done {
+    border-left: 3px solid var(--term-bright-green);
+}
+
+/* Settings Dialog */
+.settings-dialog {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--term-gray);
+    border: 1px solid var(--term-text);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    width: 80%;
+    max-width: 350px;
+    z-index: 10;
+}
+
+.settings-dialog.hidden {
+    display: none;
+}
+
+.settings-header {
+    padding: 0.75rem;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid var(--term-text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.settings-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--term-amber);
+}
+
+.close-dialog-button {
+    background: none;
+    border: none;
+    color: var(--term-text);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    line-height: 1;
+}
+
+.settings-content {
+    padding: 1rem;
+}
+
+.settings-group {
+    margin-bottom: 1rem;
+}
+
+.settings-group label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--term-beige);
+}
+
+.settings-group input,
+.settings-group select {
+    width: 100%;
+    background-color: var(--term-bg);
+    border: 1px solid var(--term-text);
+    color: var(--term-text);
+    padding: 0.5rem;
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.settings-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1.5rem;
+}
+
+.settings-actions button {
+    padding: 0.5rem 1rem;
+    background-color: var(--term-bg);
+    border: 1px solid var(--term-text);
+    color: var(--term-text);
+    font-family: "Monaco", "Courier New", monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.settings-actions button:hover {
+    background-color: var(--term-text);
+    color: var(--term-bg);
+}
+
 /* Responsive adjustments */
 @media (max-width: 1200px) {
     .events-panel {
@@ -894,6 +1430,12 @@ body::after {
 }
 
 @media (max-width: 992px) {
+    .app-container {
+        width: calc(100% - 20px);
+        height: calc(100vh - 20px);
+        margin: 10px;
+    }
+    
     .events-panel:not(.hidden) {
         position: absolute;
         right: 0;
@@ -908,6 +1450,12 @@ body::after {
 }
 
 @media (max-width: 768px) {
+    .app-container {
+        width: calc(100% - 16px);
+        height: calc(100vh - 16px);
+        margin: 8px;
+    }
+    
     .message {
         max-width: 90%;
     }
@@ -926,6 +1474,12 @@ body::after {
 }
 
 @media (max-width: 480px) {
+    .app-container {
+        width: calc(100% - 10px);
+        height: calc(100vh - 10px);
+        margin: 5px;
+    }
+    
     .message {
         max-width: 95%;
     }

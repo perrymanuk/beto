@@ -5,6 +5,7 @@ from typing import Optional
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Radbot Task API"
+    API_PORT: int = int(os.getenv("API_PORT", "8001"))
     
     # Database connection
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")

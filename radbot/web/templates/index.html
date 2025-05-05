@@ -7,13 +7,18 @@
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/emoji-toolkit@7.0.0/lib/js/joypixels.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-toolkit@7.0.0/extras/css/joypixels.min.css">
 </head>
 <body>
     <div class="app-container">
         <div class="chat-container">
             <div class="chat-header">
-                <h1>RadBot Linux Terminal v3.1.0</h1>
+                <h1>RadBot V8.8.Beta</h1>
                 <div class="controls">
+                    <button id="toggle-tasks-button" title="Toggle tasks panel">
+                        TASKS
+                    </button>
                     <button id="toggle-events-button" title="Toggle events panel">
                         EVENTS
                     </button>
@@ -25,10 +30,10 @@
             <div class="chat-messages" id="chat-messages">
                 <div class="message system">
                     <div class="message-content">
-                        <p>Linux RadBot 3.1.0 (tty1)</p>
-                        <p>radbot login: root (automatic login)</p>
-                        <p>Last login: Mon May 5 12:00:00 PDT 2025 on tty1</p>
-                        <p>Welcome to RadBot Linux Terminal</p>
+                        <p>RadBot V8.8.Beta</p>
+                        <p>Agent active: RadBot</p>
+                        <p>Session started: Mon May 5 12:00:00 PDT 2025</p>
+                        <p>Welcome to RadBot Interface</p>
                         <p>Type 'help' for available commands.</p>
                         <p>Type a message and press ENTER to begin.</p>
                     </div>
@@ -41,17 +46,22 @@
                 <div class="chat-input-wrapper">
                     <textarea 
                         id="chat-input" 
-                        placeholder="Type here..." 
+                        placeholder="Type here... (Use : for emoji suggestions)" 
                         rows="1"
                         autofocus
                     ></textarea>
                     <button id="send-button">
                         SEND
                     </button>
+                    <div id="emoji-suggestions" class="emoji-suggestions hidden"></div>
+                </div>
+                <div class="emoji-reference">
+                    Try typing: :hangloose: :smile: :thumbsup: :rocket: :fire:
                 </div>
             </div>
         </div>
         
+        <!-- Events Panel -->
         <div class="events-panel" id="events-panel">
             <div class="events-header">
                 <h2>Event Log</h2>
@@ -77,6 +87,82 @@
                 </div>
                 <div class="event-details-content">
                     <p>Select an event to view details.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tasks Panel -->
+        <div class="tasks-panel" id="tasks-panel">
+            <div class="tasks-header">
+                <h2>Task List</h2>
+                <div class="tasks-controls">
+                    <button id="refresh-tasks-button" title="Refresh tasks">↻</button>
+                    <button id="settings-tasks-button" title="Task settings">⚙</button>
+                </div>
+            </div>
+            <div class="tasks-filter">
+                <div class="filter-group">
+                    <select id="project-filter">
+                        <option value="all">All Projects</option>
+                        <!-- Projects will be added dynamically -->
+                    </select>
+                    <select id="status-filter">
+                        <option value="all">All Statuses</option>
+                        <option value="backlog">Backlog</option>
+                        <option value="inprogress">In Progress</option>
+                        <option value="done">Done</option>
+                    </select>
+                </div>
+                <div class="search-group">
+                    <input type="text" id="task-search" placeholder="Search tasks...">
+                </div>
+            </div>
+            <div class="tasks-container" id="tasks-container">
+                <!-- Tasks will be added here dynamically -->
+                <div class="tasks-empty-state">No tasks found.</div>
+            </div>
+            
+            <!-- Task Details View -->
+            <div class="task-details-view hidden" id="task-details-view">
+                <div class="task-details-header">
+                    <h3>Task Details</h3>
+                    <button id="close-task-details-button" class="close-button">×</button>
+                </div>
+                <div class="task-details-content" id="task-details-content">
+                    <!-- Task details will be populated here -->
+                </div>
+                <div class="task-details-footer">
+                    <button id="back-to-tasks-button">Back to Tasks</button>
+                </div>
+            </div>
+            <!-- No Add Task Input Since Modification Is Not Allowed -->
+            
+            <!-- Task Settings Dialog -->
+            <div class="settings-dialog hidden" id="task-settings-dialog">
+                <div class="settings-header">
+                    <h3>Task API Settings</h3>
+                    <button class="close-dialog-button">×</button>
+                </div>
+                <div class="settings-content">
+                    <div class="settings-group">
+                        <label for="api-endpoint">API Endpoint</label>
+                        <input type="text" id="api-endpoint" placeholder="http://localhost:8001">
+                    </div>
+                    <div class="settings-group">
+                        <label for="api-key">API Key (Optional)</label>
+                        <input type="password" id="api-key" placeholder="Leave blank if not required">
+                    </div>
+                    <div class="settings-group">
+                        <label for="default-project">Default Project</label>
+                        <select id="default-project">
+                            <!-- Will be populated dynamically -->
+                            <option value="">Select a project</option>
+                        </select>
+                    </div>
+                    <div class="settings-actions">
+                        <button id="save-settings-button">Save</button>
+                        <button id="test-connection-button">Test Connection</button>
+                    </div>
                 </div>
             </div>
         </div>
