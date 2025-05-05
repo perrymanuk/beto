@@ -9,41 +9,75 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <h1>RadBot Linux Terminal v3.1.0</h1>
-            <div class="controls">
-                <button id="reset-button" title="Reset conversation">
-                    CLEAR
-                </button>
+    <div class="app-container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1>RadBot Linux Terminal v3.1.0</h1>
+                <div class="controls">
+                    <button id="toggle-events-button" title="Toggle events panel">
+                        EVENTS
+                    </button>
+                    <button id="reset-button" title="Reset conversation">
+                        CLEAR
+                    </button>
+                </div>
             </div>
-        </div>
-        <div class="chat-messages" id="chat-messages">
-            <div class="message system">
-                <div class="message-content">
-                    <p>Linux RadBot 3.1.0 (tty1)</p>
-                    <p>radbot login: root (automatic login)</p>
-                    <p>Last login: Mon May 5 12:00:00 PDT 2025 on tty1</p>
-                    <p>Welcome to RadBot Linux Terminal</p>
-                    <p>Type 'help' for available commands.</p>
-                    <p>Type a message and press ENTER to begin.</p>
+            <div class="chat-messages" id="chat-messages">
+                <div class="message system">
+                    <div class="message-content">
+                        <p>Linux RadBot 3.1.0 (tty1)</p>
+                        <p>radbot login: root (automatic login)</p>
+                        <p>Last login: Mon May 5 12:00:00 PDT 2025 on tty1</p>
+                        <p>Welcome to RadBot Linux Terminal</p>
+                        <p>Type 'help' for available commands.</p>
+                        <p>Type a message and press ENTER to begin.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <div class="status-indicator" id="status-indicator">
+                    <span id="status-text">system: online | memory: 64mb | connection: active</span>
+                </div>
+                <div class="chat-input-wrapper">
+                    <textarea 
+                        id="chat-input" 
+                        placeholder="Type here..." 
+                        rows="1"
+                        autofocus
+                    ></textarea>
+                    <button id="send-button">
+                        SEND
+                    </button>
                 </div>
             </div>
         </div>
-        <div class="chat-input-container">
-            <div class="status-indicator" id="status-indicator">
-                <span id="status-text">system: online | memory: 64mb | connection: active</span>
+        
+        <div class="events-panel" id="events-panel">
+            <div class="events-header">
+                <h2>Event Log</h2>
+                <button id="clear-events-button" title="Clear events log">CLEAR</button>
             </div>
-            <div class="chat-input-wrapper">
-                <textarea 
-                    id="chat-input" 
-                    placeholder="Type here..." 
-                    rows="1"
-                    autofocus
-                ></textarea>
-                <button id="send-button">
-                    SEND
-                </button>
+            <div class="events-filter">
+                <select id="event-type-filter">
+                    <option value="all">All Events</option>
+                    <option value="tool_call">Tool Calls</option>
+                    <option value="agent_transfer">Agent Transfers</option>
+                    <option value="planner">Planner</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="events-container" id="events-container">
+                <!-- Events will be added here dynamically -->
+                <div class="event-empty-state">No events recorded yet.</div>
+            </div>
+            <div class="event-details" id="event-details">
+                <div class="event-details-header">
+                    <h3>Event Details</h3>
+                    <button id="close-details-button">×</button>
+                </div>
+                <div class="event-details-content">
+                    <p>Select an event to view details.</p>
+                </div>
             </div>
         </div>
     </div>

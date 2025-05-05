@@ -82,6 +82,13 @@ class ConnectionManager:
                 "type": "status",
                 "content": status
             })
+            
+    async def send_events(self, session_id: str, events: list):
+        if session_id in self.active_connections:
+            await self.active_connections[session_id].send_json({
+                "type": "events",
+                "content": events
+            })
 
 # Create connection manager
 manager = ConnectionManager()
@@ -127,12 +134,17 @@ async def chat(
     try:
         # Process the message
         logger.info(f"Processing message for session {session_id}: {message[:50]}{'...' if len(message) > 50 else ''}")
-        response = runner.process_message(message)
+        result = runner.process_message(message)
         
-        # Return the response with session information
+        # Extract response and events
+        response = result.get("response", "")
+        events = result.get("events", [])
+        
+        # Return the response with session information and events
         return {
             "session_id": session_id,
-            "response": response
+            "response": response,
+            "events": events
         }
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}", exc_info=True)
@@ -171,9 +183,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, session_mana
             try:
                 # Process the message
                 logger.info(f"Processing WebSocket message for session {session_id}")
-                response = runner.process_message(user_message)
+                result = runner.process_message(user_message)
                 
-                # Send the response
+                # Extract response and events
+                response = result.get("response", "")
+                events = result.get("events", [])
+                
+                # Send events first (if any)
+                if events:
+                    logger.info(f"Sending {len(events)} events to client")
+                    await manager.send_events(session_id, events)
+                
+                # Send the text response
                 await manager.send_message(session_id, response)
                 await manager.send_status(session_id, "ready")
             except Exception as e:

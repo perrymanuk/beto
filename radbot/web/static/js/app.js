@@ -9,11 +9,22 @@ const sendButton = document.getElementById('send-button');
 const resetButton = document.getElementById('reset-button');
 const statusIndicator = document.getElementById('status-indicator');
 const statusText = document.getElementById('status-text');
+const eventsPanel = document.getElementById('events-panel');
+const toggleEventsButton = document.getElementById('toggle-events-button');
+const clearEventsButton = document.getElementById('clear-events-button');
+const eventTypeFilter = document.getElementById('event-type-filter');
+const eventsContainer = document.getElementById('events-container');
+const eventDetails = document.getElementById('event-details');
+const eventDetailsContent = document.getElementById('event-details-content');
+const closeDetailsButton = document.getElementById('close-details-button');
 
 // State
 let sessionId = localStorage.getItem('radbot_session_id') || null;
 let socket = null;
 let socketConnected = false;
+let events = [];
+let activeEventId = null;
+let eventsPanelVisible = false;
 
 // Initialize
 function init() {
@@ -23,12 +34,22 @@ function init() {
         localStorage.setItem('radbot_session_id', sessionId);
     }
     
+    // Initialize events panel state
+    eventsPanel.classList.add('hidden');
+    eventsPanelVisible = false;
+    
     connectWebSocket();
     
-    // Event listeners
+    // Chat event listeners
     chatInput.addEventListener('keydown', handleInputKeydown);
     sendButton.addEventListener('click', sendMessage);
     resetButton.addEventListener('click', resetConversation);
+    
+    // Events panel event listeners
+    toggleEventsButton.addEventListener('click', toggleEventsPanel);
+    clearEventsButton.addEventListener('click', clearEvents);
+    eventTypeFilter.addEventListener('change', filterEvents);
+    closeDetailsButton.addEventListener('click', closeEventDetails);
     
     // Auto-resize textarea as user types
     chatInput.addEventListener('input', resizeTextarea);
@@ -53,6 +74,9 @@ function connectWebSocket() {
                 scrollToBottom();
             } else if (data.type === 'status') {
                 handleStatusUpdate(data.content);
+            } else if (data.type === 'events') {
+                // Process incoming events
+                handleEvents(data.content);
             }
         };
         
@@ -287,6 +311,269 @@ function generateUUID() {
         const r = Math.random() * 16 | 0;
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
+    });
+}
+
+// Event panel functions
+function toggleEventsPanel() {
+    eventsPanelVisible = !eventsPanelVisible;
+    
+    if (eventsPanelVisible) {
+        eventsPanel.classList.remove('hidden');
+    } else {
+        eventsPanel.classList.add('hidden');
+    }
+}
+
+function clearEvents() {
+    events = [];
+    renderEvents();
+    closeEventDetails();
+}
+
+function handleEvents(newEvents) {
+    if (Array.isArray(newEvents) && newEvents.length > 0) {
+        // Add event IDs if they don't have them
+        newEvents.forEach((event, index) => {
+            if (!event.id) {
+                event.id = `event-${Date.now()}-${index}`;
+            }
+        });
+        
+        // Add to events array
+        events = events.concat(newEvents);
+        
+        // Update UI
+        renderEvents();
+    }
+}
+
+function renderEvents() {
+    const currentFilter = eventTypeFilter.value;
+    const filteredEvents = filterEventsByType(currentFilter);
+    
+    // Clear container
+    eventsContainer.innerHTML = '';
+    
+    if (filteredEvents.length === 0) {
+        eventsContainer.innerHTML = '<div class="event-empty-state">No events recorded yet.</div>';
+        return;
+    }
+    
+    // Add events to container
+    filteredEvents.forEach(event => {
+        const eventElement = createEventElement(event);
+        eventsContainer.appendChild(eventElement);
+    });
+    
+    // Scroll to bottom
+    eventsContainer.scrollTop = eventsContainer.scrollHeight;
+}
+
+function filterEvents() {
+    renderEvents();
+}
+
+function filterEventsByType(filter) {
+    if (filter === 'all') {
+        return events;
+    }
+    
+    return events.filter(event => event.type === filter || event.category === filter);
+}
+
+function createEventElement(event) {
+    const eventElement = document.createElement('div');
+    eventElement.className = `event-item ${event.category || 'other'}`;
+    eventElement.dataset.eventId = event.id;
+    
+    // Add event type
+    const eventType = document.createElement('div');
+    eventType.className = 'event-type';
+    eventType.textContent = event.type || 'Unknown';
+    eventElement.appendChild(eventType);
+    
+    // Add timestamp
+    const timestamp = document.createElement('div');
+    timestamp.className = 'event-timestamp';
+    timestamp.textContent = event.timestamp || formatTimestamp(new Date());
+    eventElement.appendChild(timestamp);
+    
+    // Add summary
+    const summary = document.createElement('div');
+    summary.className = 'event-summary';
+    summary.textContent = event.summary || (event.category ? `${event.category} event` : 'Event');
+    eventElement.appendChild(summary);
+    
+    // Add click handler
+    eventElement.addEventListener('click', () => {
+        showEventDetails(event);
+        
+        // Mark this event as active
+        document.querySelectorAll('.event-item.active').forEach(item => {
+            item.classList.remove('active');
+        });
+        eventElement.classList.add('active');
+        activeEventId = event.id;
+    });
+    
+    return eventElement;
+}
+
+function showEventDetails(event) {
+    // Unhide details panel
+    eventDetails.classList.remove('hidden');
+    
+    // Clear existing content
+    const detailsContent = document.querySelector('.event-details-content');
+    detailsContent.innerHTML = '';
+    
+    // Create details content
+    const detailsHTML = createEventDetailsHTML(event);
+    detailsContent.innerHTML = detailsHTML;
+}
+
+function closeEventDetails() {
+    eventDetails.classList.add('hidden');
+    
+    // Remove active state from events
+    document.querySelectorAll('.event-item.active').forEach(item => {
+        item.classList.remove('active');
+    });
+    activeEventId = null;
+}
+
+function createEventDetailsHTML(event) {
+    let html = '';
+    
+    // Event type and category
+    html += `<div class="detail-section">
+                <h4>Type: <span>${event.type || 'Unknown'}</span></h4>
+                ${event.category ? `<h4>Category: <span>${event.category}</span></h4>` : ''}
+                <div class="detail-timestamp">${event.timestamp || formatTimestamp(new Date())}</div>
+            </div>`;
+    
+    // Event summary
+    if (event.summary) {
+        html += `<div class="detail-section">
+                    <h4>Summary</h4>
+                    <div>${event.summary}</div>
+                </div>`;
+    }
+    
+    // Tool call specific details
+    if (event.category === 'tool_call') {
+        // Tool name
+        if (event.tool_name) {
+            html += `<div class="detail-section">
+                        <h4>Tool Name</h4>
+                        <div>${event.tool_name}</div>
+                    </div>`;
+        }
+        
+        // Input
+        if (event.input) {
+            html += `<div class="detail-section">
+                        <h4>Input</h4>
+                        <pre>${formatJSON(event.input)}</pre>
+                    </div>`;
+        }
+        
+        // Output
+        if (event.output) {
+            html += `<div class="detail-section">
+                        <h4>Output</h4>
+                        <pre>${formatJSON(event.output)}</pre>
+                    </div>`;
+        }
+    }
+    
+    // Agent transfer specific details
+    if (event.category === 'agent_transfer') {
+        // From agent
+        if (event.from_agent) {
+            html += `<div class="detail-section">
+                        <h4>From Agent</h4>
+                        <div>${event.from_agent}</div>
+                    </div>`;
+        }
+        
+        // To agent
+        if (event.to_agent) {
+            html += `<div class="detail-section">
+                        <h4>To Agent</h4>
+                        <div>${event.to_agent}</div>
+                    </div>`;
+        }
+    }
+    
+    // Planner specific details
+    if (event.category === 'planner') {
+        // Plan
+        if (event.plan) {
+            html += `<div class="detail-section">
+                        <h4>Plan</h4>
+                        <pre>${formatJSON(event.plan)}</pre>
+                    </div>`;
+        }
+        
+        // Plan step
+        if (event.plan_step) {
+            html += `<div class="detail-section">
+                        <h4>Plan Step</h4>
+                        <pre>${formatJSON(event.plan_step)}</pre>
+                    </div>`;
+        }
+    }
+    
+    // Model response specific details
+    if (event.category === 'model_response') {
+        // Text
+        if (event.text) {
+            html += `<div class="detail-section">
+                        <h4>Response Text</h4>
+                        <div>${event.text}</div>
+                    </div>`;
+        }
+    }
+    
+    // Raw details (if available)
+    if (event.details) {
+        html += `<div class="detail-section">
+                    <h4>Raw Details</h4>
+                    <pre>${formatJSON(event.details)}</pre>
+                </div>`;
+    }
+    
+    return html;
+}
+
+function formatJSON(obj) {
+    if (typeof obj === 'string') {
+        try {
+            // Try to parse it as JSON first
+            const parsed = JSON.parse(obj);
+            return JSON.stringify(parsed, null, 2);
+        } catch (e) {
+            // If it's not valid JSON, return as is
+            return obj;
+        }
+    }
+    
+    try {
+        return JSON.stringify(obj, null, 2);
+    } catch (e) {
+        return String(obj);
+    }
+}
+
+function formatTimestamp(date) {
+    return date.toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit',
+        fractionalSecondDigits: 3
     });
 }
 
