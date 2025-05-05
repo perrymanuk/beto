@@ -16,12 +16,11 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 import uvicorn
 
-from radbot.agent.agent import RadBotAgent, create_agent 
 from radbot.config import config_manager
 from radbot.web.api.session import (
     SessionManager,
     get_session_manager,
-    get_or_create_agent_for_session,
+    get_or_create_runner_for_session,
 )
 
 # Set up logging
@@ -122,16 +121,13 @@ async def chat(
     else:
         logger.info(f"Using existing session ID: {session_id}")
     
-    # Get or create an agent for this session
-    agent = await get_or_create_agent_for_session(session_id, session_manager)
+    # Get or create a runner for this session
+    runner = await get_or_create_runner_for_session(session_id, session_manager)
     
     try:
-        # Generate a user ID from the session ID (for compatibility with process_message)
-        user_id = f"web_user_{session_id}"
-        
         # Process the message
         logger.info(f"Processing message for session {session_id}: {message[:50]}{'...' if len(message) > 50 else ''}")
-        response = agent.process_message(user_id, message)
+        response = runner.process_message(message)
         
         # Return the response with session information
         return {
@@ -153,8 +149,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, session_mana
     await manager.connect(websocket, session_id)
     
     try:
-        # Get or create an agent for this session
-        agent = await get_or_create_agent_for_session(session_id, session_manager)
+        # Get or create a runner for this session
+        runner = await get_or_create_runner_for_session(session_id, session_manager)
         
         # Send ready status
         await manager.send_status(session_id, "ready")
@@ -168,15 +164,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, session_mana
                 continue
             
             user_message = data["message"]
-            user_id = f"web_user_{session_id}"
             
-            # Send "typing" status
+            # Send "thinking" status
             await manager.send_status(session_id, "thinking")
             
             try:
                 # Process the message
                 logger.info(f"Processing WebSocket message for session {session_id}")
-                response = agent.process_message(user_id, user_message)
+                response = runner.process_message(user_message)
                 
                 # Send the response
                 await manager.send_message(session_id, response)
