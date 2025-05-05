@@ -30,7 +30,7 @@ def test_home_assistant_connection() -> Dict[str, Any]:
     Returns:
         Dictionary with the test results and information
     """
-    # Initialize the Home Assistant MCP tools (ADK 0.3.0 returns a list of tools)
+    # Initialize the Home Assistant MCP tools (ADK 0.4.0 returns a list of tools)
     ha_tools = create_home_assistant_toolset()
     
     if not ha_tools:
@@ -145,9 +145,20 @@ async def _check_home_assistant_entity_async(entity_id: str) -> Dict[str, Any]:
         # Find the get_state tool for this domain
         get_state_tool = None
         for tool in ha_tools:
-            if hasattr(tool, 'name') and tool.name == f"home_assistant_mcp.{domain}.get_state":
-                get_state_tool = tool
-                break
+            # Check different naming patterns to accommodate ADK 0.4.0 changes
+            if hasattr(tool, 'name'):
+                # Traditional pattern: home_assistant_mcp.{domain}.get_state
+                if tool.name == f"home_assistant_mcp.{domain}.get_state":
+                    get_state_tool = tool
+                    break
+                # Alternative pattern: HassDomainGetState
+                if tool.name.lower() == f"hass{domain.lower()}getstate":
+                    get_state_tool = tool
+                    break
+                # Other possible patterns
+                if tool.name.lower() == f"{domain.lower()}.get_state":
+                    get_state_tool = tool
+                    break
         
         if not get_state_tool:
             return {
@@ -160,6 +171,7 @@ async def _check_home_assistant_entity_async(entity_id: str) -> Dict[str, Any]:
         
         # Call the tool with the entity_id
         try:
+            # Call the get_state tool
             result = await get_state_tool(entity_id=entity_id)
             return {
                 "success": True,
@@ -262,7 +274,7 @@ async def _list_home_assistant_domains_async() -> Dict[str, Any]:
                 # Look for Hass prefix pattern: Hass{Domain}{Action}
                 if tool_name.startswith('Hass') and len(tool_name) > 4:
                     # Try to extract the domain from tool description or parameters if available
-                    if hasattr(tool, 'description') and 'domain' in tool.description.lower():
+                    if hasattr(tool, 'description') and isinstance(tool.description, str) and 'domain' in tool.description.lower():
                         desc = tool.description.lower()
                         domain_start = desc.find('domain:')
                         if domain_start >= 0:
@@ -282,6 +294,32 @@ async def _list_home_assistant_domains_async() -> Dict[str, Any]:
                         if domain.lower() in tool_name.lower():
                             domains.add(domain)
                             break
+                    
+                # New in ADK 0.4.0: Look for alternative patterns
+                common_domains = [
+                    'light', 'switch', 'sensor', 'climate', 'media_player', 
+                    'vacuum', 'scene', 'cover', 'fan', 'lock', 'input_boolean'
+                ]
+                
+                for domain in common_domains:
+                    # Check for patterns like 'LightTurnOn', 'SwitchSetState', etc.
+                    domain_pattern = domain.lower()
+                    # Special case for media_player which might appear as 'media'
+                    if domain == 'media_player':
+                        domain_pattern = 'media'
+                    # Special case for input_boolean which might appear as 'input'
+                    if domain == 'input_boolean':
+                        domain_pattern = 'input'
+                        
+                    if domain_pattern in tool_name.lower():
+                        # Map back to standard domain names
+                        if domain_pattern == 'media':
+                            domains.add('media_player')
+                        elif domain_pattern == 'input':
+                            domains.add('input_boolean')
+                        else:
+                            domains.add(domain)
+                        break
         
         return {
             "success": True,

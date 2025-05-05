@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RadBot Interface</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>RADBOT INTERFACE OS | v1.0.0</h1>
+            <div class="controls">
+                <button id="reset-button" title="Reset conversation">
+                    CLEAR
+                </button>
+            </div>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="message system">
+                <div class="message-content">
+                    <p>ENCOM RADBOT INTERFACE SYSTEM</p>
+                    <p>BOOTING SEQUENCE COMPLETE...</p>
+                    <p>AI SUBSYSTEMS ONLINE</p>
+                    <p>Type a command and press ENTER to begin interaction.</p>
+                    <p>Type 'help' for available functions.</p>
+                </div>
+            </div>
+        </div>
+        <div class="chat-input-container">
+            <div class="status-indicator" id="status-indicator">
+                <span id="status-text">SYSTEM READY</span>
+            </div>
+            <div class="chat-input-wrapper">
+                <textarea 
+                    id="chat-input" 
+                    placeholder="Enter command..." 
+                    rows="1"
+                    autofocus
+                ></textarea>
+                <button id="send-button">
+                    EXECUTE
+                </button>
+            </div>
+        </div>
+    </div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

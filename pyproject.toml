@@ -55,6 +55,11 @@ dev = [
 web = [
     "langchain-community>=0.2.16",
     "tavily-python>=0.3.8",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.1",
+    "jinja2>=3.1.4",
+    "starlette>=0.36.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.urls]

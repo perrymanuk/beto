@@ -10,6 +10,17 @@ This file tracks development tasks for the radbot project.
 - [x] Set up Qdrant database (using homelab instance)
 - [ ] Configure CI/CD pipeline
 
+## Sequential Thinking for Scout
+
+- [x] Add sequential thinking capability to the Scout agent triggered by "think" keyword
+- [x] Implement structured thinking process inspired by MCP Sequential Thinking server
+- [x] Create detection for thinking trigger keywords
+- [x] Add step-by-step reasoning with conclusion support
+- [x] Add documentation for sequential thinking feature
+- [ ] Add unit tests for sequential thinking
+- [ ] Enhance thinking with branch/revision UI
+- [ ] Add visualization for thinking process
+
 ## Core Implementation
 
 - [x] Implement base Agent structure using ADK
@@ -216,6 +227,7 @@ This file tracks development tasks for the radbot project.
 - [x] Document prompt caching implementation
 - [x] Fix failing tests after code restructuring (updated import paths)
 - [x] Fix scout agent transfer back to main agent
+- [x] Fix memory system tests to properly mock PayloadSchemaType.DATETIME enum from qdrant_client
 
 ## CLI & Interfaces
 
@@ -223,6 +235,9 @@ This file tracks development tasks for the radbot project.
 - [ ] Create scheduler for background tasks
 - [x] Add logging system
 - [ ] Create cache status command-line utility
+- [x] Implement custom FastAPI web interface
+- [x] Create WebSocket-based chat interface
+- [x] Document FastAPI web implementation
 
 ## Voice & Audio
 

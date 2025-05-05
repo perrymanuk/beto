@@ -1,0 +1,621 @@
+/* TRON Legacy inspired theme */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Source Code Pro", "Cascadia Code", "Fira Code", "JetBrains Mono", Monaco, "Courier New", monospace;
+}
+
+:root {
+    --tron-bg: #000000;
+    --tron-panel-bg: rgba(0, 20, 40, 0.7);
+    --tron-text: #d6fbff;
+    --tron-cyan: #00a6fb;
+    --tron-bright-cyan: #77e3fa;
+    --tron-blue: #0054a6;
+    --tron-green: #00fb9a;
+    --tron-red: #ff410d;
+    --tron-yellow: #ffe64d;
+    --tron-gray: #304859;
+    --tron-border: #0088cc;
+    --tron-grid: rgba(0, 166, 251, 0.2);
+    --caret-color: #77e3fa;
+    --caret-blink-time: 0.8s;
+}
+
+@keyframes scan-line {
+    0% {
+        background-position: 0 -100vh;
+    }
+    100% {
+        background-position: 0 100vh;
+    }
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 5px var(--tron-cyan); }
+    50% { box-shadow: 0 0 15px var(--tron-cyan), 0 0 30px var(--tron-cyan); }
+    100% { box-shadow: 0 0 5px var(--tron-cyan); }
+}
+
+@keyframes terminal-blink {
+    0% { opacity: 0; }
+    49% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 1; }
+}
+
+@keyframes glow {
+    0% { text-shadow: 0 0 5px var(--tron-cyan); }
+    50% { text-shadow: 0 0 10px var(--tron-cyan), 0 0 15px var(--tron-cyan); }
+    100% { text-shadow: 0 0 5px var(--tron-cyan); }
+}
+
+body {
+    background-color: var(--tron-bg);
+    color: var(--tron-text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.5;
+    position: relative;
+    overflow: hidden;
+}
+
+body::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        rgba(0, 20, 40, 0.1) 1px,
+        transparent 2px,
+        transparent 30px
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+body::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        linear-gradient(90deg, transparent 49.5%, rgba(0, 166, 251, 0.1) 50%, transparent 50.5%) 0 0 / 30px 100%,
+        radial-gradient(circle at center, rgba(0, 166, 251, 0.2) 0%, transparent 60%) center / 100% 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Chat container */
+.chat-container {
+    width: 100%;
+    max-width: 1100px;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: relative;
+    z-index: 2;
+    border: 1px solid var(--tron-border);
+    box-shadow: 0 0 20px rgba(0, 166, 251, 0.3);
+    animation: pulse 4s infinite ease-in-out;
+    background-color: var(--tron-panel-bg);
+    overflow: hidden;
+}
+
+.chat-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right, 
+        transparent, 
+        var(--tron-cyan),
+        var(--tron-bright-cyan),
+        var(--tron-cyan),
+        transparent
+    );
+    animation: pulse 4s infinite ease-in-out;
+}
+
+/* Header */
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background-color: rgba(0, 20, 40, 0.9);
+    color: var(--tron-text);
+    border-bottom: 1px solid var(--tron-border);
+}
+
+.chat-header h1 {
+    font-size: 0.95rem;
+    letter-spacing: 1px;
+    font-weight: 400;
+    color: var(--tron-bright-cyan);
+    text-transform: uppercase;
+    animation: glow 4s infinite ease-in-out;
+    font-family: "Source Code Pro", monospace;
+}
+
+.controls {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.controls button {
+    background: transparent;
+    border: 1px solid var(--tron-cyan);
+    padding: 0.3rem 0.6rem;
+    color: var(--tron-cyan);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    font-family: "Source Code Pro", monospace;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.controls button:hover {
+    background: var(--tron-cyan);
+    color: #000;
+    box-shadow: 0 0 10px var(--tron-cyan);
+}
+
+/* Messages area */
+.chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    position: relative;
+    scrollbar-width: thin; /* Firefox - show thin scrollbar */
+    scrollbar-color: var(--tron-cyan) rgba(0, 20, 40, 0.5); /* Firefox - thumb and track colors */
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 20, 40, 0.4) 0%,
+        rgba(0, 30, 60, 0.6) 50%,
+        rgba(0, 20, 40, 0.4) 100%
+    );
+}
+
+/* Custom scrollbar for Webkit browsers (Chrome, Safari, Opera) */
+.chat-messages::-webkit-scrollbar {
+    width: 8px; /* Width of scrollbar */
+    background-color: rgba(0, 20, 40, 0.5); /* Background of track */
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background-color: var(--tron-cyan); /* Color of thumb */
+    border-radius: 0; /* Square corners */
+    box-shadow: 0 0 6px var(--tron-bright-cyan); /* Glow effect */
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background-color: var(--tron-bright-cyan); /* Brighter on hover */
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: rgba(0, 20, 40, 0.5); /* Color of track */
+    border-left: 1px solid rgba(0, 166, 251, 0.2); /* Subtle border */
+}
+
+.message {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-bottom: 1rem;
+    position: relative;
+    z-index: 2;
+}
+
+.message::after {
+    content: "";
+    position: absolute;
+    bottom: -0.5rem;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(to right, 
+        transparent, 
+        rgba(0, 166, 251, 0.3) 50%, 
+        transparent
+    );
+}
+
+.message.user .message-content::before {
+    content: "USER.SYS > ";
+    color: var(--tron-green);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+.message.assistant .message-content::before {
+    content: "RADBOT.AI > ";
+    color: var(--tron-bright-cyan);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+.message.system .message-content::before {
+    content: "SYSTEM > ";
+    color: var(--tron-yellow);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+.message-content {
+    padding: 0.5rem 0;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    position: relative;
+    line-height: 1.5;
+    font-size: 0.95rem;
+}
+
+.message.user .message-content {
+    color: var(--tron-green);
+}
+
+.message.assistant .message-content {
+    color: var(--tron-text);
+}
+
+.message.system .message-content {
+    color: var(--tron-yellow);
+}
+
+.message-content p {
+    margin-bottom: 0.75rem;
+    line-height: 1.6;
+}
+
+.message-content p:last-child {
+    margin-bottom: 0;
+}
+
+.message-content code {
+    font-family: "Source Code Pro", "Cascadia Code", monospace;
+    background-color: rgba(0, 166, 251, 0.15);
+    padding: 0.1rem 0.3rem;
+    border-radius: 0;
+    font-size: 0.9em;
+    color: var(--tron-bright-cyan);
+    border-left: 1px solid var(--tron-cyan);
+}
+
+.message-content pre {
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+    border: 1px solid var(--tron-border);
+    position: relative;
+    overflow-x: auto;
+    scrollbar-width: none;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+.message-content pre::-webkit-scrollbar {
+    display: none;
+}
+
+.message-content pre::before {
+    content: "CODE OUTPUT";
+    color: var(--tron-cyan);
+    font-size: 0.7rem;
+    position: absolute;
+    top: 0;
+    right: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 0.2rem 0.4rem;
+    letter-spacing: 1px;
+}
+
+.message-content pre::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background: 
+        linear-gradient(
+            to bottom,
+            rgba(0, 166, 251, 0.05) 0%,
+            transparent 3px
+        ) 0 0 / 100% 20px repeat-y;
+}
+
+.message-content pre code {
+    background-color: transparent;
+    padding: 0;
+    border: none;
+    color: var(--tron-bright-cyan);
+    font-size: 0.9rem;
+    display: block;
+    line-height: 1.5;
+}
+
+/* Lists styling */
+.message-content ul, .message-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--tron-text);
+}
+
+.message-content ul li::marker {
+    color: var(--tron-cyan);
+}
+
+.message-content ol li::marker {
+    color: var(--tron-cyan);
+}
+
+.message-content a {
+    color: var(--tron-bright-cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--tron-cyan);
+    transition: all 0.2s;
+}
+
+.message-content a:hover {
+    color: var(--tron-cyan);
+    text-shadow: 0 0 5px var(--tron-cyan);
+}
+
+/* Input area */
+.chat-input-container {
+    padding: 1rem;
+    border-top: 1px solid var(--tron-border);
+    background-color: rgba(0, 15, 30, 0.95);
+    position: relative;
+}
+
+.status-indicator {
+    font-size: 0.8rem;
+    color: var(--tron-text);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chat-input-wrapper {
+    display: flex;
+    gap: 0.75rem;
+    position: relative;
+    align-items: stretch;
+}
+
+.chat-input-wrapper::before {
+    content: ">";
+    color: var(--tron-cyan);
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+#chat-input {
+    flex-grow: 1;
+    padding: 0.75rem 0.75rem 0.75rem 1.75rem;
+    border: 1px solid var(--tron-border);
+    resize: none;
+    outline: none;
+    font-size: 0.95rem;
+    min-height: 46px;
+    max-height: 150px;
+    overflow-y: auto;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: var(--tron-text);
+    font-family: "Source Code Pro", "JetBrains Mono", monospace;
+    caret-color: var(--tron-bright-cyan);
+    scrollbar-width: none;
+    transition: all 0.2s;
+}
+
+#chat-input::-webkit-scrollbar {
+    display: none;
+}
+
+#chat-input:focus {
+    border-color: var(--tron-cyan);
+    box-shadow: 0 0 10px rgba(0, 166, 251, 0.5);
+}
+
+#chat-input::placeholder {
+    color: rgba(214, 251, 255, 0.3);
+}
+
+#send-button {
+    width: auto;
+    padding: 0 1rem;
+    border: 1px solid var(--tron-cyan);
+    background-color: rgba(0, 30, 60, 0.5);
+    color: var(--tron-cyan);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.8rem;
+}
+
+#send-button:hover {
+    background-color: var(--tron-cyan);
+    color: #000;
+    box-shadow: 0 0 10px var(--tron-cyan);
+}
+
+#send-button:disabled {
+    border-color: var(--tron-gray);
+    color: var(--tron-gray);
+    background-color: rgba(0, 0, 0, 0.3);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Custom terminal cursor effect */
+@keyframes cursor-blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+@keyframes typing-effect {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
+.message.assistant .message-content p:last-child::after {
+    content: '█';
+    font-size: 1em;
+    color: var(--tron-bright-cyan);
+    animation: cursor-blink 1.2s infinite;
+    display: none;
+}
+
+.message.assistant:last-child .message-content p:last-child::after {
+    display: inline;
+}
+
+/* System message animations */
+.message.system {
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
+/* Scan line effect */
+.chat-container::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(
+        to right,
+        transparent,
+        var(--tron-cyan),
+        var(--tron-bright-cyan),
+        var(--tron-cyan),
+        transparent
+    );
+    opacity: 0.5;
+    z-index: 3;
+    animation: scan-line 8s linear infinite;
+}
+
+/* TRON-style grid overlay */
+.chat-messages::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        linear-gradient(to right, transparent 99.5%, var(--tron-grid) 100%) 0 0 / 30px 100%,
+        linear-gradient(to bottom, transparent 99.5%, var(--tron-grid) 100%) 0 0 / 100% 30px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.5;
+}
+
+/* Fixed cursor styling for input field */
+#chat-input {
+    caret-color: var(--tron-cyan);
+    border-right: none; /* Remove the animated border */
+}
+
+/* Glowing effect on header */
+.chat-header::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+        to right,
+        transparent,
+        var(--tron-cyan),
+        var(--tron-bright-cyan),
+        var(--tron-cyan),
+        transparent
+    );
+    opacity: 0.8;
+}
+
+/* Error status special styling */
+.status-indicator.error {
+    color: var(--tron-red);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+/* Markdown styling */
+.message-content ul, .message-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.message-content blockquote {
+    border-left: 3px solid #ddd;
+    padding-left: 1rem;
+    color: #666;
+    margin: 0.5rem 0;
+}
+
+.message-content a {
+    color: #0366d6;
+    text-decoration: none;
+}
+
+.message-content a:hover {
+    text-decoration: underline;
+}
+
+.message.user .message-content a {
+    color: #fff;
+    text-decoration: underline;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .message {
+        max-width: 90%;
+    }
+}
+
+@media (max-width: 480px) {
+    .message {
+        max-width: 95%;
+    }
+    
+    .chat-header h1 {
+        font-size: 1.2rem;
+    }
+}

@@ -1,4 +1,4 @@
-.PHONY: help setup setup-web test test-unit test-integration lint format run-cli run-web run-scheduler clean
+.PHONY: help setup setup-web test test-unit test-integration lint format run-cli run-web run-web-custom run-scheduler clean
 
 # Use uv for Python package management
 PYTHON := python
@@ -12,7 +12,7 @@ help:
 	@echo "radbot Makefile Targets:"
 	@echo "=========================="
 	@echo "setup          : Install development dependencies using uv"
-	@echo "setup-web      : Install web-specific dependencies (Tavily, LangChain)"
+	@echo "setup-web      : Install web-specific dependencies (Tavily, LangChain, FastAPI)"
 	@echo "test           : Run all tests"
 	@echo "test-unit      : Run only unit tests"
 	@echo "test-integration: Run only integration tests"
@@ -20,6 +20,7 @@ help:
 	@echo "format         : Auto-format code with black and isort"
 	@echo "run-cli        : Start the radbot CLI interface"
 	@echo "run-web        : Start the radbot web interface using ADK"
+	@echo "run-web-custom : Start the custom FastAPI web interface"
 	@echo "run-scheduler  : Run the scheduler with optional arguments (use ARGS=\"--your-args\")"
 	@echo "clean          : Remove build artifacts and cache files"
 	@echo ""
@@ -27,7 +28,8 @@ help:
 	@echo "  make setup              # Install development dependencies"
 	@echo "  make test               # Run all tests"
 	@echo "  make run-cli            # Start the interactive CLI"
-	@echo "  make run-web            # Start the web interface"
+	@echo "  make run-web            # Start the web interface using ADK"
+	@echo "  make run-web-custom     # Start the custom FastAPI web interface"
 	@echo "  make run-scheduler ARGS=\"--additional-args\""
 
 # Set help as the default target
@@ -65,6 +67,9 @@ run-cli:
 
 run-web: setup setup-web
 	$(ADK) web
+	
+run-web-custom: setup setup-web
+	$(PYTHON) -m radbot.web --reload
 
 run-scheduler:
 	$(PYTHON) -m radbot.cli.scheduler $(ARGS)

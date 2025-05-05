@@ -7,7 +7,7 @@ agent for technical research and design collaboration.
 
 import logging
 import os
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, TypeVar
 
 # Set up logging
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -20,6 +20,7 @@ from google.adk.tools import FunctionTool
 # Import project components
 from radbot.agent.research_agent.instructions import get_full_research_agent_instruction
 from radbot.agent.research_agent.tools import get_research_tools
+from radbot.agent.research_agent.sequential_thinking import detect_thinking_trigger, process_thinking
 from radbot.config import config_manager
 
 class ResearchAgent:
@@ -29,6 +30,7 @@ class ResearchAgent:
     This agent is designed to:
     1. Perform technical research using web scraping, internal knowledge search, and GitHub
     2. Engage in design discussions as a "rubber duck"
+    3. Use sequential thinking to break down complex problems when triggered
     
     The agent is meant to be used as a sub-agent within a multi-agent system,
     typically receiving tasks from a main coordinator agent.
@@ -41,7 +43,8 @@ class ResearchAgent:
         instruction: Optional[str] = None,
         description: Optional[str] = None,
         tools: Optional[List[FunctionTool]] = None,
-        output_key: Optional[str] = "research_summary"
+        output_key: Optional[str] = "research_summary",
+        enable_sequential_thinking: bool = True
     ):
         """
         Initialize the ResearchAgent.
@@ -53,6 +56,7 @@ class ResearchAgent:
             description: Agent description (defaults to standard description)
             tools: List of tools to provide to the agent (defaults to standard research tools)
             output_key: Session state key to store the agent's output (default: "research_summary")
+            enable_sequential_thinking: Whether to enable sequential thinking trigger (default: True)
         """
         logger.info(f"Initializing ResearchAgent with name: {name}")
         
@@ -90,7 +94,13 @@ class ResearchAgent:
             output_key=output_key
         )
         
+        # Save reference to the model name for sequential thinking
+        self.model_name = model
+        self.enable_sequential_thinking = enable_sequential_thinking
+        
         logger.info(f"ResearchAgent successfully initialized with {len(tools)} tools")
+        if self.enable_sequential_thinking:
+            logger.info(f"Sequential thinking feature enabled for {name}")
     
     def get_adk_agent(self):
         """
@@ -100,3 +110,95 @@ class ResearchAgent:
             LlmAgent: The ADK agent instance
         """
         return self.agent
+    
+    def _run_sequential_thinking(self, session: Any, prompt: str) -> Dict[str, Any]:
+        """
+        Run the sequential thinking process for a given prompt.
+        
+        Args:
+            session: The ADK session
+            prompt: The user's prompt
+            
+        Returns:
+            Dictionary with thinking process results
+        """
+        logger.info(f"Triggering sequential thinking process for prompt: {prompt[:100]}...")
+        
+        # Define a function that uses the same model as the agent for thinking
+        def model_fn(thinking_prompt: str) -> str:
+            # Use the agent's model directly to get thinking steps
+            from google.genai.models import GenerativeModel
+            from google.genai.types import GenerationConfig
+            
+            try:
+                # Initialize the model
+                model = GenerativeModel(
+                    name=self.model_name,
+                    generation_config=GenerationConfig(
+                        temperature=0.2,  # Lower temperature for more structured thinking
+                        top_p=0.95,
+                        top_k=40,
+                    )
+                )
+                
+                # Get response
+                response = model.generate_content(thinking_prompt)
+                return response.text
+            except Exception as e:
+                logger.error(f"Error in model_fn for sequential thinking: {str(e)}")
+                # Fallback
+                return f"ERROR: Could not complete sequential thinking process: {str(e)}"
+        
+        # Process thinking
+        thinking_results = process_thinking(
+            prompt=prompt,
+            model_fn=model_fn,
+            max_steps=6  # Limited to 6 steps for efficiency
+        )
+        
+        # Store the thinking process in session state for later reference
+        session.state["sequential_thinking"] = thinking_results
+        
+        return thinking_results
+    
+    def process_prompt(self, session: Any) -> None:
+        """
+        Pre-process user input to check for sequential thinking triggers.
+        
+        This method is called by the LlmAgent before processing the user message,
+        allowing us to intercept prompts that should trigger sequential thinking.
+        
+        Args:
+            session: The ADK session
+        """
+        # Check if sequential thinking is enabled
+        if not self.enable_sequential_thinking:
+            return
+            
+        # Get the latest user message
+        latest_message = session.messages[-1] if session.messages else None
+        if not latest_message or latest_message.role != "user":
+            return
+            
+        prompt = latest_message.content
+        
+        # Check if this prompt should trigger sequential thinking
+        if detect_thinking_trigger(prompt):
+            logger.info("Sequential thinking trigger detected in user prompt")
+            
+            # Run sequential thinking process
+            thinking_results = self._run_sequential_thinking(session, prompt)
+            
+            # Add the thinking process as a structured response from the assistant
+            formatted_thinking = thinking_results["thinking_process"]
+            
+            # Add thinking results to the response (will be shown in the next message)
+            session.response_metadata = {
+                "sequential_thinking": True,
+                "thinking_process": formatted_thinking
+            }
+            
+            # Update the session to include this pre-processed thinking
+            session.state["last_thinking_prompt"] = prompt
+            
+            logger.info("Sequential thinking process completed and stored in session")

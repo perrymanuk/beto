@@ -8,7 +8,8 @@ import os
 import json
 import asyncio
 
-from radbot.tools.mcp_crawl4ai_client import (
+# Update to use the new import path
+from radbot.tools.crawl4ai.mcp_crawl4ai_client import (
     create_crawl4ai_toolset, 
     test_crawl4ai_connection,
     create_crawl4ai_enabled_agent
@@ -32,7 +33,7 @@ class TestCrawl4AIIntegration(unittest.TestCase):
         # Remove mock environment variables
         self.env_patcher.stop()
     
-    @patch('radbot.tools.mcp_crawl4ai_client.requests.get')
+    @patch('radbot.tools.crawl4ai.mcp_crawl4ai_client.requests.get')
     def test_connection(self, mock_get):
         """Test the connection test function."""
         # Mock the response
@@ -57,7 +58,7 @@ class TestCrawl4AIIntegration(unittest.TestCase):
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer test_token")
     
-    @patch('radbot.tools.mcp_crawl4ai_client.requests.get')
+    @patch('radbot.tools.crawl4ai.mcp_crawl4ai_client.requests.get')
     def test_connection_error(self, mock_get):
         """Test the connection test function with an error."""
         # Mock a failed response
@@ -71,7 +72,7 @@ class TestCrawl4AIIntegration(unittest.TestCase):
         self.assertEqual(result["status"], "connection_error")
         self.assertIn("Connection refused", result["error"])
     
-    @patch('radbot.tools.mcp_crawl4ai_client.create_crawl4ai_toolset_async')
+    @patch('radbot.tools.crawl4ai.mcp_crawl4ai_client.create_crawl4ai_toolset_async')
     def test_create_toolset(self, mock_async):
         """Test creating the toolset."""
         # Mock the async function
@@ -88,7 +89,7 @@ class TestCrawl4AIIntegration(unittest.TestCase):
         # Verify the async function was called
         mock_async.assert_called_once()
     
-    @patch('radbot.tools.mcp_crawl4ai_client.create_crawl4ai_toolset')
+    @patch('radbot.tools.crawl4ai.mcp_crawl4ai_client.create_crawl4ai_toolset')
     def test_create_agent(self, mock_toolset):
         """Test creating an agent with Crawl4AI tools."""
         # Mock the toolset function
@@ -118,14 +119,14 @@ class TestCrawl4AIIntegration(unittest.TestCase):
         self.assertIn("tool1", kwargs["tools"])
         self.assertIn("tool2", kwargs["tools"])
     
-    @patch('radbot.tools.mcp_crawl4ai_client.asyncio.run')
+    @patch('radbot.tools.crawl4ai.mcp_crawl4ai_client.asyncio.run')
     def test_ingest_document(self, mock_run):
         """Test the ingest document function."""
         # This requires more complex testing of the async wrapper
         # We'll implement this in the future
         pass
 
-    @patch('radbot.tools.mcp_crawl4ai_client.asyncio.run')
+    @patch('radbot.tools.crawl4ai.mcp_crawl4ai_client.asyncio.run')
     def test_query_knowledge(self, mock_run):
         """Test the query knowledge function."""
         # This requires more complex testing of the async wrapper

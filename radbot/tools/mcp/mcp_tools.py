@@ -19,6 +19,19 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Flag to track if we have Tavily dependencies
+HAVE_TAVILY = False
+
+# Try to import tavily and langchain tools
+try:
+    from langchain_community.tools import TavilySearchResults
+    from google.adk.tools.langchain import LangchainTool
+    HAVE_TAVILY = True
+    logger.info("Tavily and Langchain tools imported successfully")
+except ImportError:
+    logger.warning("Tavily or Langchain tools not found. Web search capabilities will be limited.")
+    logger.warning("Try installing with: pip install langchain-community tavily-python")
+
 def get_available_mcp_tools() -> List[Any]:
     """
     Get a list of all available MCP tools.
@@ -474,7 +487,7 @@ def create_ha_mcp_enabled_agent(agent_factory, base_tools=None, ensure_memory_to
         
         # Ensure memory tools are included if requested
         if ensure_memory_tools:
-            from radbot.tools.memory_tools import search_past_conversations, store_important_information
+            from radbot.tools.memory.memory_tools import search_past_conversations, store_important_information
             memory_tools = [search_past_conversations, store_important_information]
             
             # Check if memory tools are already in tools list
