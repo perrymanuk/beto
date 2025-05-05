@@ -27,6 +27,14 @@ from google.adk.agents import Agent
 from radbot.config import config_manager
 # Import the ADK's built-in transfer_to_agent tool
 from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+# Import calendar tools
+from radbot.tools.calendar.calendar_tools import (
+    list_calendar_events_tool,
+    create_calendar_event_tool,
+    update_calendar_event_tool,
+    delete_calendar_event_tool,
+    check_calendar_availability_tool
+)
 
 # Log configuration
 logger.info(f"Config manager loaded. Model config: {config_manager.model_config}")
@@ -86,6 +94,17 @@ def create_agent(tools: Optional[List[Any]] = None):
     
     # Start with basic tools - added back get_weather as requested
     basic_tools = [get_current_time, get_weather]
+    
+    # Add calendar tools
+    calendar_tools = [
+        list_calendar_events_tool,
+        create_calendar_event_tool,
+        update_calendar_event_tool,
+        delete_calendar_event_tool,
+        check_calendar_availability_tool
+    ]
+    logger.info(f"Adding calendar tools")
+    basic_tools.extend(calendar_tools)
     
     # Always include memory tools
     memory_tools = [search_past_conversations, store_important_information]
@@ -471,6 +490,29 @@ def create_agent(tools: Optional[List[Any]] = None):
             """
             instruction += "\n\n" + todo_instruction
             logger.info("Added Todo tools instructions to agent instruction")
+            
+        # Add Calendar instructions
+        calendar_instruction = """
+        You have access to Google Calendar tools to view and manage calendar events.
+        
+        Available tools:
+        - list_calendar_events_wrapper - Lists upcoming events from Google Calendar
+        - create_calendar_event_wrapper - Creates a new event in Google Calendar
+        - update_calendar_event_wrapper - Updates an existing event in Google Calendar
+        - delete_calendar_event_wrapper - Deletes an event from Google Calendar
+        - check_calendar_availability_wrapper - Checks availability on calendars
+        
+        Example usage:
+        - To list events: list_calendar_events_wrapper(max_results=5, days_ahead=7)
+        - To create an event: create_calendar_event_wrapper(summary="Meeting", start_time="2025-06-01T10:00:00", end_time="2025-06-01T11:00:00", description="Discuss project")
+        - To update an event: update_calendar_event_wrapper(event_id="event123", summary="Updated Meeting")
+        - To delete an event: delete_calendar_event_wrapper(event_id="event123")
+        - To check availability: check_calendar_availability_wrapper(calendar_ids=["primary"], days_ahead=7)
+        
+        When working with calendar events, always provide clear details and confirm actions with the user.
+        """
+        instruction += "\n\n" + calendar_instruction
+        logger.info("Added Calendar tools instructions to agent instruction")
     except Exception as e:
         logger.warning(f"Failed to load main_agent instruction: {str(e)}")
         instruction = """You are a helpful assistant. Your goal is to understand the user's request and fulfill it by using available tools."""

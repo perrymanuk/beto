@@ -208,6 +208,105 @@ This file tracks development tasks for the radbot project.
 - [ ] Implement unit tests for todo tools
 - [ ] Create integration tests with test database
 
+## Google Calendar Integration
+
+Phase 1: Setup and Authentication
+- [x] Set up project dependencies for Google Calendar API
+  - [x] Add google-api-python-client to pyproject.toml
+  - [x] Add google-auth-httplib2 to pyproject.toml
+  - [x] Add google-auth-oauthlib to pyproject.toml
+  - [x] ~~Add gcsa (Google Calendar Simple API) for a more Pythonic interface~~ (Removed due to dependency conflict with ADK 0.4.0)
+- [x] Create project structure
+  - [x] Create radbot/tools/calendar/ directory
+  - [x] Create __init__.py file with imports
+  - [x] Create credentials/ directory with .gitignore
+  - [x] Create initial module files (calendar_auth.py, calendar_manager.py, etc.)
+- [ ] Create Google Cloud project with Calendar API enabled
+  - [ ] Create project in Google Cloud Console
+  - [ ] Enable Google Calendar API
+  - [ ] Set up OAuth consent screen (internal or external)
+  - [ ] Generate OAuth credentials (client ID and secret)
+  - [ ] Download credentials.json to credentials/ directory
+- [x] Implement authentication module (calendar_auth.py)
+  - [x] Create get_calendar_service() for personal accounts
+  - [x] Implement token refresh handling
+  - [x] Create get_workspace_calendar_service() for Google Workspace
+  - [x] Add scopes configuration (readonly, full access, freebusy)
+  - [x] Create token persistence logic
+
+Phase 2: Core Calendar Operations
+- [x] Implement core calendar operations (calendar_operations.py)
+  - [x] Create list_events() with filtering options
+  - [x] Create format_time() utility for datetime handling
+  - [x] Create create_event() with required and optional parameters
+  - [x] Create update_event() for modifying existing events
+  - [x] Create delete_event() for removing events
+  - [x] Add check_calendar_access() for permissions checks
+  - [x] Create get_calendar_availability() for free/busy info
+  - [x] Implement execute_with_retry() for rate limiting
+- [x] Create CalendarManager class (calendar_manager.py)
+  - [x] Implement __init__ and instance variables
+  - [x] Create authenticate_personal() method
+  - [x] Create authenticate_workspace() method
+  - [x] Add list_upcoming_events() wrapper
+  - [x] Add create_new_event() wrapper
+  - [x] Add update_existing_event() wrapper
+  - [x] Add delete_existing_event() wrapper
+  - [x] Create handle_calendar_request() dispatcher
+  - [x] Add get_calendar_busy_times() wrapper
+  - [x] Implement proper error handling throughout
+
+Phase 3: Agent Integration
+- [x] Create function tool interfaces (calendar_tools.py)
+  - [x] Create list_calendar_events FunctionTool
+  - [x] Create create_calendar_event FunctionTool
+  - [x] Create update_calendar_event FunctionTool
+  - [x] Create delete_calendar_event FunctionTool
+  - [x] Create check_calendar_availability FunctionTool
+  - [x] Add comprehensive documentation for each tool
+- [x] Create Google Calendar agent factory
+  - [x] Create calendar_agent_factory.py in radbot/agent/
+  - [x] Add initialization for CalendarManager
+  - [x] Configure function tools
+  - [x] Set up appropriate agent instructions
+  - [x] Create factory function for creating calendar-enabled agent
+- [x] Add example implementation
+  - [x] Create calendar_agent_example.py in examples/
+  - [x] Add sample workflows for common calendar operations
+  - [x] Show service account and OAuth2 authentication
+  - [x] Fix module import error for FunctionTools in ADK 0.4.0
+  - [x] Update calendar tool definitions to use ADK 0.4.0 API
+  - [x] Add calendar tools to main agent
+  - [x] Fix parameter parsing issue with ComplexTypes in function signatures
+  - [x] Fix credential conflict by using separate env variables for Calendar and Vertex AI
+  - [x] Fix "name 'get_credentials_from_env' is not defined" import error in calendar_manager.py
+  - [x] Fix "Error 400: redirect_uri_mismatch" by adding flexible redirect URI options and configurable port
+  - [x] Fix "Unable to submit request because function declaration response schema specified other fields alongside any_of" error by updating response types
+  - [x] Fix unhandled exceptions in calendar wrapper functions to return error information instead of crashing
+
+Phase 4: Security and Testing
+- [x] Enhance security measures
+  - [x] Implement secure token storage
+  - [x] Add environment variable support for credentials
+  - [x] Configure proper scopes for least privilege
+  - [ ] Add option for keyring integration
+  - [ ] Add option for cloud secret manager integration
+- [x] Add appropriate .env.example entries
+  - [x] GOOGLE_CLIENT_ID
+  - [x] GOOGLE_CLIENT_SECRET
+  - [x] GOOGLE_SERVICE_ACCOUNT_FILE
+- [ ] Create unit tests for calendar components
+  - [ ] Add test fixtures with mock responses
+  - [ ] Test authentication flows
+  - [ ] Test calendar operations
+  - [ ] Test error handling and retries
+  - [ ] Add integration test with real Google Calendar
+- [x] Finalize documentation
+  - [x] Create docs/implementation/google_calendar_integration.md
+  - [x] Add screenshots and examples
+  - [x] Document step-by-step setup process in google_calendar_setup.md
+  - [x] Create troubleshooting guide in google_calendar_setup.md
+
 ## Testing & Documentation
 
 - [x] Create unit tests for basic tools

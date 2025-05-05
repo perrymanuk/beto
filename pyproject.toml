@@ -39,6 +39,10 @@ dependencies = [
     "aiohttp>=3.9.0",       # Required for async HTTP requests in crawling
     "psycopg2-binary>=2.9.9",  # Required for PostgreSQL database connections
     "redis>=5.0.1",         # Optional for cross-session caching with Redis
+    "google-api-python-client>=2.102.0", # Required for Google Calendar API
+    "google-auth-httplib2>=0.1.0",      # Required for Google Calendar API authentication
+    "google-auth-oauthlib>=1.1.0",      # Required for Google Calendar OAuth flow
+    # Removed gcsa due to dependency conflict with ADK 0.4.0 (tzlocal version conflict)
 ]
 
 [project.optional-dependencies]

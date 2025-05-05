@@ -68,6 +68,20 @@ let activeSuggestionIndex = -1;
 let activeShortcodeStart = -1;
 let activeShortcodeEnd = -1;
 
+// ASCII animations and patterns
+const asciiPatterns = [
+    "█▓▒░ ▓▒░ █▓▒░ ▓▒░ █▓▒░ ▓▒░ ",
+    "╔═══╗  ╔═══╗  ╔═══╗  ╔═══╗",
+    "▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄",
+    "◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤",
+    "▌▀▐▄▌▀▐▄▌▀▐▄▌▀▐▄▌▀▐▄▌▀▐▄",
+    "░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█",
+    "▓▓▒▒░░▓▓▒▒░░▓▓▒▒░░▓▓▒▒░░",
+    "▓░█▒▓░█▒▓░█▒▓░█▒▓░█▒▓░█▒",
+    "░▒▓█ RadBot V8.8.Beta █▓▒░",
+    "▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱"
+];
+
 // Initialize
 function init() {
     // Create session ID if not exists
@@ -82,6 +96,9 @@ function init() {
     
     tasksPanel.classList.add('hidden');
     tasksPanelVisible = false;
+    
+    // Initialize ASCII animation
+    initAsciiAnimation();
     
     connectWebSocket();
     
@@ -1510,6 +1527,30 @@ function showTaskDetails(task) {
 // Close task details view
 function closeTaskDetails() {
     taskDetailsView.classList.add('hidden');
+}
+
+// Initialize ASCII animation
+function initAsciiAnimation() {
+    const asciiElement = document.querySelector('.ascii-art');
+    if (!asciiElement) return;
+    
+    // Set initial pattern
+    let currentPatternIndex = Math.floor(Math.random() * asciiPatterns.length);
+    asciiElement.textContent = asciiPatterns[currentPatternIndex].repeat(3);
+    
+    // Change pattern periodically
+    setInterval(() => {
+        currentPatternIndex = (currentPatternIndex + 1) % asciiPatterns.length;
+        
+        // Create a transition effect by fading out briefly
+        asciiElement.style.opacity = '0.3';
+        
+        setTimeout(() => {
+            // Update the pattern and restore opacity
+            asciiElement.textContent = asciiPatterns[currentPatternIndex].repeat(3);
+            asciiElement.style.opacity = '1';
+        }, 200);
+    }, 8000); // Change pattern every 8 seconds
 }
 
 // Close emoji suggestions when clicking outside

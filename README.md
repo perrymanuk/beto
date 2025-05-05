@@ -57,6 +57,25 @@ An AI agent designed with a unique '90s SoCal influence. Beto blends practical f
 *   **`execute_shell_command`**: **(Advanced - Use with Extreme Caution)** This tool can execute arbitrary shell commands. It bypasses normal safety checks and should only be used if you fully understand the security implications.
 
 
+### Calendar Management (Google Calendar)
+
+*   **`list_calendar_events_wrapper`**: Shows upcoming events from your Google Calendar. Peep the schedule, man.
+*   **`create_calendar_event_wrapper`**: Adds a new event to your Google Calendar. Lock in that surf session or meeting.
+*   **`update_calendar_event_wrapper`**: Changes details of an existing calendar event. Like editing the time or description.
+*   **`delete_calendar_event_wrapper`**: Removes an event from your Google Calendar. Zap that unwanted meeting!
+*   **`check_calendar_availability_wrapper`**: Checks free/busy times on calendars. Find out when you can totally chill or gotta jam.
+
+### Task Management (Todos)
+
+*   **`add_task`**: Jot down a new task for a project. Don't forget that important thing!
+*   **`complete_task`**: Mark a task as done. feels good, man.
+*   **`remove_task`**: Delete a task from existence. Gnarly.
+*   **`list_projects`**: See all the different project lists you've created.
+*   **`list_project_tasks`**: Lists all the tasks specifically for one project.
+*   **`list_all_tasks`**: Gathers and lists all tasks from all projects.
+*   **`update_task`**: Change the details of a task, like its description or status.
+*   **`update_project`**: Rename a project. Give it a new vibe.
+
 ## Installation
 
 1. Clone the repository:

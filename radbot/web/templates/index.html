@@ -14,7 +14,12 @@
     <div class="app-container">
         <div class="chat-container">
             <div class="chat-header">
-                <h1>RadBot V8.8.Beta</h1>
+                <div class="header-left">
+                    <h1>RadBot V8.8.Beta</h1>
+                    <div id="ascii-animation" class="ascii-animation">
+                        <div class="ascii-art"></div>
+                    </div>
+                </div>
                 <div class="controls">
                     <button id="toggle-tasks-button" title="Toggle tasks panel">
                         TASKS
@@ -54,9 +59,6 @@
                         SEND
                     </button>
                     <div id="emoji-suggestions" class="emoji-suggestions hidden"></div>
-                </div>
-                <div class="emoji-reference">
-                    Try typing: :hangloose: :smile: :thumbsup: :rocket: :fire:
                 </div>
             </div>
         </div>
@@ -102,16 +104,37 @@
             </div>
             <div class="tasks-filter">
                 <div class="filter-group">
-                    <select id="project-filter">
-                        <option value="all">All Projects</option>
-                        <!-- Projects will be added dynamically -->
-                    </select>
-                    <select id="status-filter">
-                        <option value="all">All Statuses</option>
-                        <option value="backlog">Backlog</option>
-                        <option value="inprogress">In Progress</option>
-                        <option value="done">Done</option>
-                    </select>
+                    <div class="filter-dropdown">
+                        <button id="project-filter-btn">All Projects</button>
+                        <div class="filter-dropdown-content" id="project-filter-content">
+                            <div class="filter-option">
+                                <input type="checkbox" id="project-all" value="all" checked>
+                                <label for="project-all">All Projects</label>
+                            </div>
+                            <!-- Projects will be added dynamically -->
+                        </div>
+                    </div>
+                    <div class="filter-dropdown">
+                        <button id="status-filter-btn">All Statuses</button>
+                        <div class="filter-dropdown-content" id="status-filter-content">
+                            <div class="filter-option">
+                                <input type="checkbox" id="status-all" value="all" checked>
+                                <label for="status-all">All Statuses</label>
+                            </div>
+                            <div class="filter-option">
+                                <input type="checkbox" id="status-backlog" value="backlog">
+                                <label for="status-backlog">Backlog</label>
+                            </div>
+                            <div class="filter-option">
+                                <input type="checkbox" id="status-inprogress" value="inprogress">
+                                <label for="status-inprogress">In Progress</label>
+                            </div>
+                            <div class="filter-option">
+                                <input type="checkbox" id="status-done" value="done">
+                                <label for="status-done">Done</label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="search-group">
                     <input type="text" id="task-search" placeholder="Search tasks...">
