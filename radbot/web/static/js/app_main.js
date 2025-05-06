@@ -685,7 +685,25 @@ function renderEvents() {
     // Render each event
     filteredEvents.forEach(event => {
         const eventItem = document.createElement('div');
-        eventItem.className = `event-item ${event.type}`;
+        
+        // Determine event category for styling
+        let eventCategory = 'other';
+        
+        // Safely check event type and category
+        const type = event.type ? String(event.type).toLowerCase() : '';
+        const category = event.category ? String(event.category).toLowerCase() : '';
+        
+        if (type === 'tool_call' || category === 'tool_call') {
+            eventCategory = 'tool-call';
+        } else if (type === 'agent_transfer' || category === 'agent_transfer') {
+            eventCategory = 'agent-transfer';
+        } else if (type === 'planner' || category === 'planner') {
+            eventCategory = 'planner';
+        } else if (type === 'model_response' || category === 'model_response') {
+            eventCategory = 'model-response';
+        }
+        
+        eventItem.className = `event-item ${eventCategory}`;
         
         // Use an ID if available, or create a unique one based on timestamp and type
         const eventId = event.event_id || `${event.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -826,7 +844,10 @@ function showEventDetails(event) {
     detailsContainer.appendChild(typeSection);
     
     // Process specific fields based on event type
-    if (event.type === 'tool_call') {
+    if (event.type === 'tool_call' || event.category === 'tool_call' || 
+        event.function_call || event.function_response || 
+        event.tool_calls || event.tool_results) {
+        
         // Tool call sections
         if (event.tool_name) {
             const toolSection = document.createElement('div');
@@ -844,7 +865,60 @@ function showEventDetails(event) {
             detailsContainer.appendChild(toolSection);
         }
         
-        // Input section
+        // Function call details
+        if (event.function_call) {
+            // Function call specific rendering
+            const functionCallSection = document.createElement('div');
+            functionCallSection.className = 'detail-section';
+            
+            const functionTitle = document.createElement('h4');
+            functionTitle.textContent = 'Function Call:';
+            functionCallSection.appendChild(functionTitle);
+            
+            if (event.function_call.name) {
+                const funcName = document.createElement('div');
+                funcName.className = 'detail-value';
+                funcName.textContent = event.function_call.name;
+                functionCallSection.appendChild(funcName);
+            }
+            
+            if (event.function_call.args) {
+                const argsValue = document.createElement('pre');
+                argsValue.className = 'detail-json';
+                argsValue.textContent = JSON.stringify(event.function_call.args, null, 2);
+                functionCallSection.appendChild(argsValue);
+            }
+            
+            detailsContainer.appendChild(functionCallSection);
+        }
+        
+        // Function response details
+        if (event.function_response) {
+            const functionResponseSection = document.createElement('div');
+            functionResponseSection.className = 'detail-section';
+            
+            const responseTitle = document.createElement('h4');
+            responseTitle.textContent = 'Function Response:';
+            functionResponseSection.appendChild(responseTitle);
+            
+            if (event.function_response.name) {
+                const funcName = document.createElement('div');
+                funcName.className = 'detail-value';
+                funcName.textContent = event.function_response.name;
+                functionResponseSection.appendChild(funcName);
+            }
+            
+            if (event.function_response.response) {
+                const responseValue = document.createElement('pre');
+                responseValue.className = 'detail-json';
+                responseValue.textContent = JSON.stringify(event.function_response.response, null, 2);
+                functionResponseSection.appendChild(responseValue);
+            }
+            
+            detailsContainer.appendChild(functionResponseSection);
+        }
+        
+        // Input section (regular tool call)
         if (event.input) {
             const inputSection = document.createElement('div');
             inputSection.className = 'detail-section';
@@ -861,7 +935,7 @@ function showEventDetails(event) {
             detailsContainer.appendChild(inputSection);
         }
         
-        // Output section
+        // Output section (regular tool call)
         if (event.output) {
             const outputSection = document.createElement('div');
             outputSection.className = 'detail-section';

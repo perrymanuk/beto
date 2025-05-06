@@ -313,6 +313,64 @@ async def get_projects():
         logger.error(f"Error getting projects: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error getting projects: {str(e)}")
 
+@app.get("/api/tools")
+async def get_available_tools(session_id: Optional[str] = None, session_manager: SessionManager = Depends(get_session_manager)):
+    """Get the list of available tools from the root agent.
+    
+    Args:
+        session_id: Optional session ID to get tools from a specific session
+        
+    Returns:
+        JSON list of tools with their details
+    """
+    try:
+        # Import the root_agent directly
+        from agent import root_agent
+        
+        # Use the specific session's runner if a session_id is provided
+        if session_id:
+            runner = await get_or_create_runner_for_session(session_id, session_manager)
+            if hasattr(runner, "runner") and hasattr(runner.runner, "agent"):
+                agent = runner.runner.agent
+            else:
+                agent = root_agent
+        else:
+            agent = root_agent
+            
+        # Check if agent has tools
+        if not hasattr(agent, "tools") or not agent.tools:
+            logger.warning("Agent has no tools attribute or tools list is empty")
+            return []
+            
+        # Convert tools to a serializable format
+        serializable_tools = []
+        for tool in agent.tools:
+            tool_dict = {
+                "name": str(tool.name) if hasattr(tool, "name") else "unknown",
+                "description": str(tool.description) if hasattr(tool, "description") else "",
+            }
+            
+            # Add schema information if available
+            if hasattr(tool, "input_schema"):
+                if hasattr(tool.input_schema, "schema"):
+                    tool_dict["input_schema"] = tool.input_schema.schema()
+                elif hasattr(tool.input_schema, "to_dict"):
+                    tool_dict["input_schema"] = tool.input_schema.to_dict()
+                else:
+                    tool_dict["input_schema"] = str(tool.input_schema)
+                    
+            # Add any other tool attributes that might be useful
+            if hasattr(tool, "metadata"):
+                tool_dict["metadata"] = tool.metadata
+                
+            serializable_tools.append(tool_dict)
+        
+        logger.info(f"Retrieved {len(serializable_tools)} tools")
+        return serializable_tools
+    except Exception as e:
+        logger.error(f"Error getting tools: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting tools: {str(e)}")
+
 # Mock events endpoint has been replaced with the real events API
 # provided by radbot.web.api.events
 

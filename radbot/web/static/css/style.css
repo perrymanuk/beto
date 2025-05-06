@@ -1448,6 +1448,12 @@ body {
   border-left: 3px solid var(--term-green);
 }
 
+/* Model response variations */
+.event-item.model-response,
+.event-item.model_response {
+  border-left: 3px solid var(--term-amber);
+}
+
 /* Other/system variations */
 .event-item.other,
 .event-item.system,

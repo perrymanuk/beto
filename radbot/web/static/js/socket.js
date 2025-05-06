@@ -47,6 +47,19 @@ function connectWebSocket(sessionId) {
             } else if (data.type === 'events') {
                 // Process incoming events
                 console.log('Received events data:', data.content);
+                
+                // Process model_response events directly to display in chat
+                if (Array.isArray(data.content)) {
+                    data.content.forEach(event => {
+                        if ((event.type === 'model_response' || event.category === 'model_response') && event.text) {
+                            console.log('Model response event detected with text, adding to chat:', event);
+                            window.chatModule.addMessage('assistant', event.text);
+                            window.chatModule.scrollToBottom();
+                        }
+                    });
+                }
+                
+                // Pass to event handler
                 handleEvents(data.content);
             } else if (data.type === 'tasks') {
                 // Process incoming tasks
