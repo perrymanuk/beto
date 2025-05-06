@@ -40,7 +40,17 @@ function connectWebSocket(sessionId) {
             const data = JSON.parse(event.data);
             
             if (data.type === 'message') {
-                window.chatModule.addMessage('assistant', data.content);
+                // Check if the message includes agent information
+                let agentName = window.state.currentAgentName;
+                if (data.agent) {
+                    agentName = data.agent;
+                    // Update the global state if the agent has changed
+                    if (agentName.toUpperCase() !== window.state.currentAgentName) {
+                        window.statusUtils.updateAgentStatus(agentName);
+                    }
+                }
+                
+                window.chatModule.addMessage('assistant', data.content, agentName);
                 window.chatModule.scrollToBottom();
             } else if (data.type === 'status') {
                 window.statusUtils.handleStatusUpdate(data.content);
@@ -48,12 +58,56 @@ function connectWebSocket(sessionId) {
                 // Process incoming events
                 console.log('Received events data:', data.content);
                 
-                // Process model_response events directly to display in chat
+                // Process various event types
                 if (Array.isArray(data.content)) {
                     data.content.forEach(event => {
+                        // Handle agent transfer events
+                        if (event.type === 'agent_transfer' || event.category === 'agent_transfer') {
+                            console.log('Agent transfer event detected:', event);
+                            
+                            // Check if the target agent is specified
+                            if (event.to_agent) {
+                                const newAgent = event.to_agent;
+                                console.log(`Agent transfer detected: ${window.state.currentAgentName} → ${newAgent}`);
+                                
+                                // Update the agent status using the dedicated function
+                                window.statusUtils.updateAgentStatus(newAgent);
+                                
+                                // Add a system message to notify the user about the agent change
+                                window.chatModule.addMessage('system', `Agent switched to: ${newAgent.toUpperCase()}`);
+                            }
+                        }
+                        
+                        // Process model_response events to display in chat
                         if ((event.type === 'model_response' || event.category === 'model_response') && event.text) {
                             console.log('Model response event detected with text, adding to chat:', event);
-                            window.chatModule.addMessage('assistant', event.text);
+                            
+                            // Check for model information in event details
+                            if (event.details && event.details.model) {
+                                // Update model status
+                                window.statusUtils.updateModelStatus(event.details.model);
+                            }
+                            
+                            // Check if the response indicates a specific agent
+                            let agentName = window.state.currentAgentName;
+                            
+                            // Check all possible places in the event where the agent name might be stored
+                            if (event.agent_name) {
+                                agentName = event.agent_name.toUpperCase();
+                            } else if (event.details && event.details.agent_name) {
+                                agentName = event.details.agent_name.toUpperCase();
+                            } else if (event.details && event.details.agent) {
+                                agentName = event.details.agent.toUpperCase();
+                            }
+                            
+                            // Update the current agent if it has changed
+                            if (agentName !== window.state.currentAgentName) {
+                                console.log(`Agent change detected from model_response: ${window.state.currentAgentName} → ${agentName}`);
+                                window.statusUtils.updateAgentStatus(agentName);
+                            }
+                            
+                            // Add message to chat with the specific agent name
+                            window.chatModule.addMessage('assistant', event.text, agentName);
                             window.chatModule.scrollToBottom();
                         }
                     });

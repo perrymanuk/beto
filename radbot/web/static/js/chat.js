@@ -57,7 +57,7 @@ export function initChat() {
 }
 
 // Add a message to the chat UI
-export function addMessage(role, content) {
+export function addMessage(role, content, agentName) {
     // Ensure chatMessages element exists
     if (!chatMessages) {
         chatMessages = document.getElementById('chat-messages');
@@ -78,9 +78,15 @@ export function addMessage(role, content) {
     
     // Set custom prompt for assistant messages based on current agent
     if (role === 'assistant') {
+        // Allow specifying a custom agent for this message
+        const agent = agentName || window.state.currentAgentName;
+        
         // Add a custom data attribute for the prompt
         // Use lowercase for the terminal prompt style
-        contentDiv.dataset.agentPrompt = `${window.state.currentAgentName.toLowerCase()}@radbox:~$ `;
+        contentDiv.dataset.agentPrompt = `${agent.toLowerCase()}@radbox:~$ `;
+        
+        // Store the agent name as a data attribute for future reference
+        messageDiv.dataset.agent = agent.toUpperCase();
     }
     
     // Use marked.js to render markdown with compact options

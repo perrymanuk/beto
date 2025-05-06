@@ -17,6 +17,7 @@ import * as socketClient from './socket.js';
 const state = {
     sessionId: localStorage.getItem('radbot_session_id') || null,
     currentAgentName: "BETO", // Track current agent name - use uppercase to match status bar
+    currentModel: "gemini-2.5-flash", // Track current model name
     isDarkTheme: true, // Always use dark theme
     // Hardcode task API settings since settings dialog is removed
     taskApiSettings: {
@@ -684,6 +685,24 @@ function renderEvents() {
     
     // Render each event
     filteredEvents.forEach(event => {
+        // Check for model information in event details
+        if (event.details && event.details.model && 
+            (event.type === 'model_response' || event.category === 'model_response')) {
+            // Update model status if it's a model response event with model info
+            window.statusUtils.updateModelStatus(event.details.model);
+        }
+        
+        // Check for agent transfer events and update the agent name
+        if (event.type === 'agent_transfer' || event.category === 'agent_transfer') {
+            // Update the current agent name when rendering a transfer event
+            if (event.to_agent) {
+                const newAgent = event.to_agent;
+                console.log(`Agent transfer detected in event rendering: ${newAgent}`);
+                // Update agent status using the dedicated function
+                window.statusUtils.updateAgentStatus(newAgent);
+            }
+        }
+        
         const eventItem = document.createElement('div');
         
         // Determine event category for styling
@@ -820,28 +839,37 @@ function showEventDetails(event) {
     // Now check for the details container
     const detailsContainer = document.getElementById('event-details-content');
     if (!detailsContainer) {
-        console.error('Event details container not found in DOM - this is critical!');
+        console.warn('Event details container not found in DOM - attempting to create it');
         
-        // Look for event-details-template and try to instantiate it
-        const template = document.getElementById('event-details-template');
-        if (template) {
-            console.log('Found event-details-template, trying to instantiate it');
-            const newDetailsContent = template.content.cloneNode(true);
+        // Look for detail panel where we can put the content
+        const detailPanel = document.querySelector('.detail-panel');
+        if (detailPanel) {
+            console.log('Found detail-panel, creating event details content');
             
-            // Find a place to put it
-            const possibleContainer = eventsPanel.querySelector('.detail-panel') || 
-                                       eventsPanel.querySelector('.events-content');
+            // Create event details content container
+            const detailsContent = document.createElement('div');
+            detailsContent.className = 'event-details-content';
+            detailsContent.id = 'event-details-content';
             
-            if (possibleContainer) {
-                possibleContainer.appendChild(newDetailsContent);
-                console.log('Added details content to container, retrying');
-                // Try again
-                setTimeout(() => showEventDetails(event), 100);
-                return;
+            // Find existing tile-content if it exists or create one
+            let tileContent = detailPanel.querySelector('.tile-content');
+            if (!tileContent) {
+                tileContent = document.createElement('div');
+                tileContent.className = 'tile-content event-details';
+                detailPanel.appendChild(tileContent);
             }
+            
+            // Add details content to the tile content
+            tileContent.innerHTML = ''; // Clear existing content
+            tileContent.appendChild(detailsContent);
+            console.log('Created event-details-content container');
+            
+            // Now try to use the newly created container
+            setTimeout(() => showEventDetails(event), 100);
+            return;
         }
         
-        console.error('Could not instantiate event details template');
+        console.error('Could not find detail panel to add event details content');
         return;
     }
     
@@ -1106,23 +1134,18 @@ function showEventDetails(event) {
         const detailsContent = document.createElement('div');
         detailsContent.className = 'details-content';
         
-        // Format all details in a generic way
-        for (const [key, value] of Object.entries(event.details)) {
-            const detailItem = document.createElement('div');
-            detailItem.className = 'detail-item';
-            
-            // Format the value based on its type
-            let displayValue = value;
-            if (typeof value === 'object' && value !== null) {
-                displayValue = `<pre>${formatJsonSyntax(value)}</pre>`;
-            }
-            
-            // Format key for display (convert snake_case to Title Case)
-            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            
-            detailItem.innerHTML = `<strong>${displayKey}:</strong> ${displayValue}`;
-            detailsContent.appendChild(detailItem);
-        }
+        // Format technical details as a single JSON object instead of individual fields
+        const technicalJsonContainer = document.createElement('div');
+        technicalJsonContainer.className = 'json-container';
+        technicalJsonContainer.style.maxHeight = '200px';
+        technicalJsonContainer.style.overflowY = 'auto';
+        
+        const technicalJson = document.createElement('pre');
+        technicalJson.className = 'detail-json';
+        technicalJson.innerHTML = formatJsonSyntax(event.details);
+        
+        technicalJsonContainer.appendChild(technicalJson);
+        detailsContent.appendChild(technicalJsonContainer);
         
         detailsSection.appendChild(detailsContent);
         detailsContainer.appendChild(detailsSection);
@@ -1155,10 +1178,20 @@ function showEventDetails(event) {
     
     const rawContent = document.createElement('div');
     rawContent.className = 'raw-json-content hidden';
+    rawContent.style.maxHeight = '300px';
+    rawContent.style.overflow = 'hidden';
+    
+    // Create a scrollable container for the JSON
+    const rawJsonContainer = document.createElement('div');
+    rawJsonContainer.className = 'raw-json-container';
+    rawJsonContainer.style.maxHeight = '300px';
+    rawJsonContainer.style.overflowY = 'auto';
     
     // Create a pretty-printed JSON display
     const rawJson = document.createElement('pre');
     rawJson.className = 'raw-json';
+    rawJson.style.maxHeight = 'none';
+    rawJson.style.overflow = 'visible';
     
     // Remove circular references before stringifying
     const cleanedEvent = JSON.parse(JSON.stringify(event, (key, value) => {
@@ -1172,7 +1205,9 @@ function showEventDetails(event) {
     
     // For better readability, we'll syntax highlight the JSON
     rawJson.innerHTML = formatJsonSyntax(formattedJson);
-    rawContent.appendChild(rawJson);
+    
+    rawJsonContainer.appendChild(rawJson);
+    rawContent.appendChild(rawJsonContainer);
     rawSection.appendChild(rawContent);
     
     // Add toggle behavior

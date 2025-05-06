@@ -4,6 +4,7 @@
 
 // Status bar elements
 let agentStatus;
+let modelStatus;
 let timeStatus;
 let connectionStatus;
 
@@ -13,6 +14,7 @@ export function initStatus() {
     
     // Status Bar Elements
     agentStatus = document.getElementById('agent-status');
+    modelStatus = document.getElementById('model-status');
     timeStatus = document.getElementById('time-status');
     connectionStatus = document.getElementById('connection-status');
     
@@ -30,6 +32,10 @@ export function initStatus() {
 export function updateStatusBar() {
     if (agentStatus) {
         agentStatus.textContent = `AGENT: ${window.state.currentAgentName.toUpperCase()}`;
+    }
+    
+    if (modelStatus) {
+        modelStatus.textContent = `MODEL: ${window.state.currentModel}`;
     }
     
     updateClock();
@@ -105,6 +111,52 @@ export function setStatus(status) {
     updateClock();
 }
 
+// Update agent status
+export function updateAgentStatus(agentName) {
+    if (!agentName) return;
+    
+    // Update global state - ensure uppercase for consistency
+    const formattedName = agentName.toUpperCase();
+    window.state.currentAgentName = formattedName;
+    
+    // Update status bar
+    if (agentStatus) {
+        agentStatus.textContent = `AGENT: ${formattedName}`;
+        
+        // Visual feedback to ensure update is visible
+        agentStatus.style.color = 'var(--term-blue)';
+        setTimeout(() => {
+            agentStatus.style.color = 'var(--term-amber)';
+        }, 100);
+        
+        console.log(`Agent status updated: ${formattedName}`);
+        
+        // Update CSS variable for any styling that might use it
+        document.documentElement.style.setProperty('--agent-name', `"${formattedName}"`);
+    }
+}
+
+// Update model status
+export function updateModelStatus(modelName) {
+    if (!modelName) return;
+    
+    // Update global state
+    window.state.currentModel = modelName;
+    
+    // Update status bar
+    if (modelStatus) {
+        modelStatus.textContent = `MODEL: ${modelName}`;
+        
+        // Visual feedback to ensure update is visible
+        modelStatus.style.color = 'var(--term-blue)';
+        setTimeout(() => {
+            modelStatus.style.color = 'var(--text-primary)';
+        }, 100);
+        
+        console.log(`Model status updated: ${modelName}`);
+    }
+}
+
 // Handle status updates from server
 export function handleStatusUpdate(status) {
     setStatus(status);
@@ -112,5 +164,10 @@ export function handleStatusUpdate(status) {
     // Ensure agent name is always visible in the status bar
     if (agentStatus) {
         agentStatus.textContent = `AGENT: ${window.state.currentAgentName.toUpperCase()}`;
+    }
+    
+    // Ensure model name is always visible in the status bar
+    if (modelStatus) {
+        modelStatus.textContent = `MODEL: ${window.state.currentModel}`;
     }
 }

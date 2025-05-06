@@ -164,20 +164,76 @@ class TilingManager {
       
       secondPanelTile.appendChild(header);
       
-      // Add panel content
-      const panelContent = document.createElement('div');
-      panelContent.className = `tile-content ${panelType}`;
-      
-      // Add mountain background
-      const mountainBg = document.createElement('div');
-      mountainBg.className = 'mountain-bg';
-      panelContent.appendChild(mountainBg);
-      
-      // Add content from template
-      const template = this.templates[panelType].content.cloneNode(true);
-      panelContent.appendChild(template);
-      
-      secondPanelTile.appendChild(panelContent);
+      // If events panel, create a split view for list and details
+      if (panelType === 'events') {
+        // Create a vertical container for the split
+        const verticalContainer = document.createElement('div');
+        verticalContainer.className = 'tile-container vertical';
+        
+        // Add events content tile
+        const eventsContentTile = document.createElement('div');
+        eventsContentTile.className = 'tile';
+        eventsContentTile.style.flex = '60 1 0%';
+        
+        // Add events content
+        const eventsContent = document.createElement('div');
+        eventsContent.className = 'tile-content events';
+        
+        // Add mountain background
+        const mountainBg = document.createElement('div');
+        mountainBg.className = 'mountain-bg';
+        eventsContent.appendChild(mountainBg);
+        
+        // Add content from template
+        const eventsTemplate = this.templates.events.content.cloneNode(true);
+        eventsContent.appendChild(eventsTemplate);
+        eventsContentTile.appendChild(eventsContent);
+        
+        // Add details tile
+        const detailsContentTile = document.createElement('div');
+        detailsContentTile.className = 'tile detail-panel';
+        detailsContentTile.style.flex = '40 1 0%';
+        
+        // Add event details content
+        const detailsContent = document.createElement('div');
+        detailsContent.className = 'tile-content event-details';
+        
+        // Add content from template
+        const detailsTemplate = this.templates.eventDetails.content.cloneNode(true);
+        detailsContent.appendChild(detailsTemplate);
+        detailsContentTile.appendChild(detailsContent);
+        
+        // Add both to vertical container
+        verticalContainer.appendChild(eventsContentTile);
+        
+        // Add resize handle
+        const verticalResizeHandle = document.createElement('div');
+        verticalResizeHandle.className = 'resize-handle resize-handle-vertical';
+        verticalContainer.appendChild(verticalResizeHandle);
+        
+        verticalContainer.appendChild(detailsContentTile);
+        
+        // Add vertical container to the second panel tile
+        secondPanelTile.appendChild(verticalContainer);
+        
+        // Setup vertical resize handle
+        this.setupVerticalResizeHandle(verticalResizeHandle, eventsContentTile, detailsContentTile);
+      } else {
+        // For other panels (tasks), use the simple layout
+        const panelContent = document.createElement('div');
+        panelContent.className = `tile-content ${panelType}`;
+        
+        // Add mountain background
+        const mountainBg = document.createElement('div');
+        mountainBg.className = 'mountain-bg';
+        panelContent.appendChild(mountainBg);
+        
+        // Add content from template
+        const template = this.templates[panelType].content.cloneNode(true);
+        panelContent.appendChild(template);
+        
+        secondPanelTile.appendChild(panelContent);
+      }
       container.appendChild(secondPanelTile);
       
       // Set up resize handle
@@ -242,7 +298,7 @@ class TilingManager {
     }
   }
   
-  // Set up resize handle functionality
+  // Set up horizontal resize handle functionality
   setupResizeHandle(handle, leftElement, rightElement) {
     let startX;
     let startLeftWidth;
@@ -276,6 +332,52 @@ class TilingManager {
       if (leftPercent >= 15 && rightPercent >= 15) {
         leftElement.style.flex = `${leftPercent} 1 0%`;
         rightElement.style.flex = `${rightPercent} 1 0%`;
+      }
+    };
+    
+    const end = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', end);
+      handle.classList.remove('active');
+    };
+    
+    handle.addEventListener('mousedown', start);
+  }
+  
+  // Set up vertical resize handle functionality
+  setupVerticalResizeHandle(handle, topElement, bottomElement) {
+    let startY;
+    let startTopHeight;
+    let startBottomHeight;
+    
+    const start = (e) => {
+      e.preventDefault();
+      startY = e.clientY;
+      
+      const topRect = topElement.getBoundingClientRect();
+      const bottomRect = bottomElement.getBoundingClientRect();
+      
+      startTopHeight = topRect.height;
+      startBottomHeight = bottomRect.height;
+      
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', end);
+      
+      handle.classList.add('active');
+    };
+    
+    const move = (e) => {
+      const delta = e.clientY - startY;
+      
+      // Calculate percentages based on container height
+      const containerHeight = topElement.parentNode.clientHeight - handle.clientHeight;
+      const topPercent = ((startTopHeight + delta) / containerHeight) * 100;
+      const bottomPercent = ((startBottomHeight - delta) / containerHeight) * 100;
+      
+      // Apply constraints (minimum 15% height)
+      if (topPercent >= 15 && bottomPercent >= 15) {
+        topElement.style.flex = `${topPercent} 1 0%`;
+        bottomElement.style.flex = `${bottomPercent} 1 0%`;
       }
     };
     

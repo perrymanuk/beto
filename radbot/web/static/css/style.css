@@ -354,6 +354,10 @@ body {
   font-weight: bold;
 }
 
+#model-status {
+  color: var(--text-primary);
+}
+
 #time-status {
   color: var(--text-secondary);
 }
@@ -455,6 +459,15 @@ body {
   font-weight: 400;
   letter-spacing: 0.5px;
   font-size: 0.85rem;
+}
+
+/* Specific styling for different agents */
+.message.assistant[data-agent="SCOUT"] .message-content::before {
+  color: var(--term-green);
+}
+
+.message.assistant[data-agent="BETO"] .message-content::before {
+  color: var(--term-amber);
 }
 
 .message.system .message-content::before {
@@ -1126,11 +1139,18 @@ body {
   flex-direction: column;
   height: 100%;
   background-color: var(--bg-primary);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
 }
 
 .events-filter {
   padding: 0.3rem;
   border-bottom: 1px solid var(--border-color);
+  flex: 0 0 auto;
 }
 
 #event-type-filter {
@@ -1152,6 +1172,11 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--accent-blue) var(--bg-primary);
   background-color: var(--bg-primary);
+  position: absolute;
+  top: 38px; /* Height of filter + padding */
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .event-item {
@@ -1216,12 +1241,67 @@ body {
 
 /* Event details content */
 .event-details-content {
-  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   overflow-y: auto;
   padding: 0.5rem;
   font-size: 0.75rem;
   line-height: 1.2;
   background-color: var(--bg-tertiary);
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-blue) var(--bg-tertiary);
+}
+
+.event-details-content::-webkit-scrollbar {
+  width: 6px;
+  background-color: var(--bg-tertiary);
+}
+
+.event-details-content::-webkit-scrollbar-thumb {
+  background-color: var(--accent-blue);
+  border-radius: 0;
+}
+
+.tile-content.event-details {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+}
+
+/* Adding more specific styling for details section containers */
+.detail-section {
+  margin-bottom: 1rem;
+}
+
+.detail-json {
+  max-height: none !important; /* Remove max-height constraint */
+  overflow-y: visible !important; /* Allow content to flow */
+  margin: 0;
+}
+
+.json-container {
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 0.5rem 0;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-left: 2px solid var(--accent-blue);
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-blue) var(--bg-secondary);
+}
+
+.json-container::-webkit-scrollbar {
+  width: 6px;
+  background-color: var(--bg-secondary);
+}
+
+.json-container::-webkit-scrollbar-thumb {
+  background-color: var(--accent-blue);
+  border-radius: 0;
 }
 
 /* Event details styling */
@@ -1361,10 +1441,28 @@ body {
 .raw-json-content {
   transition: max-height 0.3s ease;
   overflow: hidden;
+  max-height: 300px;
 }
 
 .raw-json-content.hidden {
   display: none;
+}
+
+.raw-json-container {
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-blue) var(--bg-secondary);
+}
+
+.raw-json-container::-webkit-scrollbar {
+  width: 6px;
+  background-color: var(--bg-secondary);
+}
+
+.raw-json-container::-webkit-scrollbar-thumb {
+  background-color: var(--accent-blue);
+  border-radius: 0;
 }
 
 .raw-json {
@@ -1376,9 +1474,21 @@ body {
   font-size: 0.65rem;
   color: var(--text-primary);
   max-height: 300px;
-  overflow: auto;
+  overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-blue) var(--bg-secondary);
+}
+
+.raw-json::-webkit-scrollbar {
+  width: 6px;
+  background-color: var(--bg-secondary);
+}
+
+.raw-json::-webkit-scrollbar-thumb {
+  background-color: var(--accent-blue);
+  border-radius: 0;
 }
 
 /* JSON syntax highlighting */
