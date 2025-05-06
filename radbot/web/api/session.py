@@ -158,6 +158,11 @@ class SessionRunner:
                 
                 processed_events.append(event_data)
                 
+                # Store the event in the events storage
+                # Import here to avoid circular imports
+                from radbot.web.api.events import add_event
+                add_event(self.session_id, event_data)
+                
                 # If no final response has been found yet, try to extract it
                 if final_response is None:
                     # Method 1: Check if it's a final response
@@ -204,15 +209,31 @@ class SessionRunner:
     
     def _get_event_type(self, event):
         """Determine the type of event."""
+        # Debug: Log event attributes for debugging
+        logger.debug(f"Event class: {event.__class__.__name__}, dir(event): {dir(event)}")
+        
+        # For tool events in ADK 0.4.0, check for function_call / tool_calls attribute
+        if hasattr(event, 'function_call') or hasattr(event, 'tool_calls'):
+            logger.info(f"Detected tool call via function_call/tool_calls: {event}")
+            return "tool_call"
+            
+        # Check for tool result event
+        if hasattr(event, 'function_response') or hasattr(event, 'tool_results'):
+            logger.info(f"Detected tool result: {event}")
+            return "tool_call"
+        
         # Try to get type attribute
         if hasattr(event, 'type'):
-            return str(event.type)
+            event_type = str(event.type)
+            logger.debug(f"Event has explicit type: {event_type}")
+            return event_type
         
         # Check for tool call events
         if (hasattr(event, 'tool_name') or 
             (hasattr(event, 'payload') and 
              isinstance(event.payload, dict) and 
              'toolName' in event.payload)):
+            logger.info(f"Detected tool call via tool_name or payload.toolName")
             return "tool_call"
         
         # Check for agent transfer events
@@ -231,7 +252,18 @@ class SessionRunner:
         
         # Check for model response events
         if hasattr(event, 'is_final_response'):
+            is_final = event.is_final_response()
+            final_status = "final" if is_final else "intermediate"
+            logger.debug(f"Detected model response ({final_status})")
             return "model_response"
+        
+        # Check for content which indicates model response (ADK 0.4.0+)
+        if hasattr(event, 'content') or hasattr(event, 'message'):
+            logger.debug(f"Detected model response via content/message attributes")
+            return "model_response"
+            
+        # Log the event for debugging
+        logger.warning(f"Unrecognized event type: {event.__class__.__name__}")
         
         # Default category
         return "other"
@@ -243,25 +275,70 @@ class SessionRunner:
             "summary": "Tool Call"
         }
         
-        # Extract tool name
-        if hasattr(event, 'tool_name'):
-            event_data["tool_name"] = event.tool_name
-            event_data["summary"] = f"Tool Call: {event.tool_name}"
-        elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'toolName' in event.payload:
-            event_data["tool_name"] = event.payload['toolName']
-            event_data["summary"] = f"Tool Call: {event.payload['toolName']}"
+        # Process function call events (ADK 0.4.0+)
+        if hasattr(event, 'function_call'):
+            function_call = event.function_call
+            if hasattr(function_call, 'name'):
+                event_data["tool_name"] = function_call.name
+                event_data["summary"] = f"Tool Call: {function_call.name}"
+            
+            if hasattr(function_call, 'args'):
+                event_data["input"] = self._safely_serialize(function_call.args)
+                
+        # Process tool_calls (ADK 0.4.0+)
+        elif hasattr(event, 'tool_calls') and event.tool_calls:
+            # Use first tool call for display
+            tool_call = event.tool_calls[0]
+            if hasattr(tool_call, 'name'):
+                event_data["tool_name"] = tool_call.name
+                event_data["summary"] = f"Tool Call: {tool_call.name}"
+            
+            if hasattr(tool_call, 'args'):
+                event_data["input"] = self._safely_serialize(tool_call.args)
+                
+        # Process function response / tool results (ADK 0.4.0+)
+        elif hasattr(event, 'function_response'):
+            if hasattr(event.function_response, 'name'):
+                event_data["tool_name"] = event.function_response.name
+                event_data["summary"] = f"Tool Response: {event.function_response.name}"
+            
+            if hasattr(event.function_response, 'response'):
+                event_data["output"] = self._safely_serialize(event.function_response.response)
+                
+        elif hasattr(event, 'tool_results') and event.tool_results:
+            # Use first tool result for display
+            tool_result = event.tool_results[0]
+            if hasattr(tool_result, 'name'):
+                event_data["tool_name"] = tool_result.name
+                event_data["summary"] = f"Tool Response: {tool_result.name}"
+            
+            if hasattr(tool_result, 'output'):
+                event_data["output"] = self._safely_serialize(tool_result.output)
         
-        # Extract input
-        if hasattr(event, 'input'):
-            event_data["input"] = self._safely_serialize(event.input)
-        elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'input' in event.payload:
-            event_data["input"] = self._safely_serialize(event.payload['input'])
+        # Legacy tool call formats
+        else:
+            # Extract tool name
+            if hasattr(event, 'tool_name'):
+                event_data["tool_name"] = event.tool_name
+                event_data["summary"] = f"Tool Call: {event.tool_name}"
+            elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'toolName' in event.payload:
+                event_data["tool_name"] = event.payload['toolName']
+                event_data["summary"] = f"Tool Call: {event.payload['toolName']}"
+            
+            # Extract input
+            if hasattr(event, 'input'):
+                event_data["input"] = self._safely_serialize(event.input)
+            elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'input' in event.payload:
+                event_data["input"] = self._safely_serialize(event.payload['input'])
+            
+            # Extract output
+            if hasattr(event, 'output'):
+                event_data["output"] = self._safely_serialize(event.output)
+            elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'output' in event.payload:
+                event_data["output"] = self._safely_serialize(event.payload['output'])
         
-        # Extract output
-        if hasattr(event, 'output'):
-            event_data["output"] = self._safely_serialize(event.output)
-        elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'output' in event.payload:
-            event_data["output"] = self._safely_serialize(event.payload['output'])
+        # Log the processed event data for debugging
+        logger.debug(f"Processed tool event data: {event_data}")
         
         # Get the full event for details
         event_data["details"] = self._get_event_details(event)

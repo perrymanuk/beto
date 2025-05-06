@@ -23,6 +23,9 @@ from radbot.web.api.session import (
     get_or_create_runner_for_session,
 )
 
+# Import events router for registration
+from radbot.web.api.events import register_events_router
+
 # Set up logging
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -36,6 +39,10 @@ app = FastAPI(
     description="Web interface for interacting with RadBot agent",
     version="0.1.0",
 )
+
+# Register the events router immediately after app creation
+register_events_router(app)
+logger.info("Events router registered during app initialization")
 
 # Configure CORS
 app.add_middleware(
@@ -306,62 +313,8 @@ async def get_projects():
         logger.error(f"Error getting projects: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error getting projects: {str(e)}")
 
-@app.get("/api/events")
-async def get_events():
-    """Get demo events since there's no API for real events yet.
-    
-    Returns:
-        JSON list of demo events
-    """
-    try:
-        # Create some demo events
-        events = [
-            {
-                "id": "evt-001",
-                "type": "tool_call",
-                "category": "tool_call",
-                "timestamp": "2025-05-06 10:00:00",
-                "summary": "Called weather API for current forecast",
-                "details": {"tool": "get_weather", "args": {"location": "San Francisco"}}
-            },
-            {
-                "id": "evt-002",
-                "type": "agent_transfer",
-                "category": "agent_transfer",
-                "timestamp": "2025-05-06 10:05:00",
-                "summary": "Transferred to scout agent for web research",
-                "details": {"from_agent": "beto", "to_agent": "scout"}
-            },
-            {
-                "id": "evt-003",
-                "type": "planner",
-                "category": "planner",
-                "timestamp": "2025-05-06 10:10:00",
-                "summary": "Created plan for task implementation",
-                "details": {"steps": ["Research API", "Implement function", "Test"]}
-            },
-            {
-                "id": "evt-004",
-                "type": "tool_call",
-                "category": "tool_call",
-                "timestamp": "2025-05-06 10:15:00",
-                "summary": "Searched filesystem for Python files",
-                "details": {"tool": "list_files", "args": {"pattern": "*.py"}}
-            },
-            {
-                "id": "evt-005",
-                "type": "agent_transfer",
-                "category": "agent_transfer",
-                "timestamp": "2025-05-06 10:20:00",
-                "summary": "Transferred back to main agent",
-                "details": {"from_agent": "scout", "to_agent": "beto"}
-            }
-        ]
-        
-        return events
-    except Exception as e:
-        logger.error(f"Error getting events: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error getting events: {str(e)}")
+# Mock events endpoint has been replaced with the real events API
+# provided by radbot.web.api.events
 
 def start_server(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
     """Start the FastAPI server.
@@ -371,5 +324,7 @@ def start_server(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
         port: Port to bind to
         reload: Whether to reload on code changes
     """
+    # Events router is already registered during module initialization
+    
     logger.info(f"Starting RadBot web server on {host}:{port}")
     uvicorn.run("radbot.web.app:app", host=host, port=port, reload=reload)

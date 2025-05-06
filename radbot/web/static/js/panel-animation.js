@@ -1,67 +1,49 @@
 /**
- * Enhanced Panel Animation from Left
+ * Panel Animation Support for Tiling Interface
+ * 
+ * This script simply forwards commands to the tiling system.
+ * The actual panel rendering is handled by the tiling.js file.
  */
-document.addEventListener('DOMContentLoaded', function() {
-    // Get elements
-    const appContainer = document.getElementById('app-container');
-    const chatContainerWrapper = document.getElementById('chat-container-wrapper');
-    const eventsPanel = document.getElementById('events-panel');
-    const tasksPanel = document.getElementById('tasks-panel');
+
+// Initialize panel animation listeners
+function initPanelAnimation() {
+    console.log('Initializing panel animation support (forwarding to tiling system)');
+    
+    // Setup panel toggle buttons - just forward the events to the tiling system
     const toggleEventsButton = document.getElementById('toggle-events-button');
     const toggleTasksButton = document.getElementById('toggle-tasks-button');
     
-    // Note: We don't initialize panels as hidden here
-    // because app.js already handles this
+    if (toggleEventsButton) {
+        toggleEventsButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Events toggle button clicked');
+            document.dispatchEvent(new CustomEvent('command:events'));
+        });
+    }
     
-    // Toggle events panel
-    toggleEventsButton.addEventListener('click', function() {
-        const isVisible = !eventsPanel.classList.contains('hidden');
-        
-        // If currently visible, hide it
-        if (isVisible) {
-            eventsPanel.classList.add('hidden');
-            appContainer.classList.remove('panel-visible');
-        } else {
-            // Hide tasks panel if it's visible
-            tasksPanel.classList.add('hidden');
-            
-            // Show events panel
-            eventsPanel.classList.remove('hidden');
-            appContainer.classList.add('panel-visible');
-        }
-    });
-    
-    // Toggle tasks panel
-    toggleTasksButton.addEventListener('click', function() {
-        const isVisible = !tasksPanel.classList.contains('hidden');
-        
-        // If currently visible, hide it
-        if (isVisible) {
-            tasksPanel.classList.add('hidden');
-            appContainer.classList.remove('panel-visible');
-        } else {
-            // Hide events panel if it's visible
-            eventsPanel.classList.add('hidden');
-            
-            // Show tasks panel
-            tasksPanel.classList.remove('hidden');
-            appContainer.classList.add('panel-visible');
-        }
-    });
-    
-    // Handle window resize
-    window.addEventListener('resize', function() {
-        // Adjust panels based on window size
-        const windowWidth = window.innerWidth;
-        
-        // For very small screens, close panels automatically
-        if (windowWidth < 768 && 
-            ((!eventsPanel.classList.contains('hidden')) || 
-             (!tasksPanel.classList.contains('hidden')))) {
-            
-            eventsPanel.classList.add('hidden');
-            tasksPanel.classList.add('hidden');
-            appContainer.classList.remove('panel-visible');
-        }
-    });
+    if (toggleTasksButton) {
+        toggleTasksButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Tasks toggle button clicked');
+            document.dispatchEvent(new CustomEvent('command:tasks'));
+        });
+    }
+}
+
+// Initialize on DOM content loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize with a slight delay to ensure DOM is fully ready
+    setTimeout(initPanelAnimation, 300);
+});
+
+// Re-initialize when tiling system reports ready
+document.addEventListener('tiling:ready', function() {
+    console.log('Tiling system ready, setting up panel animation support');
+    initPanelAnimation();
+});
+
+// Also re-initialize on layout changes
+document.addEventListener('layout:changed', function() {
+    console.log('Layout changed, re-initializing panel animation support');
+    initPanelAnimation();
 });

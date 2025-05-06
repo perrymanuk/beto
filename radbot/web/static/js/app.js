@@ -139,6 +139,9 @@ function initializeUI() {
             handleCommandAutocomplete(event);
         });
         
+        // Set initial compact height
+        setTimeout(resizeTextarea, 0);
+        
         // Handle keyboard navigation for emoji suggestions
         chatInput.addEventListener('keydown', handleEmojiKeyNavigation);
         
@@ -457,13 +460,7 @@ function addMessage(role, content) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     
-    // Add timestamp for messages
-    const timestamp = new Date().toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
-    });
+    // Add timestamp for messages - removed to save space
     
     // Convert emoji shortcodes to actual emojis
     content = convertEmoji(content);
@@ -475,8 +472,10 @@ function addMessage(role, content) {
         contentDiv.dataset.agentPrompt = `${currentAgentName.toLowerCase()}@radbox:~$ `;
     }
     
-    // Use marked.js to render markdown
+    // Use marked.js to render markdown with compact options
     if (typeof marked !== 'undefined') {
+        // Process content to reduce blank lines for compactness
+        content = content.replace(/\n\s*\n/g, '\n');
         contentDiv.innerHTML = marked.parse(content);
     } else {
         contentDiv.textContent = content;
@@ -1865,7 +1864,13 @@ function resizeTextarea() {
     if (!chatInput) return;
     
     chatInput.style.height = 'auto';
-    chatInput.style.height = Math.min(chatInput.scrollHeight, 150) + 'px';
+    // Limit the max height to 100px for more compact interface
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+    
+    // If there's no text, keep height small (30px initial height)
+    if (!chatInput.value.trim()) {
+        chatInput.style.height = '30px';
+    }
 }
 
 // Render tasks to tasks container
@@ -1883,7 +1888,7 @@ function renderTasks() {
     // Create empty state message if needed
     const emptyState = document.createElement('div');
     emptyState.className = 'tasks-empty-state';
-    emptyState.textContent = 'No tasks found.';
+    emptyState.textContent = 'No tasks';
     
     // If no tasks array or it's empty, show empty state
     if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
@@ -2040,7 +2045,7 @@ function renderEvents() {
     // Create empty state message if needed
     const emptyState = document.createElement('div');
     emptyState.className = 'event-empty-state';
-    emptyState.textContent = 'No events recorded yet.';
+    emptyState.textContent = 'No events';
     
     // If no events array or it's empty, show empty state
     if (!events || !Array.isArray(events) || events.length === 0) {
@@ -2196,6 +2201,44 @@ function renderEvents() {
 function setupFilterControls() {
     console.log('Setting up filter controls');
     
+    // Reset any previous event handlers
+    if (window.closeDropdownsHandler) {
+        document.removeEventListener('click', window.closeDropdownsHandler);
+    }
+    
+    // New global click handler for document
+    window.closeDropdownsHandler = function(e) {
+        const projectFilterBtn = document.getElementById('project-filter-btn');
+        const projectFilterContent = document.getElementById('project-filter-content');
+        const statusFilterBtn = document.getElementById('status-filter-btn');
+        const statusFilterContent = document.getElementById('status-filter-content');
+        
+        // Check if click is outside all dropdown elements
+        const isOutsideProjectDropdown = projectFilterContent && 
+                                         !projectFilterContent.contains(e.target) && 
+                                         projectFilterBtn && 
+                                         !projectFilterBtn.contains(e.target);
+        
+        const isOutsideStatusDropdown = statusFilterContent && 
+                                        !statusFilterContent.contains(e.target) && 
+                                        statusFilterBtn && 
+                                        !statusFilterBtn.contains(e.target);
+        
+        // If clicking outside dropdowns, close them
+        if (isOutsideProjectDropdown && isOutsideStatusDropdown) {
+            if (projectFilterContent && projectFilterContent.classList.contains('show')) {
+                projectFilterContent.classList.remove('show');
+            }
+            
+            if (statusFilterContent && statusFilterContent.classList.contains('show')) {
+                statusFilterContent.classList.remove('show');
+            }
+        }
+    };
+    
+    // Add the document listener
+    document.addEventListener('click', window.closeDropdownsHandler);
+    
     // Event type filter
     const eventTypeFilter = document.getElementById('event-type-filter');
     if (eventTypeFilter) {
@@ -2206,19 +2249,105 @@ function setupFilterControls() {
     }
     
     // Project filter
-    const projectFilterBtn = document.getElementById('project-filter-btn');
+    let projectFilterBtn = document.getElementById('project-filter-btn');
     const projectFilterContent = document.getElementById('project-filter-content');
     
     if (projectFilterBtn && projectFilterContent) {
-        // Toggle dropdown
-        projectFilterBtn.addEventListener('click', () => {
+        // Remove any existing listeners to prevent duplicates
+        const newProjectFilterBtn = projectFilterBtn.cloneNode(true);
+        projectFilterBtn.parentNode.replaceChild(newProjectFilterBtn, projectFilterBtn);
+        projectFilterBtn = newProjectFilterBtn;
+        
+        // Remove any existing close buttons first
+        const existingCloseBtn = projectFilterContent.querySelector('.dropdown-close-btn');
+        if (existingCloseBtn) {
+            projectFilterContent.removeChild(existingCloseBtn);
+        }
+        
+        // Add a direct close button to the dropdown 
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'dropdown-close-btn';
+        closeBtn.innerHTML = '×';
+        closeBtn.style.position = 'absolute';
+        closeBtn.style.top = '5px';
+        closeBtn.style.right = '5px';
+        closeBtn.style.color = 'var(--accent-blue)';
+        closeBtn.style.backgroundColor = 'var(--bg-secondary)';
+        closeBtn.style.border = '1px solid var(--border-color)';
+        closeBtn.style.borderRadius = '3px';
+        closeBtn.style.width = '18px';
+        closeBtn.style.height = '18px';
+        closeBtn.style.padding = '0';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.fontSize = '14px';
+        closeBtn.style.lineHeight = '14px';
+        closeBtn.style.fontWeight = 'bold';
+        closeBtn.style.zIndex = '900';
+        closeBtn.style.display = 'flex';
+        closeBtn.style.alignItems = 'center';
+        closeBtn.style.justifyContent = 'center';
+        
+        // Give the button a title for accessibility
+        closeBtn.title = "Close dropdown";
+        
+        // Use addEventListener to ensure proper event handling
+        closeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            projectFilterContent.classList.remove('show');
+        });
+        
+        projectFilterContent.appendChild(closeBtn);
+        
+        // Toggle dropdown with new approach
+        projectFilterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Toggle this dropdown
             projectFilterContent.classList.toggle('show');
+            
+            // Hide status dropdown if it's open
+            const statusFilterContent = document.getElementById('status-filter-content');
+            if (statusFilterContent && statusFilterContent.classList.contains('show')) {
+                statusFilterContent.classList.remove('show');
+            }
+            
+            // Force a repaint to ensure visibility
+            setTimeout(() => {
+                if (projectFilterContent.classList.contains('show')) {
+                    projectFilterContent.style.display = 'block';
+                    // Bring to front
+                    projectFilterContent.style.zIndex = "500";
+                    // Scroll to top when opened
+                    projectFilterContent.scrollTop = 0;
+                }
+            }, 0);
         });
         
         // Handle "All Projects" checkbox
         const allProjectsCheckbox = document.getElementById('project-all');
         if (allProjectsCheckbox) {
-            allProjectsCheckbox.addEventListener('change', (e) => {
+            // Replace the checkbox with a fresh clone to remove any existing event listeners
+            const newAllProjectsCheckbox = allProjectsCheckbox.cloneNode(true);
+            allProjectsCheckbox.parentNode.replaceChild(newAllProjectsCheckbox, allProjectsCheckbox);
+            
+            // Stop propagation for all-projects checkbox with a simpler approach
+            newAllProjectsCheckbox.onclick = function(e) {
+                e.stopPropagation();
+                return true; // Allow the default checkbox behavior
+            };
+            
+            // Stop propagation for label clicks with a simpler approach
+            const allProjectsLabel = document.querySelector('label[for="project-all"]');
+            if (allProjectsLabel) {
+                allProjectsLabel.onclick = function(e) {
+                    e.stopPropagation();
+                    return true; // Allow the default label behavior
+                };
+            }
+            
+            newAllProjectsCheckbox.addEventListener('change', (e) => {
                 const projectCheckboxes = projectFilterContent.querySelectorAll('input[type="checkbox"]:not(#project-all)');
                 
                 if (e.target.checked) {
@@ -2262,7 +2391,18 @@ function setupFilterControls() {
                     label.htmlFor = `project-${projectId}`;
                     label.textContent = projectName;
                     
-                    checkbox.addEventListener('change', () => {
+                    // Stop propagation for checkbox clicks
+                    checkbox.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                    
+                    // Stop propagation for label clicks
+                    label.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                    });
+                    
+                    checkbox.addEventListener('change', (e) => {
+                        e.stopPropagation();
                         const allCheckbox = document.getElementById('project-all');
                         
                         if (checkbox.checked) {
@@ -2305,28 +2445,108 @@ function setupFilterControls() {
             });
         }
         
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!projectFilterBtn.contains(e.target) && !projectFilterContent.contains(e.target)) {
-                projectFilterContent.classList.remove('show');
-            }
-        });
+        // We're using the global closeDropdowns function now, so this is not needed
     }
     
     // Status filter
-    const statusFilterBtn = document.getElementById('status-filter-btn');
+    let statusFilterBtn = document.getElementById('status-filter-btn');
     const statusFilterContent = document.getElementById('status-filter-content');
     
     if (statusFilterBtn && statusFilterContent) {
-        // Toggle dropdown
-        statusFilterBtn.addEventListener('click', () => {
+        // Remove any existing listeners to prevent duplicates
+        const newStatusFilterBtn = statusFilterBtn.cloneNode(true);
+        statusFilterBtn.parentNode.replaceChild(newStatusFilterBtn, statusFilterBtn);
+        statusFilterBtn = newStatusFilterBtn;
+        
+        // Remove any existing close buttons first
+        const existingCloseStatusBtn = statusFilterContent.querySelector('.dropdown-close-btn');
+        if (existingCloseStatusBtn) {
+            statusFilterContent.removeChild(existingCloseStatusBtn);
+        }
+        
+        // Add a direct close button to the dropdown
+        const closeStatusBtn = document.createElement('button');
+        closeStatusBtn.className = 'dropdown-close-btn';
+        closeStatusBtn.innerHTML = '×';
+        closeStatusBtn.style.position = 'absolute';
+        closeStatusBtn.style.top = '5px';
+        closeStatusBtn.style.right = '5px';
+        closeStatusBtn.style.color = 'var(--accent-blue)';
+        closeStatusBtn.style.backgroundColor = 'var(--bg-secondary)';
+        closeStatusBtn.style.border = '1px solid var(--border-color)';
+        closeStatusBtn.style.borderRadius = '3px';
+        closeStatusBtn.style.width = '18px';
+        closeStatusBtn.style.height = '18px';
+        closeStatusBtn.style.padding = '0';
+        closeStatusBtn.style.cursor = 'pointer';
+        closeStatusBtn.style.fontSize = '14px';
+        closeStatusBtn.style.lineHeight = '14px';
+        closeStatusBtn.style.fontWeight = 'bold';
+        closeStatusBtn.style.zIndex = '900';
+        closeStatusBtn.style.display = 'flex';
+        closeStatusBtn.style.alignItems = 'center';
+        closeStatusBtn.style.justifyContent = 'center';
+        
+        // Give the button a title for accessibility
+        closeStatusBtn.title = "Close dropdown";
+        
+        // Use addEventListener to ensure proper event handling
+        closeStatusBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            statusFilterContent.classList.remove('show');
+        });
+        
+        statusFilterContent.appendChild(closeStatusBtn);
+        
+        // Toggle dropdown with new approach
+        statusFilterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Toggle this dropdown
             statusFilterContent.classList.toggle('show');
+            
+            // Hide project dropdown if it's open
+            if (projectFilterContent && projectFilterContent.classList.contains('show')) {
+                projectFilterContent.classList.remove('show');
+            }
+            
+            // Force a repaint to ensure visibility
+            setTimeout(() => {
+                if (statusFilterContent.classList.contains('show')) {
+                    statusFilterContent.style.display = 'block';
+                    // Bring to front
+                    statusFilterContent.style.zIndex = "500";
+                    // Scroll to top when opened
+                    statusFilterContent.scrollTop = 0;
+                }
+            }, 0);
         });
         
         // Handle "All Statuses" checkbox
         const allStatusesCheckbox = document.getElementById('status-all');
         if (allStatusesCheckbox) {
-            allStatusesCheckbox.addEventListener('change', (e) => {
+            // Replace the checkbox with a fresh clone to remove any existing event listeners
+            const newAllStatusesCheckbox = allStatusesCheckbox.cloneNode(true);
+            allStatusesCheckbox.parentNode.replaceChild(newAllStatusesCheckbox, allStatusesCheckbox);
+            
+            // Stop propagation for all-statuses checkbox with a simpler approach
+            newAllStatusesCheckbox.onclick = function(e) {
+                e.stopPropagation();
+                return true; // Allow the default checkbox behavior
+            };
+            
+            // Stop propagation for label clicks with a simpler approach
+            const allStatusesLabel = document.querySelector('label[for="status-all"]');
+            if (allStatusesLabel) {
+                allStatusesLabel.onclick = function(e) {
+                    e.stopPropagation();
+                    return true; // Allow the default label behavior
+                };
+            }
+            
+            newAllStatusesCheckbox.addEventListener('change', (e) => {
                 const statusCheckboxes = statusFilterContent.querySelectorAll('input[type="checkbox"]:not(#status-all)');
                 
                 if (e.target.checked) {
@@ -2352,7 +2572,21 @@ function setupFilterControls() {
         // Status checkboxes event handlers
         const statusCheckboxes = statusFilterContent.querySelectorAll('input[type="checkbox"]:not(#status-all)');
         statusCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', () => {
+            // Stop propagation for checkbox clicks
+            checkbox.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            
+            // Stop propagation for label clicks
+            const label = document.querySelector(`label[for="${checkbox.id}"]`);
+            if (label) {
+                label.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            }
+            
+            checkbox.addEventListener('change', (e) => {
+                e.stopPropagation();
                 const allCheckbox = document.getElementById('status-all');
                 
                 if (checkbox.checked) {
@@ -2393,12 +2627,7 @@ function setupFilterControls() {
             });
         });
         
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!statusFilterBtn.contains(e.target) && !statusFilterContent.contains(e.target)) {
-                statusFilterContent.classList.remove('show');
-            }
-        });
+        // We're using the global closeDropdowns function now, so this is not needed
     }
     
     // Task search

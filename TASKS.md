@@ -384,5 +384,8 @@ Phase 4: Security and Testing
 - [x] Connect tasks panel to task API at port 8001
 - [x] Add settings panel for API endpoint configuration
 - [x] Add dark mode toggle support
+- [x] Implement real events API endpoint with MCP events tracking
+- [x] Connect events panel to real ADK event tracking
+- [x] Display ADK event data in user-friendly format
 - [ ] Add notification system for agent status and tasks
-- [ ] Implement event filtering by timestamp
+- [x] Implement event filtering by timestamp and type

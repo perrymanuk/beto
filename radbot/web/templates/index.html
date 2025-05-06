@@ -56,12 +56,9 @@
             <div class="chat-messages" id="chat-messages">
                 <div class="message system">
                     <div class="message-content">
-                        <p>RadBot V8.8.Beta</p>
-                        <p>Agent active: BETO</p>
-                        <p>Session started: Mon May 5 12:00:00 PDT 2025</p>
+                        <p>RadBot V8.8.Beta | Agent: BETO | Session: Mon May 5 12:00:00 PDT 2025</p>
                         <p>Welcome to RadBot Interface</p>
-                        <p>Type 'help' for available commands. Type message + ENTER to begin.</p>
-                        <p>Use /tasks or /events to control the interface.</p>
+                        <p>'help' for commands | message + ENTER to begin | /tasks /events for UI</p>
                     </div>
                 </div>
             </div>
@@ -87,33 +84,41 @@
         <div class="tasks-content">
             <div class="tasks-filter">
                 <div class="filter-group">
-                    <div class="filter-dropdown">
-                        <button id="project-filter-btn">All Projects</button>
-                        <div class="filter-dropdown-content" id="project-filter-content">
-                            <div class="filter-option">
-                                <input type="checkbox" id="project-all" value="all" checked>
-                                <label for="project-all">All Projects</label>
+                    <div class="simple-select" id="project-select-container">
+                        <button id="project-select-btn" class="select-button">
+                            <span id="project-select-text">All Projects</span>
+                            <span class="select-arrow">▼</span>
+                        </button>
+                        <div id="project-select-dropdown" class="select-dropdown">
+                            <div class="select-option" data-value="all">
+                                <input type="radio" id="project-option-all" name="project" value="all" checked>
+                                <label for="project-option-all">All Projects</label>
                             </div>
+                            <!-- Additional project options will be added dynamically -->
                         </div>
                     </div>
-                    <div class="filter-dropdown">
-                        <button id="status-filter-btn">All Statuses</button>
-                        <div class="filter-dropdown-content" id="status-filter-content">
-                            <div class="filter-option">
-                                <input type="checkbox" id="status-all" value="all" checked>
-                                <label for="status-all">All Statuses</label>
+                    
+                    <div class="simple-select" id="status-select-container">
+                        <button id="status-select-btn" class="select-button">
+                            <span id="status-select-text">All Statuses</span>
+                            <span class="select-arrow">▼</span>
+                        </button>
+                        <div id="status-select-dropdown" class="select-dropdown">
+                            <div class="select-option" data-value="all">
+                                <input type="radio" id="status-option-all" name="status" value="all" checked>
+                                <label for="status-option-all">All Statuses</label>
                             </div>
-                            <div class="filter-option">
-                                <input type="checkbox" id="status-backlog" value="backlog">
-                                <label for="status-backlog">Backlog</label>
+                            <div class="select-option" data-value="backlog">
+                                <input type="radio" id="status-option-backlog" name="status" value="backlog">
+                                <label for="status-option-backlog">Backlog</label>
                             </div>
-                            <div class="filter-option">
-                                <input type="checkbox" id="status-inprogress" value="inprogress">
-                                <label for="status-inprogress">In Progress</label>
+                            <div class="select-option" data-value="inprogress">
+                                <input type="radio" id="status-option-inprogress" name="status" value="inprogress">
+                                <label for="status-option-inprogress">In Progress</label>
                             </div>
-                            <div class="filter-option">
-                                <input type="checkbox" id="status-done" value="done">
-                                <label for="status-done">Done</label>
+                            <div class="select-option" data-value="done">
+                                <input type="radio" id="status-option-done" name="status" value="done">
+                                <label for="status-option-done">Done</label>
                             </div>
                         </div>
                     </div>
@@ -135,6 +140,7 @@
                 <select id="event-type-filter">
                     <option value="all">All Events</option>
                     <option value="tool_call">Tool Calls</option>
+                    <option value="model_response">Model Responses</option>
                     <option value="agent_transfer">Agent Transfers</option>
                     <option value="planner">Planner</option>
                     <option value="other">Other</option>
@@ -161,7 +167,24 @@
     
     <!-- Settings Dialog Removed -->
     
+    <!-- Core UI Scripts (Load First) -->
     <script src="/static/js/tiling.js"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/border-fix.js"></script>
+    
+    <!-- Modular JS Architecture -->
+    <script type="module" src="/static/js/chat.js"></script>
+    <script type="module" src="/static/js/emoji.js"></script>
+    <script type="module" src="/static/js/commands.js"></script>
+    <script type="module" src="/static/js/status.js"></script>
+    <script type="module" src="/static/js/selects.js"></script>
+    <script type="module" src="/static/js/socket.js"></script>
+    <script type="module" src="/static/js/app_main.js"></script>
+    
+    <!-- Support Scripts (Load Last) -->
+    <script src="/static/js/matrix-background.js"></script>
+    <script src="/static/js/panel-trigger.js"></script>
+    
+    <!-- Legacy script kept for backward compatibility -->
+    <!-- <script src="/static/js/app.js"></script> -->
 </body>
 </html>
