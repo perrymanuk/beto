@@ -1093,6 +1093,42 @@ function showEventDetails(event) {
         
         detailsContainer.appendChild(categorySection);
     }
+    
+    // Add a Raw JSON section to show the full event payload
+    const rawSection = document.createElement('div');
+    rawSection.className = 'detail-section raw-json-section';
+    
+    const rawHeader = document.createElement('div');
+    rawHeader.className = 'raw-json-header';
+    rawHeader.innerHTML = '<h4>Raw Event Data</h4><button class="toggle-raw-json">Show</button>';
+    rawSection.appendChild(rawHeader);
+    
+    const rawContent = document.createElement('div');
+    rawContent.className = 'raw-json-content hidden';
+    
+    // Create a pretty-printed JSON display
+    const rawJson = document.createElement('pre');
+    rawJson.className = 'raw-json';
+    
+    // Remove circular references before stringifying
+    const cleanedEvent = JSON.parse(JSON.stringify(event, (key, value) => {
+        // Skip parent/circular references that can't be stringified
+        if (key === 'parent' || key === '_parent') return undefined;
+        return value;
+    }));
+    
+    rawJson.textContent = JSON.stringify(cleanedEvent, null, 2);
+    rawContent.appendChild(rawJson);
+    rawSection.appendChild(rawContent);
+    
+    // Add toggle behavior
+    const toggleButton = rawHeader.querySelector('.toggle-raw-json');
+    toggleButton.addEventListener('click', function() {
+        rawContent.classList.toggle('hidden');
+        this.textContent = rawContent.classList.contains('hidden') ? 'Show' : 'Hide';
+    });
+    
+    detailsContainer.appendChild(rawSection);
 }
 
 // Generate a UUID for session ID

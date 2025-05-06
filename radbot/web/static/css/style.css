@@ -1317,6 +1317,64 @@ body {
   color: var(--text-primary);
 }
 
+/* Raw JSON styling */
+.raw-json-section {
+  margin-top: 1rem;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 0.5rem;
+}
+
+.raw-json-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.raw-json-header h4 {
+  margin: 0;
+  color: var(--term-amber);
+  font-size: 0.75rem;
+}
+
+.toggle-raw-json {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.1rem 0.3rem;
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-raw-json:hover {
+  background-color: var(--accent-blue);
+  color: var(--bg-primary);
+}
+
+.raw-json-content {
+  transition: max-height 0.3s ease;
+  overflow: hidden;
+}
+
+.raw-json-content.hidden {
+  display: none;
+}
+
+.raw-json {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-left: 2px solid var(--term-amber);
+  padding: 0.5rem;
+  font-family: "Source Code Pro", monospace;
+  font-size: 0.65rem;
+  color: var(--text-primary);
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .detail-item.status-success strong {
   color: var(--term-green);
 }
