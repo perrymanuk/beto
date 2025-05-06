@@ -61,7 +61,8 @@ def create_research_agent(
     else:
         logger.warning("No tools provided to research agent")
     
-    # Create the research agent
+    # Create the research agent with explicit name logging
+    logger.info(f"EXPLICIT NAME ASSIGNMENT: Creating research agent with name='{name}'")
     research_agent = ResearchAgent(
         name=name,
         model=model,

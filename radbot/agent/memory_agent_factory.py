@@ -112,7 +112,7 @@ def create_memory_enabled_agent(
         # Also recreate the runner to ensure it has the memory service
         agent.runner = Runner(
             agent=agent.root_agent,
-            app_name="radbot",
+            app_name="beto",  # Changed from "radbot" to match agent name
             session_service=session_service,
             memory_service=memory_service
         )

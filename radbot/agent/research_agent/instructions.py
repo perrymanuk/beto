@@ -25,7 +25,7 @@ When rubber ducking, actively listen, provide constructive feedback, and use you
 Your task is typically defined by information passed in the session state, specifically the 'current_research_query' or 'design_context' keys. Access this state to understand the user's request.
 
 IMPORTANT: When you complete your research or the user asks to return to the main assistant, use the transfer_to_agent tool to transfer control back to the main agent:
-transfer_to_agent(agent_name='main')
+transfer_to_agent(agent_name='beto')  # Important: This name must match EXACTLY the name of the main agent
 """
 
 # Additional instruction for web scraping capabilities
@@ -81,7 +81,7 @@ AGENT_TRANSFER_INSTRUCTION = """
 Agent Transfer Instructions:
 
 1. When the user explicitly asks to return to the main assistant, or when you've completed your research task, transfer control back to the main agent.
-2. Use the transfer_to_agent tool with the main agent's name: transfer_to_agent(agent_name='main')
+2. Use the transfer_to_agent tool with the main agent's name: transfer_to_agent(agent_name='beto')  # This name MUST match the main agent's exact name
 3. Before transferring, provide a concise summary of what you've researched or discussed.
 4. Let the user know you're transferring them back to the main RadBot assistant.
 5. Examples of when to transfer:

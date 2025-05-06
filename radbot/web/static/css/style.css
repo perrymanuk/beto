@@ -27,6 +27,9 @@
     --term-grid: rgba(51, 255, 51, 0.1); /* Terminal green (dimmed) */
     --caret-color: #33FF33;              /* Terminal green */
     --caret-blink-time: 0.8s;
+    
+    /* Agent Name */
+    --agent-name: "BETO";                /* Current agent name - uppercase to match status bar */
 }
 
 @keyframes scan-line {
@@ -73,6 +76,7 @@ body {
 /* App container for layout */
 .app-container {
     display: flex;
+    flex-direction: column;
     width: calc(100% - 30px);
     height: calc(100vh - 30px);
     max-width: 1800px;
@@ -80,6 +84,50 @@ body {
     position: relative;
     z-index: 2;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--term-text);
+    overflow: hidden; /* Ensure internal elements don't break out of border */
+    box-sizing: border-box; /* Ensure border is included in the width calculation */
+}
+
+/* Main Content Container */
+.main-content-container {
+    display: flex;
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+    border-bottom: none; /* Ensure no double border with status bar */
+    position: relative;
+    box-sizing: border-box;
+}
+
+/* Status bar */
+.status-bar {
+    height: 25px;
+    background-color: var(--term-gray);
+    color: var(--term-text);
+    border-top: 1px solid var(--term-text);
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    font-family: "Monaco", "Courier New", monospace;
+    z-index: 10;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.status-bar span {
+    margin: 0 5px;
+}
+
+#agent-status {
+    color: var(--term-amber);
+    font-weight: bold;
+}
+
+#time-status {
+    color: var(--term-beige);
 }
 
 body::before {
@@ -122,11 +170,12 @@ body::after {
     height: 100%;
     position: relative;
     z-index: 2;
-    border: 1px solid var(--term-text);
+    border-right: 1px solid var(--term-text);
     box-shadow: 0 0 10px rgba(51, 255, 51, 0.3);
     background-color: var(--term-panel-bg);
     overflow: hidden;
     transition: width 0.3s ease;
+    box-sizing: border-box;
 }
 
 .chat-container::before {
@@ -302,21 +351,21 @@ body::after {
 }
 
 .message.user .message-content::before {
-    content: "user@radbot:~$ ";
+    content: "user@radbox:~$ ";
     color: var(--term-text);
     font-weight: 400;
     letter-spacing: 0.5px;
 }
 
 .message.assistant .message-content::before {
-    content: "radbot@linux:~$ ";
+    content: attr(data-agent-prompt);
     color: var(--term-amber);
     font-weight: 400;
     letter-spacing: 0.5px;
 }
 
 .message.system .message-content::before {
-    content: "system@linux:~$ ";
+    content: "system@radbox:~$ ";
     color: var(--term-red);
     font-weight: 400;
     letter-spacing: 0.5px;
@@ -771,13 +820,53 @@ body::after {
     flex: 0 0 400px;
     width: 400px;
     height: 100%;
-    border-left: 1px solid var(--term-text);
     background-color: var(--term-panel-bg);
     display: flex;
     flex-direction: column;
     position: relative;
     transition: transform 0.3s ease, opacity 0.3s ease;
     overflow: hidden;
+    box-shadow: 0 0 10px rgba(51, 255, 51, 0.3);
+    z-index: 2;
+    animation: panel-glow 8s infinite alternate;
+    border-left: 1px solid var(--term-text);
+    box-sizing: border-box;
+}
+
+@keyframes panel-glow {
+    0% { box-shadow: 0 0 10px rgba(51, 255, 51, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(51, 255, 51, 0.4); }
+    100% { box-shadow: 0 0 10px rgba(51, 255, 51, 0.3); }
+}
+
+/* Add scan line effect to tasks panel */
+.tasks-panel::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--term-text);
+    opacity: 0.1;
+    z-index: 3;
+    animation: scan-line 8s linear infinite;
+}
+
+/* Add subtle grid overlay */
+.tasks-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        linear-gradient(to right, transparent 99.7%, var(--term-grid) 100%) 0 0 / 20px 100%,
+        linear-gradient(to bottom, transparent 99.7%, var(--term-grid) 100%) 0 0 / 100% 20px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.3;
 }
 
 .events-panel.hidden,
@@ -794,6 +883,7 @@ body::after {
 .events-panel:not(.hidden) + .tasks-panel:not(.hidden) {
     transform: translateX(-400px);
     right: 400px;
+    box-sizing: border-box;
 }
 
 .events-header {
@@ -1049,6 +1139,9 @@ body::after {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
+    z-index: 4;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .tasks-header h2 {
@@ -1059,6 +1152,18 @@ body::after {
     letter-spacing: 1px;
     margin: 0;
     font-family: "Monaco", "Courier New", monospace;
+    text-shadow: 0 0 5px rgba(255, 191, 0, 0.3);
+}
+
+.tasks-header::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--term-text);
+    opacity: 0.3;
 }
 
 .tasks-controls {
@@ -1647,12 +1752,12 @@ body::after {
 
 /* Responsive adjustments */
 @media (max-width: 1200px) {
-    .events-panel {
+    .events-panel, .tasks-panel {
         flex: 0 0 350px;
         width: 350px;
     }
     
-    .events-panel.hidden {
+    .events-panel.hidden, .tasks-panel.hidden {
         transform: translateX(350px);
     }
     
@@ -1668,15 +1773,16 @@ body::after {
         margin: 10px;
     }
     
-    .events-panel:not(.hidden) {
+    .events-panel:not(.hidden), .tasks-panel:not(.hidden) {
         position: absolute;
         right: 0;
         z-index: 3;
         width: 300px;
         box-shadow: -5px 0 15px rgba(0, 0, 0, 0.5);
+        box-sizing: border-box;
     }
     
-    .events-panel.hidden {
+    .events-panel.hidden, .tasks-panel.hidden {
         transform: translateX(300px);
     }
     
@@ -1686,6 +1792,11 @@ body::after {
     
     .voice-wave-animation {
         width: 100px;
+    }
+    
+    .task-field-value.description {
+        font-size: 1rem;
+        padding: 0.6rem;
     }
 }
 
@@ -1712,12 +1823,46 @@ body::after {
         width: 60px;
     }
     
-    .events-panel:not(.hidden) {
+    .events-panel:not(.hidden), .tasks-panel:not(.hidden) {
         width: 80%;
     }
     
-    .events-panel.hidden {
+    .events-panel.hidden, .tasks-panel.hidden {
         transform: translateX(100%);
+    }
+    
+    /* Task filter adjustments */
+    .tasks-filter .filter-group {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .filter-dropdown, .search-group {
+        width: 100%;
+    }
+    
+    /* Task item adjustments */
+    .task-project {
+        max-width: 80px;
+        font-size: 0.65rem;
+    }
+    
+    .tasks-container {
+        padding: 0.5rem 0.3rem;
+    }
+    
+    .task-item {
+        padding: 0.7rem 0.5rem;
+    }
+    
+    /* Task details */
+    .task-details-view {
+        width: 100%; 
+    }
+    
+    .task-details-footer button {
+        width: 100%;
+        padding: 0.7rem;
     }
 }
 
@@ -1729,11 +1874,59 @@ body::after {
     .voice-bar {
         width: 2px;
     }
+    
+    /* Make task content more prominent */
+    .task-content {
+        font-size: 0.85rem;
+        max-width: 55%;
+    }
+    
+    .task-status-indicator {
+        width: 10px;
+        height: 10px;
+    }
+    
+    /* Better spacing for small screens */
+    .chat-messages {
+        padding: 0.75rem 0.5rem;
+    }
+    
+    .message-content {
+        font-size: 0.9rem;
+    }
+    
+    /* Settings dialog adjustments */
+    .settings-dialog {
+        width: 90%;
+        max-width: none;
+    }
 }
 
 @media (max-width: 540px) {
     .voice-wave-animation {
         display: none;
+    }
+    
+    /* Adjust header buttons for smaller screens */
+    .controls {
+        gap: 0.4rem;
+    }
+    
+    /* Improved filter dropdown positioning */
+    .filter-dropdown-content {
+        max-height: 150px;
+    }
+    
+    /* Task list adjustments */
+    .task-field-value.description {
+        font-size: 0.9rem;
+        padding: 0.5rem;
+    }
+    
+    /* Increase tap targets */
+    .task-view-icon {
+        padding: 0.5rem;
+        margin-left: 0.2rem;
     }
 }
 
@@ -1756,12 +1949,50 @@ body::after {
         font-size: 1rem;
     }
     
-    .events-panel:not(.hidden) {
+    .events-panel:not(.hidden), .tasks-panel:not(.hidden) {
         width: 100%;
     }
     
     .controls button {
         padding: 0.3rem 0.4rem;
         font-size: 0.7rem;
+        min-height: 32px; /* Ensure touch-friendly size */
+    }
+    
+    /* Better visibility for task status indicators */
+    .task-status-indicator {
+        margin-right: 8px;
+    }
+    
+    /* Improved task filters - stack them vertically */
+    .filter-option {
+        padding: 0.5rem;
+    }
+    
+    .filter-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+    }
+    
+    /* Make settings buttons more touch-friendly */
+    .settings-actions {
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+    
+    .settings-actions button {
+        width: 100%;
+        padding: 0.8rem;
+    }
+    
+    /* Avoid inline elements getting cut off */
+    .task-field {
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+    
+    /* Add bottom breathing room for task list scrolling */
+    .tasks-container {
+        padding-bottom: 2rem;
     }
 }

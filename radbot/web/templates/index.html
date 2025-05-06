@@ -2,17 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>RadBot Linux Interface</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/fix.css">
+    <link rel="stylesheet" href="/static/css/header-status.css">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/emoji-toolkit@7.0.0/lib/js/joypixels.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-toolkit@7.0.0/extras/css/joypixels.min.css">
 </head>
 <body>
-    <div class="app-container">
-        <div class="chat-container">
+    <div class="app-container" id="app-container">
+        <div class="main-content-container">
+            <div class="chat-container">
             <div class="chat-header">
                 <div class="header-left">
                     <h1>RadBot V8.8.Beta</h1>
@@ -29,12 +35,16 @@
                         <div class="voice-bar"></div>
                         <div class="voice-bar"></div>
                     </div>
+                    <!-- Status Info Added to Header -->
+                    <div class="header-status">
+                        <span id="agent-status">AGENT: BETO</span> | <span id="time-status">TIME: 00:00:00</span> | <span id="connection-status">CONNECTION: ACTIVE</span>
+                    </div>
                 </div>
                 <div class="controls">
-                    <button id="toggle-tasks-button" title="Toggle tasks panel">
+                    <button id="toggle-tasks-button" title="Show/hide tasks panel (closes events panel if open)">
                         TASKS
                     </button>
-                    <button id="toggle-events-button" title="Toggle events panel">
+                    <button id="toggle-events-button" title="Show/hide events panel (closes tasks panel if open)">
                         EVENTS
                     </button>
                     <button id="reset-button" title="Reset conversation">
@@ -46,7 +56,7 @@
                 <div class="message system">
                     <div class="message-content">
                         <p>RadBot V8.8.Beta</p>
-                        <p>Agent active: RadBot</p>
+                        <p>Agent active: BETO</p>
                         <p>Session started: Mon May 5 12:00:00 PDT 2025</p>
                         <p>Welcome to RadBot Interface</p>
                         <p>Type 'help' for available commands.</p>
@@ -55,9 +65,6 @@
                 </div>
             </div>
             <div class="chat-input-container">
-                <div class="status-indicator" id="status-indicator">
-                    <span id="status-text">system: online | memory: 64mb | connection: active</span>
-                </div>
                 <div class="chat-input-wrapper">
                     <textarea 
                         id="chat-input" 
@@ -71,6 +78,7 @@
                     <div id="emoji-suggestions" class="emoji-suggestions hidden"></div>
                 </div>
             </div>
+            <!-- Status bar removed as it's now in the header -->
         </div>
         
         <!-- Events Panel -->
@@ -199,7 +207,9 @@
                 </div>
             </div>
         </div>
+        </div>
     </div>
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/border-fix.js"></script>
 </body>
 </html>

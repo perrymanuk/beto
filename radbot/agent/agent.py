@@ -65,7 +65,7 @@ class RadBotAgent:
         self.session_service = session_service or InMemorySessionService()
         
         # Store app_name for use with session service
-        self.app_name = "radbot"
+        self.app_name = "beto"  # Changed from "radbot" to match agent name
         
         # Determine the model to use
         self.model = model or self.config.get_main_model()
@@ -126,7 +126,7 @@ class RadBotAgent:
         else:
             self.runner = Runner(
                 agent=self.root_agent,
-                app_name="radbot",
+                app_name=self.app_name,  # Use self.app_name for consistency
                 session_service=self.session_service
             )
     
@@ -462,7 +462,7 @@ class AgentFactory:
 
 def create_runner(
     agent: Agent, 
-    app_name: str = "radbot",
+    app_name: str = "beto",  # Changed from "radbot" to match agent name
     session_service: Optional[SessionService] = None
 ) -> Runner:
     """Create an ADK Runner with the specified agent.

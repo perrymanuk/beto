@@ -164,7 +164,7 @@ def search_past_conversations(
         
         # Search memories
         results = memory_service.search_memory(
-            app_name="radbot",
+            app_name="beto",  # Changed from "radbot" to match agent name
             user_id=user_id,
             query=query,
             limit=result_limit,

@@ -530,7 +530,7 @@ def create_agent(tools: Optional[List[Any]] = None):
     # For now, create regular agent without GenAI function calling
     # This approach is more compatible across ADK versions
     agent = Agent(
-        name="radbot_web",
+        name="beto",
         model=model_name,
         instruction=instruction,
         description="The main agent that handles user requests with memory capabilities.",
@@ -621,38 +621,125 @@ def create_agent(tools: Optional[List[Any]] = None):
             logger.info(f"Research Tool {i+1}: {tool_name}")
         logger.info("===========================================")
         
-        # Add the research agent as a subagent to the main agent
-        agent.sub_agents.append(research_agent)
-        logger.info("Successfully added research agent as a subagent")
+        # Add the scout agent as a subagent directly to the main agent
+        # This is critical for agent transfers to work correctly - the scout must be listed in the agent.sub_agents
+        if hasattr(agent, 'sub_agents'):
+            # Force reinitialization - this is crucial for ADK to register the agent in the tree
+            agent.sub_agents = []  # Clear existing sub-agents
+            agent.sub_agents.append(research_agent)
+            
+            # Bidirectional linking - research_agent should know its parent
+            if hasattr(research_agent, 'parent'):
+                research_agent.parent = agent
+                
+            # Verify registration
+            sub_agent_names = [sa.name for sa in agent.sub_agents if hasattr(sa, 'name')]
+            logger.info(f"Verified agent tree structure - Root agent: '{agent.name}', Sub-agents: {sub_agent_names}")
+        else:
+            agent.sub_agents = []
+            agent.sub_agents.append(research_agent)
+            logger.info(f"Created new sub_agents list with scout agent")
+            
+        # Ensure bidirectional relationship
+        if hasattr(research_agent, '_parent'):
+            research_agent._parent = agent
+            logger.info(f"Set parent (_parent) reference on scout agent to '{agent.name}'")
+        elif hasattr(research_agent, 'parent'):
+            research_agent.parent = agent
+            logger.info(f"Set parent reference on scout agent to '{agent.name}'")
+            
+        # Force agent name consistency one more time
+        if hasattr(research_agent, 'name') and research_agent.name != 'scout':
+            logger.warning(f"Scout agent name mismatch: '{research_agent.name}' not 'scout', fixing...")
+            research_agent.name = 'scout'
         
-        # Add instruction for research agent delegation
+        logger.info("Successfully added scout agent as a subagent")
+        
+        # Debug the agent tree structure extensively
+        if agent.sub_agents:
+            sub_agent_names = [sub_agent.name for sub_agent in agent.sub_agents if hasattr(sub_agent, 'name')]
+            logger.info(f"Agent tree structure - Root agent: '{agent.name}', Sub-agents: {sub_agent_names}")
+            
+            # Print details of each sub-agent
+            for i, sub_agent in enumerate(agent.sub_agents):
+                sa_name = sub_agent.name if hasattr(sub_agent, 'name') else f"unnamed-{i}"
+                
+                # Check parent references
+                parent_ref = None
+                if hasattr(sub_agent, 'parent'):
+                    parent_name = sub_agent.parent.name if hasattr(sub_agent.parent, 'name') else "unnamed-parent"
+                    parent_ref = f"parent.name='{parent_name}'"
+                elif hasattr(sub_agent, '_parent'):
+                    parent_name = sub_agent._parent.name if hasattr(sub_agent._parent, 'name') else "unnamed-parent"
+                    parent_ref = f"_parent.name='{parent_name}'"
+                
+                # Log details
+                logger.info(f"Sub-agent {i}: name='{sa_name}', parent_ref={parent_ref}")
+                
+                # Check bidirectional relationship
+                if parent_ref:
+                    # Verify parent's sub_agents contains this agent
+                    if hasattr(sub_agent, 'parent') and hasattr(sub_agent.parent, 'sub_agents'):
+                        found_self = any(sa is sub_agent for sa in sub_agent.parent.sub_agents)
+                        logger.info(f"  - Bidirectional check: parent.sub_agents contains this agent: {found_self}")
+        else:
+            logger.info(f"Agent tree structure - Root agent: '{agent.name}', No sub-agents found")
+            
+        # Debug transfer_to_agent function access
+        from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+        logger.info(f"transfer_to_agent function available: {bool(transfer_to_agent)}")
+        # Check if transfer tool is in agent's tools
+        has_transfer_tool = False
+        if hasattr(agent, 'tools'):
+            for tool in agent.tools:
+                if hasattr(tool, 'name') and tool.name == 'transfer_to_agent':
+                    has_transfer_tool = True
+                    break
+                elif hasattr(tool, '__name__') and tool.__name__ == 'transfer_to_agent':
+                    has_transfer_tool = True
+                    break
+        logger.info(f"Main agent has transfer_to_agent tool: {has_transfer_tool}")
+        
+        # Check research agent's tools
+        if research_agent and hasattr(research_agent, 'tools'):
+            has_research_transfer_tool = False
+            for tool in research_agent.tools:
+                if hasattr(tool, 'name') and tool.name == 'transfer_to_agent':
+                    has_research_transfer_tool = True
+                    break
+                elif hasattr(tool, '__name__') and tool.__name__ == 'transfer_to_agent':
+                    has_research_transfer_tool = True
+                    break
+            logger.info(f"Research agent has transfer_to_agent tool: {has_research_transfer_tool}")
+        
+        # Add instruction for scout agent delegation
         research_agent_instruction = """
         If the user has a technical research question or wants to discuss a design/architecture,
-        you can transfer the conversation to scout by using the
+        you can transfer the conversation to the scout agent by using the
         transfer_to_agent function. Example: transfer_to_agent(agent_name='scout')
         
-        The scout is specialized for:
+        The scout agent is specialized for:
         1. Technical research using web search, internal knowledge, and GitHub
         2. Design discussions (rubber duck debugging) to help think through technical designs
         
         Before transferring, make sure you've fully understood what the user wants to research
-        or discuss, then use session.state to pass the context to the research agent.
+        or discuss, then use session.state to pass the context to the scout agent.
         
-        The research agent can transfer control back to you using the same function:
-        transfer_to_agent(agent_name='radbot_web')
+        The scout agent can transfer control back to you using the same function:
+        transfer_to_agent(agent_name='beto')
         """
         instruction += "\n\n" + research_agent_instruction
         agent.instruction = instruction
-        logger.info("Added research agent delegation instructions to main agent")
+        logger.info("Added scout agent delegation instructions to main agent")
     except Exception as e:
-        logger.warning(f"Failed to add research agent as a subagent: {str(e)}")
-        logger.debug("Research agent creation error details:", exc_info=True)
+        logger.warning(f"Failed to add scout agent as a subagent: {str(e)}")
+        logger.debug("Scout agent creation error details:", exc_info=True)
     
     logger.info(f"Created ADK BaseAgent for web UI with {len(all_tools)} tools")
     return agent
 
 # Create a root_agent instance for ADK web to use directly
 root_agent = create_agent()
-logger.info("Created root_agent instance for direct use by ADK web")
+logger.info(f"Created root_agent instance for ADK web with name '{root_agent.name}' and {len(root_agent.sub_agents) if hasattr(root_agent, 'sub_agents') else 0} sub-agents")
 
 # Using REST API approach for Home Assistant

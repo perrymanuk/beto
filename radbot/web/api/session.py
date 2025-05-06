@@ -47,10 +47,22 @@ class SessionRunner:
         self.session_id = session_id
         self.session_service = InMemorySessionService()
         
+        # Debug the root_agent directly for diagnosis of transfers
+        if hasattr(root_agent, 'name'):
+            logger.info(f"DIRECT AGENT NAME CHECK: root_agent.name='{root_agent.name}'")
+        else:
+            logger.warning("root_agent has no 'name' attribute!")
+            
+        # This is critical: explicitly set the name of the root_agent to match what the scout agent uses in transfers
+        if hasattr(root_agent, 'name') and root_agent.name != 'beto':
+            logger.warning(f"CRITICAL NAME MISMATCH: root_agent.name='{root_agent.name}' should be 'beto' - attempting to fix")
+            root_agent.name = 'beto'
+            logger.info(f"FIXED: root_agent.name now set to '{root_agent.name}'")
+        
         # Create the ADK Runner with explicit app_name
         self.runner = Runner(
             agent=root_agent,
-            app_name="radbot",  # Required keyword parameter
+            app_name="beto",  # Changed from "radbot" to match agent name for transfers
             session_service=self.session_service
         )
         
@@ -64,6 +76,15 @@ class SessionRunner:
             sub_agent_count = len(root_agent.sub_agents)
             sub_agent_names = [sa.name for sa in root_agent.sub_agents if hasattr(sa, 'name')]
             logger.info(f"SessionRunner has {sub_agent_count} sub-agents: {', '.join(sub_agent_names)}")
+            
+            # Debug the agent tree structure in detail
+            logger.info(f"ROOT AGENT NAME: '{root_agent.name if hasattr(root_agent, 'name') else 'unnamed'}'")
+            logger.info(f"RUNNER APP_NAME: '{self.runner.app_name if hasattr(self.runner, 'app_name') else 'no app_name'}'")
+            for i, sa in enumerate(root_agent.sub_agents):
+                sa_name = sa.name if hasattr(sa, 'name') else f"unnamed-{i}"
+                logger.info(f"SUB-AGENT {i}: NAME='{sa_name}'")
+        else:
+            logger.info("No sub-agents found in the SessionRunner")
     
     def process_message(self, message: str) -> dict:
         """Process a user message and return the agent's response with event data.
@@ -83,14 +104,14 @@ class SessionRunner:
             
             # Get or create session
             session = self.session_service.get_session(
-                app_name="radbot",
+                app_name="beto",
                 user_id=self.user_id,
                 session_id=self.session_id
             )
             
             if not session:
                 session = self.session_service.create_session(
-                    app_name="radbot",
+                    app_name="beto",
                     user_id=self.user_id,
                     session_id=self.session_id
                 )
@@ -406,14 +427,14 @@ class SessionRunner:
         try:
             # Simply delete and recreate the session
             self.session_service.delete_session(
-                app_name="radbot",
+                app_name="beto",
                 user_id=self.user_id,
                 session_id=self.session_id
             )
             
             # Create a new session
             self.session_service.create_session(
-                app_name="radbot",
+                app_name="beto",
                 user_id=self.user_id,
                 session_id=self.session_id
             )

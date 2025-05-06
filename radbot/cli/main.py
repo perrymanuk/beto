@@ -308,7 +308,7 @@ async def setup_agent() -> Optional[RadBotAgent]:
                 # Create runner directly with explicit app_name
                 runner = Runner(
                     agent=root_agent,
-                    app_name="radbot",  # Explicitly provide app_name
+                    app_name="beto",  # Changed from "radbot" to match agent name for transfers
                     session_service=session_service
                 )
                 
@@ -324,7 +324,7 @@ async def setup_agent() -> Optional[RadBotAgent]:
                 # Replace the auto-created runner with our explicit one
                 agent.runner = runner
                 agent.root_agent = root_agent
-                agent.app_name = "radbot"  # Ensure this is set
+                agent.app_name = "beto"  # Changed from "radbot" to match agent name for transfers
                 
                 logger.info("Created basic agent without memory in direct mode")          
             except Exception as e:
@@ -349,7 +349,7 @@ async def setup_agent() -> Optional[RadBotAgent]:
                 # Create runner with explicit app_name
                 runner = Runner(
                     agent=root_agent,
-                    app_name="radbot",  # Explicitly provide app_name
+                    app_name="beto",  # Changed from "radbot" to match agent name for transfers
                     session_service=session_service
                 )
                 
@@ -365,7 +365,7 @@ async def setup_agent() -> Optional[RadBotAgent]:
                 # Replace auto-created components
                 agent.runner = runner
                 agent.root_agent = root_agent
-                agent.app_name = "radbot"  # Ensure this is set
+                agent.app_name = "beto"  # Changed from "radbot" to match agent name for transfers
                 
                 logger.info("Created ultra-basic agent in direct fallback mode")
         

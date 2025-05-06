@@ -7,8 +7,11 @@ const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
 const sendButton = document.getElementById('send-button');
 const resetButton = document.getElementById('reset-button');
-const statusIndicator = document.getElementById('status-indicator');
-const statusText = document.getElementById('status-text');
+
+// Status Bar Elements
+const agentStatus = document.getElementById('agent-status');
+const timeStatus = document.getElementById('time-status');
+const connectionStatus = document.getElementById('connection-status');
 
 // Events Panel Elements
 const eventsPanel = document.getElementById('events-panel');
@@ -64,6 +67,7 @@ let selectedProjects = ['all'];
 let selectedStatuses = ['all'];
 let projectFilterOpen = false;
 let statusFilterOpen = false;
+let currentAgentName = "BETO"; // Track current agent name - use uppercase to match status bar
 let taskApiSettings = {
     endpoint: localStorage.getItem('task_api_endpoint') || 'http://localhost:8001',
     apiKey: localStorage.getItem('task_api_key') || '',
@@ -78,6 +82,34 @@ let activeShortcodeEnd = -1;
 
 // Voice animation constants
 const VOICE_BAR_COLOR = 'var(--term-text)';
+
+// Fix for border alignment issue
+function fixBorderAlignment() {
+    // Force the container to be full width but not too wide to cause scrolling
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) {
+        // Set the exact dimensions
+        appContainer.style.width = '96vw';
+        appContainer.style.height = '96vh';
+        appContainer.style.maxWidth = 'none';
+        
+        // Make sure everything inside stays contained
+        appContainer.style.overflow = 'hidden';
+        
+        // Force the body to center the container
+        document.body.style.display = 'flex';
+        document.body.style.justifyContent = 'center';
+        document.body.style.alignItems = 'center';
+        document.body.style.overflow = 'hidden';
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
+        
+        // Ensure background color extends to edge
+        document.body.style.backgroundColor = '#121212';
+    }
+}
 
 // Initialize
 function init() {
@@ -94,8 +126,19 @@ function init() {
     tasksPanel.classList.add('hidden');
     tasksPanelVisible = false;
     
+    // Apply border fix
+    fixBorderAlignment();
+    window.addEventListener('resize', fixBorderAlignment);
+    
     // Initialize voice wave animation
     initVoiceWaveAnimation();
+    
+    // Initialize status bar
+    updateStatusBar();
+    
+    // Start clock
+    updateClock();
+    setInterval(updateClock, 1000);
     
     connectWebSocket();
     
@@ -177,6 +220,7 @@ function connectWebSocket() {
                 handleStatusUpdate(data.content);
             } else if (data.type === 'events') {
                 // Process incoming events
+                console.log('Received events data:', data.content);
                 handleEvents(data.content);
             }
         };
@@ -209,6 +253,40 @@ function sendMessage() {
     
     if (!message) return;
     
+    // Special handler for "scout pls" or "scount pls" message - force agent switch
+    if (message.toLowerCase() === 'scout pls' || message.toLowerCase() === 'scount pls') {
+        console.log("SCOUT REQUEST DETECTED - Forcing agent switch");
+        // Force the agent change
+        const previousAgent = currentAgentName;
+        currentAgentName = 'SCOUT';
+        
+        // Update CSS and status
+        document.documentElement.style.setProperty('--agent-name', `"${currentAgentName}"`);
+        
+        // Direct update of status bar element to ensure it updates
+        if (agentStatus) {
+            agentStatus.textContent = `AGENT: ${currentAgentName}`;
+            console.log("Directly updated agent status element text: " + agentStatus.textContent);
+            
+            // Visual feedback for the change
+            agentStatus.style.color = 'var(--term-blue)';
+            setTimeout(() => {
+                agentStatus.style.color = '';
+            }, 500);
+        } else {
+            console.error("Cannot find agent-status element in DOM");
+        }
+        
+        // Update other UI elements
+        updateClock();
+        
+        // Add a system message
+        addMessage('system', `Agent switched to: ${currentAgentName}`);
+        
+        // Force a status update to update all UI elements consistently
+        setStatus('ready');
+    }
+    
     // Convert emoji shortcodes to unicode emojis for display, but send original text to server
     const displayMessage = convertEmoji(message);
     
@@ -230,6 +308,11 @@ function sendMessage() {
     } else {
         // Fallback to REST API if WebSocket is not connected
         sendMessageREST(message, displayMessage);
+    }
+    
+    // Ensure the agent name is visible in status bar
+    if (agentStatus) {
+        agentStatus.textContent = `AGENT: ${currentAgentName.toUpperCase()}`;
     }
     
     scrollToBottom();
@@ -382,6 +465,13 @@ function addMessage(role, content) {
     // Convert emoji shortcodes to actual emojis
     content = convertEmoji(content);
     
+    // Set custom prompt for assistant messages based on current agent
+    if (role === 'assistant') {
+        // Add a custom data attribute for the prompt
+        // Use lowercase for the terminal prompt style
+        contentDiv.dataset.agentPrompt = `${currentAgentName.toLowerCase()}@radbox:~$ `;
+    }
+    
     // Use marked.js to render markdown
     contentDiv.innerHTML = marked.parse(content);
     
@@ -417,45 +507,61 @@ function addMessage(role, content) {
 // Handle status updates
 function handleStatusUpdate(status) {
     setStatus(status);
+    
+    // Ensure agent name is always visible in the status bar
+    if (agentStatus) {
+        agentStatus.textContent = `AGENT: ${currentAgentName.toUpperCase()}`;
+    }
 }
 
 // Set the UI status indicator
 function setStatus(status) {
-    statusIndicator.className = 'status-indicator';
-    statusIndicator.classList.add(status);
-    
-    const timestamp = new Date().toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
-    });
-    
-    switch (status) {
-        case 'ready':
-            statusText.innerHTML = `Agent: RadBot | time: ${timestamp} | connection: active`;
-            sendButton.disabled = false;
-            chatInput.disabled = false;
-            break;
-        case 'thinking':
-            statusText.innerHTML = `Agent: RadBot | time: ${timestamp} | processing...`;
-            sendButton.disabled = true;
-            break;
-        case 'disconnected':
-            statusText.innerHTML = `Agent: offline | time: ${timestamp} | connection lost`;
-            break;
-        case 'error':
-            statusText.innerHTML = `Agent: error | time: ${timestamp} | refresh required`;
-            break;
-        default:
-            if (status.startsWith('error:')) {
-                statusText.innerHTML = `Agent: error | time: ${timestamp} | ${status.replace('error:', '')}`;
+    // Update the connection status in the main status bar
+    if (connectionStatus) {
+        switch (status) {
+            case 'ready':
+                connectionStatus.textContent = 'CONNECTION: ACTIVE';
                 sendButton.disabled = false;
                 chatInput.disabled = false;
-            } else {
-                statusText.innerHTML = `Agent: RadBot | time: ${timestamp} | ${status}`;
-            }
+                break;
+            case 'thinking':
+                connectionStatus.textContent = 'CONNECTION: PROCESSING...';
+                sendButton.disabled = true;
+                break;
+            case 'disconnected':
+                connectionStatus.textContent = 'CONNECTION: LOST';
+                if (agentStatus) agentStatus.textContent = 'AGENT: OFFLINE';
+                break;
+            case 'error':
+                connectionStatus.textContent = 'CONNECTION: ERROR - REFRESH REQUIRED';
+                break;
+            default:
+                if (status.startsWith('error:')) {
+                    connectionStatus.textContent = `CONNECTION: ERROR - ${status.replace('error:', '')}`;
+                    sendButton.disabled = false;
+                    chatInput.disabled = false;
+                } else {
+                    connectionStatus.textContent = `CONNECTION: ${status.toUpperCase()}`;
+                }
+        }
     }
+    
+    // Make sure the agent status is up to date, except for disconnected state
+    if (status !== 'disconnected' && agentStatus) {
+        const displayName = currentAgentName.toUpperCase();
+        agentStatus.textContent = `AGENT: ${displayName}`;
+        
+        // Visual feedback to ensure update is visible
+        agentStatus.style.color = 'var(--term-blue)';
+        setTimeout(() => {
+            agentStatus.style.color = 'var(--term-amber)';
+        }, 100);
+        
+        console.log(`Status bar updated with agent: ${displayName} (from setStatus)`);
+    }
+    
+    // Make sure time is up to date
+    updateClock();
 }
 
 // Reset the conversation
@@ -713,6 +819,53 @@ function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// Update status bar
+function updateStatusBar() {
+    if (agentStatus) {
+        // Always display agent name in uppercase in the status bar
+        const displayName = currentAgentName.toUpperCase();
+        
+        // Special handling for SCOUT agent
+        if (currentAgentName.toUpperCase() === 'SCOUT') {
+            console.log("SCOUT AGENT DETECTED - Updating status bar");
+        }
+        
+        agentStatus.textContent = `AGENT: ${displayName}`;
+        console.log(`Updated status bar with agent name: ${displayName}`);
+        
+        // Force the status bar to update immediately
+        agentStatus.style.color = displayName === 'SCOUT' ? 'var(--term-blue)' : 'var(--term-amber)';
+        setTimeout(() => {
+            agentStatus.style.color = 'var(--term-amber)';
+        }, 100);
+    } else {
+        console.error('Agent status element not found in DOM. Element ID: agent-status');
+    }
+    
+    // Update clock
+    updateClock();
+    
+    // Set initial connection status if needed
+    if (connectionStatus && !connectionStatus.textContent) {
+        connectionStatus.textContent = 'CONNECTION: ACTIVE';
+    }
+}
+
+// Update clock in status bar
+function updateClock() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    
+    if (timeStatus) {
+        timeStatus.textContent = `TIME: ${timeString}`;
+    }
+}
+
 // Generate a UUID
 function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -724,12 +877,21 @@ function generateUUID() {
 
 // Event panel functions
 function toggleEventsPanel() {
-    eventsPanelVisible = !eventsPanelVisible;
-    
-    if (eventsPanelVisible) {
+    // If events panel is not visible, we're about to show it
+    if (!eventsPanelVisible) {
+        // Hide tasks panel if it's visible
+        if (tasksPanelVisible) {
+            tasksPanel.classList.add('hidden');
+            tasksPanelVisible = false;
+        }
+        
+        // Show events panel
         eventsPanel.classList.remove('hidden');
+        eventsPanelVisible = true;
     } else {
+        // Hide events panel
         eventsPanel.classList.add('hidden');
+        eventsPanelVisible = false;
     }
 }
 
@@ -740,11 +902,84 @@ function clearEvents() {
 }
 
 function handleEvents(newEvents) {
+    console.log('Received events:', newEvents);
+    
     if (Array.isArray(newEvents) && newEvents.length > 0) {
         // Add event IDs if they don't have them
         newEvents.forEach((event, index) => {
             if (!event.id) {
                 event.id = `event-${Date.now()}-${index}`;
+            }
+            
+            // Log all events for debugging
+            console.log(`Processing event #${index}:`, event);
+            
+            // Check for agent transfer events and update current agent name
+            if (event.category === 'agent_transfer' || event.type === 'agent_transfer') {
+                console.log('Agent transfer event detected:', event);
+                
+                // Check various properties where agent name might be found
+                const targetAgent = event.to_agent || 
+                                   event.target_agent || 
+                                   (event.details && (event.details.to_agent || event.details.agent)) || 
+                                   (event.summary && event.summary.includes('SCOUT') ? 'SCOUT' : null);
+                
+                if (targetAgent) {
+                    // Update the current agent name - force uppercase for consistency
+                    const previousAgent = currentAgentName;
+                    currentAgentName = targetAgent.toUpperCase();
+                    
+                    console.log(`Agent name changing from ${previousAgent} to ${currentAgentName}`);
+                    
+                    // Update the CSS variable for agent name
+                    document.documentElement.style.setProperty('--agent-name', `"${currentAgentName}"`);
+                    
+                    // Direct update of all status elements
+                    if (agentStatus) {
+                        agentStatus.textContent = `AGENT: ${currentAgentName}`;
+                        console.log("Directly updated agent status in status bar: " + agentStatus.textContent);
+                        // Force DOM redraw by changing style slightly
+                        agentStatus.style.opacity = "0.9";
+                        setTimeout(() => { agentStatus.style.opacity = "1"; }, 10);
+                    } else {
+                        console.error("Cannot find agent-status element in DOM for update:", document.getElementById('agent-status'));
+                    }
+                    
+                    // Update clock and connection status also
+                    updateClock();
+                    
+                    // Add a system message indicating the agent change
+                    addMessage('system', `Agent switched to: ${currentAgentName}`);
+                    
+                    console.log(`Agent changed to: ${currentAgentName}`);
+                } else {
+                    console.warn('Agent transfer event missing target agent field:', event);
+                    console.log('Event properties:', Object.keys(event));
+                    
+                    // As a fallback, check if this seems to be a transfer to SCOUT
+                    if (event.summary && event.summary.toLowerCase().includes('scout')) {
+                        const previousAgent = currentAgentName;
+                        currentAgentName = 'SCOUT';
+                        console.log(`[FALLBACK] Agent name changing from ${previousAgent} to ${currentAgentName}`);
+                        
+                        // Direct update of all status elements
+                        if (agentStatus) {
+                            agentStatus.textContent = `AGENT: ${currentAgentName}`;
+                            console.log("Directly updated agent status through fallback: " + agentStatus.textContent);
+                            // Force DOM redraw by changing style slightly
+                            agentStatus.style.opacity = "0.9";
+                            setTimeout(() => { agentStatus.style.opacity = "1"; }, 10);
+                        } else {
+                            console.error("Cannot find agent-status element in DOM for fallback update");
+                        }
+                        
+                        // Update the CSS variable
+                        document.documentElement.style.setProperty('--agent-name', `"${currentAgentName}"`);
+                        
+                        // Add a system message
+                        addMessage('system', `Agent switched to: ${currentAgentName} (detected from event summary)`);
+                    }
+                }
             }
         });
         
@@ -754,6 +989,20 @@ function handleEvents(newEvents) {
         // Update UI
         renderEvents();
     }
+}
+
+// Function to update status text with current agent name
+function updateStatusText() {
+    // Update the agent name in the status bar
+    if (agentStatus) {
+        // Always display agent name in uppercase in the status bar
+        const displayName = currentAgentName.toUpperCase();
+        agentStatus.textContent = `AGENT: ${displayName}`;
+        console.log(`Status text updated with agent name: ${currentAgentName.toUpperCase()}`);
+    }
+    
+    // Make sure time is up to date
+    updateClock();
 }
 
 function renderEvents() {
@@ -1041,15 +1290,26 @@ function formatTimestamp(date) {
 
 // Tasks Panel Toggle
 function toggleTasksPanel() {
-    tasksPanelVisible = !tasksPanelVisible;
-    
-    if (tasksPanelVisible) {
+    // If tasks panel is not visible, we're about to show it
+    if (!tasksPanelVisible) {
+        // Hide events panel if it's visible
+        if (eventsPanelVisible) {
+            eventsPanel.classList.add('hidden');
+            eventsPanelVisible = false;
+        }
+        
+        // Show tasks panel
         tasksPanel.classList.remove('hidden');
+        tasksPanelVisible = true;
+        
+        // Fetch tasks if needed
         if (!tasks.length && taskApiSettings.endpoint) {
             refreshTasks();
         }
     } else {
+        // Hide tasks panel
         tasksPanel.classList.add('hidden');
+        tasksPanelVisible = false;
     }
 }
 

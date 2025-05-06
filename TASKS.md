@@ -320,13 +320,37 @@ Phase 4: Security and Testing
 - [x] Implement direct filesystem access to replace MCP fileserver
 - [x] Deploy direct filesystem implementation and remove MCP fileserver dependency
 - [x] Document enhanced memory system implementation
-- [x] Implement research agent sub-agent
-- [x] Document research agent implementation
+- [x] Implement scout agent sub-agent
+- [x] Document scout agent implementation
 - [x] Add scout.md custom prompt for our subagent "scout"
 - [x] Document prompt caching implementation
 - [x] Fix failing tests after code restructuring (updated import paths)
 - [x] Fix scout agent transfer back to main agent
+- [x] Fix scout agent (web search agent) transfer back to main agent by correcting agent name mismatch ('main' vs 'beto')
+- [x] Fix app_name parameter in session.py to align with agent names for proper agent transfers
+- [x] Fix self.app_name in RadBotAgent class to ensure consistency for agent transfers
+- [x] Force agent name consistency by explicitly setting root_agent.name to 'beto' when initializing
+- [x] Fix all remaining instances of "app_name=radbot" throughout the codebase (memory_tools.py, memory_agent_factory.py, cli/main.py)
+- [x] Implement bidirectional parent-child relationship between main agent and scout agent to fix "Agent beto not found in the agent tree" error
+- [x] Improve agent tree initialization with empty sub_agents list before adding sub-agents to ensure proper registration
 - [x] Fix memory system tests to properly mock PayloadSchemaType.DATETIME enum from qdrant_client
+
+## Documentation Cleanup
+
+- [ ] Create subdirectory structure in docs/implementation/ (core, components, integrations, fixes, enhancements, migrations)
+- [ ] Merge 15_agent_config_integration.md and agent_config_integration.md
+- [ ] Merge crawl4ai.md and crawl4ai_integration.md
+- [ ] Merge memory_system.md and 16_memory_implementation.md
+- [ ] Consolidate home-assistant.md, home_assistant_integration.md, and 08_mcp_home_assistant.md
+- [ ] Merge gui.md and custom_web_ui.md
+- [ ] Consolidate google-calendar documentation files
+- [ ] Consolidate MCP fix documentation files
+- [ ] Consolidate todo tools documentation files
+- [ ] Consolidate crawl4ai documentation files
+- [ ] Create index.md files for each subdirectory
+- [ ] Create master index.md for the implementation directory
+- [ ] Update cross-references between documentation files
+- [ ] Add version tags to relevant documentation sections
 
 ## CLI & Interfaces
 
@@ -352,7 +376,9 @@ Phase 4: Security and Testing
 - [x] Create task sorting by status (in progress first, backlog second, done last)
 - [x] Fix project filter to allow selecting individual projects when "All Projects" is selected
 - [x] Add task styling improvements for better readability
-- [ ] Enable responsive view for mobile devices
+- [x] Enable responsive view for mobile devices
+- [x] Add border and elevation effects to task panel
+- [x] Prevent tasks and events panels from being open simultaneously
 - [ ] Add notification system for agent status and tasks
 - [ ] Implement event filtering by timestamp
 - [ ] Add dark mode toggle support
