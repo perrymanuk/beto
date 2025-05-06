@@ -249,6 +249,26 @@ async function resetConversation() {
             messages[i].remove();
         }
         
+        // Also clear events
+        if (window.events && Array.isArray(window.events)) {
+            console.log('Clearing event history');
+            window.events = [];
+            
+            // If events are currently displayed, refresh the view
+            const eventsContainer = document.getElementById('events-container');
+            if (eventsContainer) {
+                console.log('Refreshing events view');
+                // If renderEvents is available, call it
+                if (typeof window.renderEvents === 'function') {
+                    window.renderEvents();
+                }
+                // Otherwise just clear the container
+                else {
+                    eventsContainer.innerHTML = '<div class="event-empty-state">No events recorded yet.</div>';
+                }
+            }
+        }
+        
         addMessage('system', 'Session cleared. New terminal started.');
     } catch (error) {
         console.error('Error resetting conversation:', error);

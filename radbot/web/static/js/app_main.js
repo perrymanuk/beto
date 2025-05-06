@@ -794,8 +794,58 @@ function formatEventType(type) {
 
 // Show event details
 function showEventDetails(event) {
+    console.log('Showing event details:', event);
+    
+    // First, ensure the events tile is visible - this is using the tiling system
+    let eventsPanel = document.querySelector('[data-content="events"]');
+    if (!eventsPanel) {
+        console.warn('Events panel not found in DOM, attempting to open it');
+        // Try to trigger events panel command
+        document.dispatchEvent(new CustomEvent('command:events'));
+        
+        // Wait a moment and try again
+        setTimeout(() => {
+            eventsPanel = document.querySelector('[data-content="events"]');
+            if (eventsPanel) {
+                console.log('Events panel now found, attempting to show details again');
+                // Try again after panel is opened
+                showEventDetails(event);
+            } else {
+                console.error('Could not find events panel after attempting to open it');
+            }
+        }, 300);
+        return;
+    }
+    
+    // Now check for the details container
     const detailsContainer = document.getElementById('event-details-content');
-    if (!detailsContainer) return;
+    if (!detailsContainer) {
+        console.error('Event details container not found in DOM - this is critical!');
+        
+        // Look for event-details-template and try to instantiate it
+        const template = document.getElementById('event-details-template');
+        if (template) {
+            console.log('Found event-details-template, trying to instantiate it');
+            const newDetailsContent = template.content.cloneNode(true);
+            
+            // Find a place to put it
+            const possibleContainer = eventsPanel.querySelector('.detail-panel') || 
+                                       eventsPanel.querySelector('.events-content');
+            
+            if (possibleContainer) {
+                possibleContainer.appendChild(newDetailsContent);
+                console.log('Added details content to container, retrying');
+                // Try again
+                setTimeout(() => showEventDetails(event), 100);
+                return;
+            }
+        }
+        
+        console.error('Could not instantiate event details template');
+        return;
+    }
+    
+    console.log('Found event-details-content, rendering details');
     
     // Clear existing content
     detailsContainer.innerHTML = '';
