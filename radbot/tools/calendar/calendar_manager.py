@@ -1,13 +1,14 @@
 """Calendar Manager class for Google Calendar integration."""
 
+import logging
 import datetime
+import os.path
 from typing import Any, Dict, List, Optional, Union
 
 from radbot.tools.calendar.calendar_auth import (
-    DEFAULT_CREDENTIALS_PATH,
     get_calendar_service,
     get_workspace_calendar_service,
-    get_credentials_from_env,
+    validate_calendar_access,
 )
 from radbot.tools.calendar.calendar_operations import (
     check_calendar_access,
@@ -18,6 +19,9 @@ from radbot.tools.calendar.calendar_operations import (
     update_event,
 )
 
+# Set up logging
+logger = logging.getLogger(__name__)
+
 # Type aliases
 TimeValue = Union[datetime.datetime, datetime.date]
 
@@ -25,47 +29,59 @@ TimeValue = Union[datetime.datetime, datetime.date]
 class CalendarManager:
     """Manages Google Calendar operations for radbot."""
     
-    def __init__(self, credentials_path: str = DEFAULT_CREDENTIALS_PATH):
+    def __init__(self, service_account_path: Optional[str] = None):
         """Initialize CalendarManager.
         
         Args:
-            credentials_path: Path to the credentials.json file.
+            service_account_path: Path to the service account JSON file. If None, 
+                                 uses GOOGLE_CREDENTIALS_PATH environment variable.
         """
-        self.credentials_path = credentials_path
+        self.service_account_path = service_account_path
         self.personal_service = None
         self.workspace_service = None
         self.workspace_email = None
     
     def authenticate_personal(self) -> bool:
-        """Authenticate with personal Google account.
+        """Authenticate with Google Calendar using service account.
         
         Returns:
             True if authentication was successful, False otherwise.
         """
         try:
-            # Get credentials from environment variables
-            creds = get_credentials_from_env()
+            # Get the service account path from init or environment
+            credentials_path = self.service_account_path or os.environ.get('GOOGLE_CALENDAR_SERVICE_ACCOUNT_FILE')
             
-            # Try to authenticate with credentials from environment variables or file
+            # Check if using JSON from environment, skip path check in that case
+            if not os.environ.get('GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON'):
+                if credentials_path and not os.path.exists(credentials_path):
+                    logger.error(f"Service account file not found at {credentials_path}")
+                    return False
+            
+            # Try to authenticate with service account
+            logger.info("Authenticating with Google Calendar using service account")
             self.personal_service = get_calendar_service(
-                credentials_path=self.credentials_path,
-                use_env_vars=True
+                force_new=True,
+                service_account_path=credentials_path,
             )
             
             # Test the service with a simple API call
             if self.personal_service:
-                # Try to get the primary calendar to confirm authentication worked
-                primary_calendar = self.personal_service.calendars().get(calendarId='primary').execute()
-                print(f"Successfully authenticated with Google Calendar as: {primary_calendar.get('summary', 'Unknown')}")
-                return True
+                try:
+                    # Try to get the primary calendar to confirm authentication worked
+                    primary_calendar = self.personal_service.calendars().get(calendarId='primary').execute()
+                    logger.info(f"Successfully authenticated with Google Calendar as: {primary_calendar.get('summary', 'Unknown')}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to access primary calendar: {e}")
+                    return False
             
             return False
         except Exception as e:
-            print(f"Personal calendar authentication failed: {e}")
+            logger.error(f"Google Calendar authentication failed: {e}")
             return False
     
     def authenticate_workspace(self, email: str) -> bool:
-        """Authenticate with Google Workspace account using service account.
+        """Authenticate with Google Workspace account using service account impersonation.
         
         Args:
             email: The user email to impersonate.
@@ -74,11 +90,37 @@ class CalendarManager:
             True if authentication was successful, False otherwise.
         """
         try:
+            # Get the service account path
+            credentials_path = self.service_account_path or os.environ.get('GOOGLE_CALENDAR_SERVICE_ACCOUNT_FILE')
+            
+            # Check if using JSON from environment, skip path check in that case
+            if not os.environ.get('GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON'):
+                if credentials_path and not os.path.exists(credentials_path):
+                    logger.error(f"Service account file not found at {credentials_path}")
+                    return False
+            
+            logger.info(f"Authenticating with Google Workspace as {email}")
             self.workspace_email = email
-            self.workspace_service = get_workspace_calendar_service(email)
-            return self.workspace_service is not None
+            self.workspace_service = get_workspace_calendar_service(
+                user_email=email,
+                service_account_path=credentials_path,
+                force_new=True
+            )
+            
+            # Test the service with a simple API call
+            if self.workspace_service:
+                try:
+                    # Try to get the primary calendar to confirm authentication worked
+                    primary_calendar = self.workspace_service.calendars().get(calendarId='primary').execute()
+                    logger.info(f"Successfully authenticated with Google Workspace as: {email}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to access primary calendar as {email}: {e}")
+                    return False
+            
+            return False
         except Exception as e:
-            print(f"Workspace calendar authentication failed: {e}")
+            logger.error(f"Workspace calendar authentication failed: {e}")
             return False
     
     def list_upcoming_events(

@@ -22,6 +22,7 @@ def create_calendar_agent(
     model: Optional[str] = None,
     config_manager: Optional[ConfigManager] = None,
     calendar_manager: Optional[CalendarManager] = None,
+    service_account_path: Optional[str] = None,
     additional_tools: Optional[Dict[str, FunctionTool]] = None,
     instruction_name: str = "main_agent",
 ) -> RadBotAgent:
@@ -31,6 +32,7 @@ def create_calendar_agent(
         model: LLM model name. If None, uses the default from config.
         config_manager: ConfigManager instance. If None, creates a new one.
         calendar_manager: CalendarManager instance. If None, creates a new one.
+        service_account_path: Path to the service account JSON file. If None, uses GOOGLE_CREDENTIALS_PATH.
         additional_tools: Additional function tools to add to the agent.
         instruction_name: Name of instruction to load from config.
         
@@ -43,9 +45,14 @@ def create_calendar_agent(
     
     # Create calendar manager if not provided
     if calendar_manager is None:
-        calendar_manager = CalendarManager()
-        # Authenticate with personal account
-        calendar_manager.authenticate_personal()
+        calendar_manager = CalendarManager(service_account_path=service_account_path)
+        # Authenticate with service account
+        auth_success = calendar_manager.authenticate_personal()
+        if not auth_success:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to authenticate with Google Calendar. Calendar operations may not work."
+            )
     
     # Create list of calendar tools
     calendar_tools = [

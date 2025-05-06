@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Union
 from google.adk.tools import FunctionTool
 from pydantic import BaseModel, Field
 
+from radbot.tools.calendar.calendar_auth import CALENDAR_TIMEZONE
 from radbot.tools.calendar.calendar_manager import CalendarManager
 
 # Response models
@@ -89,7 +90,7 @@ class CreateEventParameters(BaseModel):
         description="Calendar identifier, default is 'primary'",
     )
     timezone: str = Field(
-        default="UTC",
+        default=CALENDAR_TIMEZONE,
         description="Timezone for the event",
     )
     is_workspace: bool = Field(
@@ -137,6 +138,10 @@ class UpdateEventParameters(BaseModel):
     calendar_id: str = Field(
         default="primary",
         description="Calendar identifier, default is 'primary'",
+    )
+    timezone: str = Field(
+        default=CALENDAR_TIMEZONE,
+        description="Timezone for the event",
     )
     is_workspace: bool = Field(
         default=False,
@@ -275,7 +280,7 @@ def create_calendar_event(
     location: Optional[str] = None,
     attendees: Optional[List[str]] = None,
     calendar_id: str = "primary",
-    timezone: str = "UTC",
+    timezone: str = CALENDAR_TIMEZONE,
     is_workspace: bool = False,
 ) -> Dict[str, Any]:
     """Create a new event in Google Calendar.
@@ -325,6 +330,7 @@ def update_calendar_event(
     location: Optional[str] = None,
     attendees: Optional[List[str]] = None,
     calendar_id: str = "primary",
+    timezone: str = CALENDAR_TIMEZONE,
     is_workspace: bool = False,
 ) -> Dict[str, Any]:
     """Update an existing event in Google Calendar.
@@ -339,6 +345,7 @@ def update_calendar_event(
         location: New location.
         attendees: New list of attendee email addresses.
         calendar_id: Calendar identifier, default is 'primary'.
+        timezone: Timezone for the event.
         is_workspace: Whether to use workspace calendar (True) or personal calendar (False).
         
     Returns:
@@ -367,6 +374,10 @@ def update_calendar_event(
         
     if attendees is not None:
         kwargs["attendees"] = [{"email": email} for email in attendees]
+    
+    # Add timezone to kwargs if start or end time is provided
+    if (start_time is not None or end_time is not None) and timezone:
+        kwargs["timezone"] = timezone
     
     return manager.update_existing_event(
         event_id=event_id,
@@ -423,8 +434,11 @@ def check_calendar_availability(
     if manager is None:
         manager = get_calendar_manager()
     
+    # Use environment variable for calendar_id if not specified
+    from radbot.tools.calendar.calendar_auth import CALENDAR_ID as DEFAULT_ENV_CALENDAR_ID
+    
     if calendar_ids is None:
-        calendar_ids = ["primary"]
+        calendar_ids = [DEFAULT_ENV_CALENDAR_ID]
     
     time_min = datetime.datetime.utcnow()
     time_max = time_min + datetime.timedelta(days=days_ahead)
@@ -439,7 +453,7 @@ def check_calendar_availability(
 
 # Create wrapper functions without manager parameter for ADK function tools
 def list_calendar_events_wrapper(
-    calendar_id: str = "primary",
+    calendar_id: Optional[str] = None,
     max_results: int = 10,
     query: Optional[str] = None,
     days_ahead: int = 7,
@@ -448,7 +462,7 @@ def list_calendar_events_wrapper(
     """List upcoming events from Google Calendar.
     
     Args:
-        calendar_id: Calendar identifier, default is 'primary'.
+        calendar_id: Calendar identifier. If None, uses the environment variable GOOGLE_CALENDAR_ID.
         max_results: Maximum number of events to return.
         query: Free text search term.
         days_ahead: Number of days ahead to search for events.
@@ -458,6 +472,13 @@ def list_calendar_events_wrapper(
         List of event dictionaries.
     """
     try:
+        # Use environment variable for calendar_id if not specified
+        from radbot.tools.calendar.calendar_auth import CALENDAR_ID as DEFAULT_ENV_CALENDAR_ID
+        
+        # If calendar_id is None, use the environment variable
+        if calendar_id is None:
+            calendar_id = DEFAULT_ENV_CALENDAR_ID
+            
         result = list_calendar_events(
             calendar_id=calendar_id,
             max_results=max_results,
@@ -487,8 +508,8 @@ def create_calendar_event_wrapper(
     description: Optional[str] = None,
     location: Optional[str] = None,
     attendees: Optional[List[str]] = None,
-    calendar_id: str = "primary",
-    timezone: str = "UTC",
+    calendar_id: Optional[str] = None,
+    timezone: str = CALENDAR_TIMEZONE,
     is_workspace: bool = False,
 ) -> Dict[str, Any]:
     """Create a new event in Google Calendar.
@@ -517,6 +538,13 @@ def create_calendar_event_wrapper(
             print(error_message)
             return {"status": "error", "message": error_message}
         
+        # Use environment variable for calendar_id if not specified
+        from radbot.tools.calendar.calendar_auth import CALENDAR_ID as DEFAULT_ENV_CALENDAR_ID
+        
+        # If calendar_id is None, use the environment variable
+        if calendar_id is None:
+            calendar_id = DEFAULT_ENV_CALENDAR_ID
+            
         result = create_calendar_event(
             summary=summary,
             start_time=start_time,
@@ -552,7 +580,8 @@ def update_calendar_event_wrapper(
     description: Optional[str] = None,
     location: Optional[str] = None,
     attendees: Optional[List[str]] = None,
-    calendar_id: str = "primary",
+    calendar_id: Optional[str] = None,
+    timezone: str = CALENDAR_TIMEZONE,
     is_workspace: bool = False,
 ) -> Dict[str, Any]:
     """Update an existing event in Google Calendar.
@@ -566,6 +595,7 @@ def update_calendar_event_wrapper(
         location: New location.
         attendees: New list of attendee email addresses.
         calendar_id: Calendar identifier, default is 'primary'.
+        timezone: Timezone for the event (default: UTC).
         is_workspace: Whether to use workspace calendar (True) or personal calendar (False).
         
     Returns:
@@ -589,6 +619,13 @@ def update_calendar_event_wrapper(
                 print(error_message)
                 return {"status": "error", "message": error_message}
                 
+        # Use environment variable for calendar_id if not specified
+        from radbot.tools.calendar.calendar_auth import CALENDAR_ID as DEFAULT_ENV_CALENDAR_ID
+        
+        # If calendar_id is None, use the environment variable
+        if calendar_id is None:
+            calendar_id = DEFAULT_ENV_CALENDAR_ID
+            
         result = update_calendar_event(
             event_id=event_id,
             summary=summary,
@@ -598,6 +635,7 @@ def update_calendar_event_wrapper(
             location=location,
             attendees=attendees,
             calendar_id=calendar_id,
+            timezone=timezone,
             is_workspace=is_workspace
         )
         
@@ -618,7 +656,7 @@ def update_calendar_event_wrapper(
 
 def delete_calendar_event_wrapper(
     event_id: str,
-    calendar_id: str = "primary",
+    calendar_id: Optional[str] = None,
     is_workspace: bool = False,
 ) -> Dict[str, str]:
     """Delete an event from Google Calendar.
@@ -636,6 +674,13 @@ def delete_calendar_event_wrapper(
             error_message = "Event ID is required to delete an event"
             print(error_message)
             return {"status": "error", "message": error_message}
+            
+        # Use environment variable for calendar_id if not specified
+        from radbot.tools.calendar.calendar_auth import CALENDAR_ID as DEFAULT_ENV_CALENDAR_ID
+        
+        # If calendar_id is None, use the environment variable
+        if calendar_id is None:
+            calendar_id = DEFAULT_ENV_CALENDAR_ID
             
         result = delete_calendar_event(
             event_id=event_id,
@@ -700,6 +745,7 @@ def check_calendar_availability_wrapper(
         error_message = f"Exception while checking calendar availability: {str(e)}. Please check authentication credentials."
         print(error_message)
         return {"status": "error", "message": error_message, "calendars": {}}
+
 
 # Function tool definitions with wrapper functions
 list_calendar_events_tool = FunctionTool(list_calendar_events_wrapper)

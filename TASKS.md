@@ -346,3 +346,13 @@ Phase 4: Security and Testing
 - [x] ~~Implement JavaScript extension for voice capabilities~~ (Removed due to implementation issues)
 - [x] ~~Document voice implementation~~ (Removed due to implementation issues)
 - [x] Remove broken voice implementation and related dependencies
+
+## Web UI Improvements
+
+- [x] Create task sorting by status (in progress first, backlog second, done last)
+- [x] Fix project filter to allow selecting individual projects when "All Projects" is selected
+- [x] Add task styling improvements for better readability
+- [ ] Enable responsive view for mobile devices
+- [ ] Add notification system for agent status and tasks
+- [ ] Implement event filtering by timestamp
+- [ ] Add dark mode toggle support

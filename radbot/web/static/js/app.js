@@ -25,8 +25,12 @@ const tasksPanel = document.getElementById('tasks-panel');
 const toggleTasksButton = document.getElementById('toggle-tasks-button');
 const refreshTasksButton = document.getElementById('refresh-tasks-button');
 const settingsTasksButton = document.getElementById('settings-tasks-button');
-const projectFilter = document.getElementById('project-filter');
-const statusFilter = document.getElementById('status-filter');
+const projectFilterBtn = document.getElementById('project-filter-btn');
+const projectFilterContent = document.getElementById('project-filter-content');
+const statusFilterBtn = document.getElementById('status-filter-btn');
+const statusFilterContent = document.getElementById('status-filter-content');
+const projectAllCheckbox = document.getElementById('project-all');
+const statusAllCheckbox = document.getElementById('status-all');
 const taskSearch = document.getElementById('task-search');
 const tasksContainer = document.getElementById('tasks-container');
 const taskSettingsDialog = document.getElementById('task-settings-dialog');
@@ -56,6 +60,10 @@ let eventsPanelVisible = false;
 let tasksPanelVisible = false;
 let tasks = [];
 let projects = [];
+let selectedProjects = ['all'];
+let selectedStatuses = ['all'];
+let projectFilterOpen = false;
+let statusFilterOpen = false;
 let taskApiSettings = {
     endpoint: localStorage.getItem('task_api_endpoint') || 'http://localhost:8001',
     apiKey: localStorage.getItem('task_api_key') || '',
@@ -68,19 +76,8 @@ let activeSuggestionIndex = -1;
 let activeShortcodeStart = -1;
 let activeShortcodeEnd = -1;
 
-// ASCII animations and patterns
-const asciiPatterns = [
-    "█▓▒░ ▓▒░ █▓▒░ ▓▒░ █▓▒░ ▓▒░ ",
-    "╔═══╗  ╔═══╗  ╔═══╗  ╔═══╗",
-    "▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄",
-    "◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤",
-    "▌▀▐▄▌▀▐▄▌▀▐▄▌▀▐▄▌▀▐▄▌▀▐▄",
-    "░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█",
-    "▓▓▒▒░░▓▓▒▒░░▓▓▒▒░░▓▓▒▒░░",
-    "▓░█▒▓░█▒▓░█▒▓░█▒▓░█▒▓░█▒",
-    "░▒▓█ RadBot V8.8.Beta █▓▒░",
-    "▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱▰▱"
-];
+// Voice animation constants
+const VOICE_BAR_COLOR = 'var(--term-text)';
 
 // Initialize
 function init() {
@@ -97,8 +94,8 @@ function init() {
     tasksPanel.classList.add('hidden');
     tasksPanelVisible = false;
     
-    // Initialize ASCII animation
-    initAsciiAnimation();
+    // Initialize voice wave animation
+    initVoiceWaveAnimation();
     
     connectWebSocket();
     
@@ -120,9 +117,14 @@ function init() {
     toggleTasksButton.addEventListener('click', toggleTasksPanel);
     refreshTasksButton.addEventListener('click', refreshTasks);
     settingsTasksButton.addEventListener('click', showTaskSettings);
-    projectFilter.addEventListener('change', handleProjectFilterChange);
-    statusFilter.addEventListener('change', filterTasks);
+    projectFilterBtn.addEventListener('click', toggleProjectFilter);
+    statusFilterBtn.addEventListener('click', toggleStatusFilter);
+    projectAllCheckbox.addEventListener('change', handleProjectAllCheckbox);
+    statusAllCheckbox.addEventListener('change', handleStatusAllCheckbox);
     taskSearch.addEventListener('input', filterTasks);
+    
+    // Close the dropdowns when clicking outside of them
+    document.addEventListener('click', handleClickOutsideDropdowns);
     
     // Task details view event listeners
     closeTaskDetailsButton.addEventListener('click', closeTaskDetails);
@@ -144,6 +146,9 @@ function init() {
     
     // Initialize task panel if settings are available
     if (taskApiSettings.endpoint) {
+        // Setup status checkboxes
+        setupStatusCheckboxes();
+        
         // Fetch projects and tasks
         fetchProjects().then(() => {
             fetchTasks();
@@ -1191,17 +1196,30 @@ async function fetchProjects() {
 
 // Update project filter dropdown
 function updateProjectFilter() {
-    // Clear all options except "All Projects"
-    while (projectFilter.options.length > 1) {
-        projectFilter.remove(1);
-    }
+    // Remove all dynamically added project options
+    const existingOptions = projectFilterContent.querySelectorAll('.filter-option:not(:first-child)');
+    existingOptions.forEach(option => option.remove());
     
-    // Add project options
+    // Add project options as checkboxes
     projects.forEach(project => {
-        const option = document.createElement('option');
-        option.value = project.project_id;
-        option.textContent = project.name;
-        projectFilter.appendChild(option);
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'filter-option';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `project-${project.project_id}`;
+        checkbox.value = project.project_id;
+        checkbox.addEventListener('change', function() {
+            handleProjectCheckboxChange(this);
+        });
+        
+        const label = document.createElement('label');
+        label.htmlFor = `project-${project.project_id}`;
+        label.textContent = project.name;
+        
+        optionDiv.appendChild(checkbox);
+        optionDiv.appendChild(label);
+        projectFilterContent.appendChild(optionDiv);
     });
 }
 
@@ -1233,14 +1251,11 @@ async function fetchTasks() {
         return;
     }
     
-    const projectId = projectFilter.value === 'all' ? null : projectFilter.value;
-    const endpoint = projectId 
-        ? `${taskApiSettings.endpoint}/api/v1/projects/${projectId}/tasks` 
-        : `${taskApiSettings.endpoint}/api/v1/tasks`;
+    // Always fetch all tasks - the filtering will be done client-side
+    const endpoint = `${taskApiSettings.endpoint}/api/v1/tasks`;
     console.log('Fetching tasks from:', endpoint);
     
     try {
-        
         const response = await fetch(endpoint, {
             method: 'GET',
             headers: {
@@ -1290,18 +1305,198 @@ function refreshTasks() {
     fetchTasks();
 }
 
-// Handle project filter change
-function handleProjectFilterChange() {
-    console.log('Project filter changed to:', projectFilter.value);
-    fetchTasks(); // Re-fetch tasks with the new project filter
+// Toggle project filter dropdown
+function toggleProjectFilter(event) {
+    event.stopPropagation();
+    
+    // Toggle the dropdown
+    projectFilterOpen = !projectFilterOpen;
+    statusFilterOpen = false; // Close the other dropdown
+    
+    // Show/hide dropdowns
+    projectFilterContent.classList.toggle('show', projectFilterOpen);
+    statusFilterContent.classList.remove('show');
 }
 
-// Filter tasks based on status and search (not project - that's handled by re-fetching)
+// Toggle status filter dropdown
+function toggleStatusFilter(event) {
+    event.stopPropagation();
+    
+    // Toggle the dropdown
+    statusFilterOpen = !statusFilterOpen;
+    projectFilterOpen = false; // Close the other dropdown
+    
+    // Show/hide dropdowns
+    statusFilterContent.classList.toggle('show', statusFilterOpen);
+    projectFilterContent.classList.remove('show');
+}
+
+// Handle click outside dropdowns
+function handleClickOutsideDropdowns(event) {
+    // Check if click is outside filter dropdowns
+    if (!event.target.closest('.filter-dropdown')) {
+        projectFilterContent.classList.remove('show');
+        statusFilterContent.classList.remove('show');
+        projectFilterOpen = false;
+        statusFilterOpen = false;
+    }
+}
+
+// Handle "All Projects" checkbox
+function handleProjectAllCheckbox(event) {
+    const checked = event.target.checked;
+    
+    // Get all project checkboxes
+    const projectCheckboxes = projectFilterContent.querySelectorAll('input[type="checkbox"]:not(#project-all)');
+    
+    // If "All Projects" is checked, uncheck all others but don't disable them
+    projectCheckboxes.forEach(checkbox => {
+        checkbox.checked = false;
+        // Remove the disabling of checkboxes so they can still be clicked
+        // checkbox.disabled = checked;
+    });
+    
+    // Update selected projects
+    if (checked) {
+        selectedProjects = ['all'];
+    } else {
+        selectedProjects = [];
+    }
+    
+    // Update filter button text
+    updateProjectFilterButtonText();
+    
+    // Filter tasks
+    filterTasks();
+}
+
+// Handle individual project checkbox changes
+function handleProjectCheckboxChange(checkbox) {
+    // If any individual project is checked, uncheck "All Projects"
+    if (checkbox.checked) {
+        projectAllCheckbox.checked = false;
+        
+        // Add to selected projects
+        selectedProjects = selectedProjects.filter(p => p !== 'all');
+        selectedProjects.push(checkbox.value);
+    } else {
+        // Remove from selected projects
+        selectedProjects = selectedProjects.filter(p => p !== checkbox.value);
+        
+        // If no projects are selected, check "All Projects"
+        if (selectedProjects.length === 0) {
+            projectAllCheckbox.checked = true;
+            selectedProjects = ['all'];
+        }
+    }
+    
+    // Update filter button text
+    updateProjectFilterButtonText();
+    
+    // Filter tasks
+    filterTasks();
+}
+
+// Handle "All Statuses" checkbox
+function handleStatusAllCheckbox(event) {
+    const checked = event.target.checked;
+    
+    // Get all status checkboxes
+    const statusCheckboxes = statusFilterContent.querySelectorAll('input[type="checkbox"]:not(#status-all)');
+    
+    // If "All Statuses" is checked, uncheck all others but don't disable them
+    statusCheckboxes.forEach(checkbox => {
+        checkbox.checked = false;
+        // Remove the disabling of checkboxes so they can still be clicked
+        // checkbox.disabled = checked;
+    });
+    
+    // Update selected statuses
+    if (checked) {
+        selectedStatuses = ['all'];
+    } else {
+        selectedStatuses = [];
+    }
+    
+    // Update filter button text
+    updateStatusFilterButtonText();
+    
+    // Filter tasks
+    filterTasks();
+}
+
+// Update project filter button text based on selection
+function updateProjectFilterButtonText() {
+    if (selectedProjects.includes('all')) {
+        projectFilterBtn.textContent = 'All Projects';
+    } else if (selectedProjects.length === 1) {
+        const project = projects.find(p => p.project_id === selectedProjects[0]);
+        projectFilterBtn.textContent = project ? project.name : 'Unknown Project';
+    } else {
+        projectFilterBtn.textContent = `${selectedProjects.length} Projects`;
+    }
+}
+
+// Update status filter button text based on selection
+function updateStatusFilterButtonText() {
+    if (selectedStatuses.includes('all')) {
+        statusFilterBtn.textContent = 'All Statuses';
+    } else if (selectedStatuses.length === 0) {
+        statusFilterBtn.textContent = 'No Status';
+    } else if (selectedStatuses.length === 1) {
+        const statusMap = {
+            'backlog': 'Backlog',
+            'inprogress': 'In Progress',
+            'done': 'Done'
+        };
+        statusFilterBtn.textContent = statusMap[selectedStatuses[0]] || selectedStatuses[0];
+    } else {
+        statusFilterBtn.textContent = `${selectedStatuses.length} Statuses`;
+    }
+}
+
+// Add status checkbox change event listeners
+function setupStatusCheckboxes() {
+    const statusCheckboxes = statusFilterContent.querySelectorAll('input[type="checkbox"]:not(#status-all)');
+    statusCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            handleStatusCheckboxChange(this);
+        });
+    });
+}
+
+// Handle individual status checkbox changes
+function handleStatusCheckboxChange(checkbox) {
+    // If any individual status is checked, uncheck "All Statuses"
+    if (checkbox.checked) {
+        statusAllCheckbox.checked = false;
+        
+        // Add to selected statuses
+        selectedStatuses = selectedStatuses.filter(s => s !== 'all');
+        selectedStatuses.push(checkbox.value);
+    } else {
+        // Remove from selected statuses
+        selectedStatuses = selectedStatuses.filter(s => s !== checkbox.value);
+        
+        // If no statuses are selected, check "All Statuses"
+        if (selectedStatuses.length === 0) {
+            statusAllCheckbox.checked = true;
+            selectedStatuses = ['all'];
+        }
+    }
+    
+    // Update filter button text
+    updateStatusFilterButtonText();
+    
+    // Filter tasks
+    filterTasks();
+}
+
+// Filter tasks based on selected statuses, projects, and search
 function filterTasks() {
     const searchQuery = taskSearch.value.toLowerCase();
-    const statusValue = statusFilter.value;
     
-    console.log('Filtering tasks - Status:', statusValue, 'Search:', searchQuery);
+    console.log('Filtering tasks - Statuses:', selectedStatuses, 'Projects:', selectedProjects, 'Search:', searchQuery);
     
     // Get all task elements
     const taskElements = document.querySelectorAll('.task-item');
@@ -1314,7 +1509,12 @@ function filterTasks() {
         if (!task) return;
         
         // Check if task matches status filter
-        const statusMatch = statusValue === 'all' || task.status === statusValue;
+        const statusMatch = selectedStatuses.includes('all') || 
+                         selectedStatuses.includes(task.status);
+        
+        // Check if task matches project filter
+        const projectMatch = selectedProjects.includes('all') || 
+                          selectedProjects.includes(task.project_id);
         
         // Check if task matches search query
         const searchMatch = searchQuery === '' || 
@@ -1322,7 +1522,7 @@ function filterTasks() {
             (task.category && task.category.toLowerCase().includes(searchQuery));
         
         // Show or hide task
-        if (statusMatch && searchMatch) {
+        if (statusMatch && projectMatch && searchMatch) {
             taskElement.style.display = '';
         } else {
             taskElement.style.display = 'none';
@@ -1340,8 +1540,14 @@ function renderTasks() {
         return;
     }
     
+    // Sort tasks by status (inprogress first, then backlog, then done)
+    const sortedTasks = [...tasks].sort((a, b) => {
+        const statusOrder = { 'inprogress': 0, 'backlog': 1, 'done': 2 };
+        return statusOrder[a.status] - statusOrder[b.status];
+    });
+    
     // Add tasks to container
-    tasks.forEach(task => {
+    sortedTasks.forEach(task => {
         const taskElement = createTaskElement(task);
         tasksContainer.appendChild(taskElement);
     });
@@ -1529,28 +1735,29 @@ function closeTaskDetails() {
     taskDetailsView.classList.add('hidden');
 }
 
-// Initialize ASCII animation
-function initAsciiAnimation() {
-    const asciiElement = document.querySelector('.ascii-art');
-    if (!asciiElement) return;
+// Initialize voice wave animation
+function initVoiceWaveAnimation() {
+    const voiceBars = document.querySelectorAll('.voice-bar');
+    if (!voiceBars.length) return;
     
-    // Set initial pattern
-    let currentPatternIndex = Math.floor(Math.random() * asciiPatterns.length);
-    asciiElement.textContent = asciiPatterns[currentPatternIndex].repeat(3);
+    // Set random heights for voice bars
+    voiceBars.forEach(bar => {
+        const randomHeight = 5 + Math.floor(Math.random() * 11); // Random height between 5-15px
+        bar.style.height = `${randomHeight}px`;
+        
+        // Set color to green (term-text)
+        bar.style.backgroundColor = 'var(--term-text)';
+    });
     
-    // Change pattern periodically
+    // Animate voice bars with random heights
     setInterval(() => {
-        currentPatternIndex = (currentPatternIndex + 1) % asciiPatterns.length;
-        
-        // Create a transition effect by fading out briefly
-        asciiElement.style.opacity = '0.3';
-        
-        setTimeout(() => {
-            // Update the pattern and restore opacity
-            asciiElement.textContent = asciiPatterns[currentPatternIndex].repeat(3);
-            asciiElement.style.opacity = '1';
-        }, 200);
-    }, 8000); // Change pattern every 8 seconds
+        voiceBars.forEach(bar => {
+            setTimeout(() => {
+                const randomHeight = 5 + Math.floor(Math.random() * 11); // Random height between 5-15px
+                bar.style.height = `${randomHeight}px`;
+            }, Math.random() * 200); // Random delay up to 200ms
+        });
+    }, 300); // Update heights every 300ms
 }
 
 // Close emoji suggestions when clicking outside

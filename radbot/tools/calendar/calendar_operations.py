@@ -169,10 +169,13 @@ def update_event(
         # First retrieve the event
         event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
         
+        # Get timezone from kwargs or use UTC as default
+        timezone = kwargs.pop('timezone', 'UTC') if 'timezone' in kwargs else 'UTC'
+        
         # Update fields that were provided
         for key, value in kwargs.items():
             if key in ['start', 'end']:
-                event[key] = format_time(value)
+                event[key] = format_time(value, timezone)
             else:
                 event[key] = value
         
