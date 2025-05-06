@@ -228,6 +228,141 @@ async def reset_session(
         logger.error(f"Error resetting session: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error resetting session: {str(e)}")
 
+@app.get("/api/tasks")
+async def get_tasks():
+    """Get all tasks from the database directly.
+    
+    Returns:
+        JSON list of tasks
+    """
+    try:
+        # Import task listing function
+        from radbot.tools.todo.api.list_tools import list_all_tasks
+        
+        # Call the function directly
+        tasks = list_all_tasks()
+        
+        # Convert tasks to a serializable format
+        serializable_tasks = []
+        for task in tasks:
+            # Check if task is already a dict
+            if isinstance(task, dict):
+                serializable_tasks.append(task)
+            else:
+                # Convert task object to dict
+                task_dict = {
+                    "task_id": str(task.task_id) if hasattr(task, "task_id") else "unknown",
+                    "description": str(task.description) if hasattr(task, "description") else "",
+                    "status": str(task.status) if hasattr(task, "status") else "backlog",
+                    "category": str(task.category) if hasattr(task, "category") else None,
+                    "project_id": str(task.project_id) if hasattr(task, "project_id") else None,
+                    "project_name": str(task.project_name) if hasattr(task, "project_name") else "Default",
+                    "created_at": str(task.created_at) if hasattr(task, "created_at") else None,
+                    "updated_at": str(task.updated_at) if hasattr(task, "updated_at") else None,
+                    "origin": str(task.origin) if hasattr(task, "origin") else None,
+                }
+                serializable_tasks.append(task_dict)
+        
+        # Return the tasks
+        return serializable_tasks
+    except Exception as e:
+        logger.error(f"Error getting tasks: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting tasks: {str(e)}")
+
+@app.get("/api/projects")
+async def get_projects():
+    """Get all projects from the database directly.
+    
+    Returns:
+        JSON list of projects
+    """
+    try:
+        # Import project listing function
+        from radbot.tools.todo.api.list_tools import list_projects
+        
+        # Call the function directly
+        projects = list_projects()
+        
+        # Convert projects to a serializable format
+        serializable_projects = []
+        for project in projects:
+            # Check if project is already a dict
+            if isinstance(project, dict):
+                serializable_projects.append(project)
+            else:
+                # Convert project object to dict
+                project_dict = {
+                    "project_id": str(project.project_id) if hasattr(project, "project_id") else "unknown",
+                    "name": str(project.name) if hasattr(project, "name") else "Default",
+                    "description": str(project.description) if hasattr(project, "description") else "",
+                    "created_at": str(project.created_at) if hasattr(project, "created_at") else None,
+                    "updated_at": str(project.updated_at) if hasattr(project, "updated_at") else None,
+                }
+                serializable_projects.append(project_dict)
+        
+        # Return the projects
+        return serializable_projects
+    except Exception as e:
+        logger.error(f"Error getting projects: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting projects: {str(e)}")
+
+@app.get("/api/events")
+async def get_events():
+    """Get demo events since there's no API for real events yet.
+    
+    Returns:
+        JSON list of demo events
+    """
+    try:
+        # Create some demo events
+        events = [
+            {
+                "id": "evt-001",
+                "type": "tool_call",
+                "category": "tool_call",
+                "timestamp": "2025-05-06 10:00:00",
+                "summary": "Called weather API for current forecast",
+                "details": {"tool": "get_weather", "args": {"location": "San Francisco"}}
+            },
+            {
+                "id": "evt-002",
+                "type": "agent_transfer",
+                "category": "agent_transfer",
+                "timestamp": "2025-05-06 10:05:00",
+                "summary": "Transferred to scout agent for web research",
+                "details": {"from_agent": "beto", "to_agent": "scout"}
+            },
+            {
+                "id": "evt-003",
+                "type": "planner",
+                "category": "planner",
+                "timestamp": "2025-05-06 10:10:00",
+                "summary": "Created plan for task implementation",
+                "details": {"steps": ["Research API", "Implement function", "Test"]}
+            },
+            {
+                "id": "evt-004",
+                "type": "tool_call",
+                "category": "tool_call",
+                "timestamp": "2025-05-06 10:15:00",
+                "summary": "Searched filesystem for Python files",
+                "details": {"tool": "list_files", "args": {"pattern": "*.py"}}
+            },
+            {
+                "id": "evt-005",
+                "type": "agent_transfer",
+                "category": "agent_transfer",
+                "timestamp": "2025-05-06 10:20:00",
+                "summary": "Transferred back to main agent",
+                "details": {"from_agent": "scout", "to_agent": "beto"}
+            }
+        ]
+        
+        return events
+    except Exception as e:
+        logger.error(f"Error getting events: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting events: {str(e)}")
+
 def start_server(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
     """Start the FastAPI server.
     

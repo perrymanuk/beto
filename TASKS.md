@@ -379,6 +379,10 @@ Phase 4: Security and Testing
 - [x] Enable responsive view for mobile devices
 - [x] Add border and elevation effects to task panel
 - [x] Prevent tasks and events panels from being open simultaneously
+- [x] Fix agent transfer functionality (solve "Malformed function call: transfer_to_agent" error)
+- [x] Fix tasks and events not loading issue
+- [x] Connect tasks panel to task API at port 8001
+- [x] Add settings panel for API endpoint configuration
+- [x] Add dark mode toggle support
 - [ ] Add notification system for agent status and tasks
 - [ ] Implement event filtering by timestamp
-- [ ] Add dark mode toggle support

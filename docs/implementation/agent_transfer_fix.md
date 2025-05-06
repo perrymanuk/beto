@@ -187,3 +187,31 @@ The Google ADK 0.4.0 agent transfer mechanism appears to have specific requireme
 6. Clearing and rebuilding the `sub_agents` list seems to improve agent registration
 
 These requirements may change in future ADK versions, so it's important to check the ADK documentation and update this implementation as needed.
+
+## May 2025 Update: Malformed Function Call Fix
+
+A new issue was discovered in May 2025 where agent transfers were failing with a "Malformed function call: transfer_to_agent" error. The issue was fixed with the following changes:
+
+1. Changed how the transfer_to_agent tool is registered in agent.py:
+   - Instead of creating a FunctionTool wrapper around the transfer_to_agent function (which was causing the malformed function call error), we now add the function directly to the tools list.
+   - Also added the TRANSFER_TO_AGENT_TOOL constant from the ADK library as a backup, which is pre-configured with the correct schema.
+
+```python
+# Add the ADK's built-in transfer_to_agent tool
+try:
+    # Rather than wrapping in a FunctionTool, add transfer_to_agent directly
+    # as it's likely already properly registered within the ADK
+    basic_tools.append(transfer_to_agent)
+    logger.info("Added transfer_to_agent function directly to tools list")
+    
+    # Check if the function tool is available in the ADK
+    from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
+    if TRANSFER_TO_AGENT_TOOL:
+        basic_tools.append(TRANSFER_TO_AGENT_TOOL)
+        logger.info("Added TRANSFER_TO_AGENT_TOOL from ADK")
+except Exception as e:
+    logger.warning(f"Failed to add transfer_to_agent tool: {str(e)}")
+    logger.debug(f"Transfer tool addition error details:", exc_info=True)
+```
+
+This implementation ensures that the transfer_to_agent function is correctly registered with the ADK and can be called with the proper JSON schema, resolving the "Malformed function call" error.

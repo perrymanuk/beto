@@ -3,75 +3,39 @@
  */
 
 // DOM Elements
-const chatMessages = document.getElementById('chat-messages');
-const chatInput = document.getElementById('chat-input');
-const sendButton = document.getElementById('send-button');
-const resetButton = document.getElementById('reset-button');
+let chatMessages;
+let chatInput;
+let sendButton;
+let resetButton;
 
 // Status Bar Elements
-const agentStatus = document.getElementById('agent-status');
-const timeStatus = document.getElementById('time-status');
-const connectionStatus = document.getElementById('connection-status');
+let agentStatus;
+let timeStatus;
+let connectionStatus;
 
-// Events Panel Elements
-const eventsPanel = document.getElementById('events-panel');
-const toggleEventsButton = document.getElementById('toggle-events-button');
-const clearEventsButton = document.getElementById('clear-events-button');
-const eventTypeFilter = document.getElementById('event-type-filter');
-const eventsContainer = document.getElementById('events-container');
-const eventDetails = document.getElementById('event-details');
-const eventDetailsContent = document.getElementById('event-details-content');
-const closeDetailsButton = document.getElementById('close-details-button');
-
-// Tasks Panel Elements
-const tasksPanel = document.getElementById('tasks-panel');
-const toggleTasksButton = document.getElementById('toggle-tasks-button');
-const refreshTasksButton = document.getElementById('refresh-tasks-button');
-const settingsTasksButton = document.getElementById('settings-tasks-button');
-const projectFilterBtn = document.getElementById('project-filter-btn');
-const projectFilterContent = document.getElementById('project-filter-content');
-const statusFilterBtn = document.getElementById('status-filter-btn');
-const statusFilterContent = document.getElementById('status-filter-content');
-const projectAllCheckbox = document.getElementById('project-all');
-const statusAllCheckbox = document.getElementById('status-all');
-const taskSearch = document.getElementById('task-search');
-const tasksContainer = document.getElementById('tasks-container');
-const taskSettingsDialog = document.getElementById('task-settings-dialog');
-const apiEndpointInput = document.getElementById('api-endpoint');
-const apiKeyInput = document.getElementById('api-key');
-const defaultProjectSelect = document.getElementById('default-project');
-const saveSettingsButton = document.getElementById('save-settings-button');
-const testConnectionButton = document.getElementById('test-connection-button');
-const closeDialogButton = document.querySelector('.close-dialog-button');
-
-// Task Details View Elements
-const taskDetailsView = document.getElementById('task-details-view');
-const taskDetailsContent = document.getElementById('task-details-content');
-const closeTaskDetailsButton = document.getElementById('close-task-details-button');
-const backToTasksButton = document.getElementById('back-to-tasks-button');
+// Event panel buttons 
+let toggleEventsButton;
+let toggleTasksButton;
 
 // Emoji Suggestions Element
-const emojiSuggestionsElement = document.getElementById('emoji-suggestions');
+let emojiSuggestionsElement;
 
 // State
 let sessionId = localStorage.getItem('radbot_session_id') || null;
 let socket = null;
 let socketConnected = false;
 let events = [];
-let activeEventId = null;
-let eventsPanelVisible = false;
-let tasksPanelVisible = false;
 let tasks = [];
 let projects = [];
 let selectedProjects = ['all'];
 let selectedStatuses = ['all'];
-let projectFilterOpen = false;
-let statusFilterOpen = false;
 let currentAgentName = "BETO"; // Track current agent name - use uppercase to match status bar
+let isDarkTheme = true; // Always use dark theme
+// Hardcode task API settings since settings dialog is removed
 let taskApiSettings = {
-    endpoint: localStorage.getItem('task_api_endpoint') || 'http://localhost:8001',
-    apiKey: localStorage.getItem('task_api_key') || '',
-    defaultProject: localStorage.getItem('task_default_project') || ''
+    endpoint: 'http://localhost:8001',
+    apiKey: '',
+    defaultProject: ''
 };
 
 // Emoji autocomplete state
@@ -80,55 +44,79 @@ let activeSuggestionIndex = -1;
 let activeShortcodeStart = -1;
 let activeShortcodeEnd = -1;
 
-// Voice animation constants
-const VOICE_BAR_COLOR = 'var(--term-text)';
-
-// Fix for border alignment issue
-function fixBorderAlignment() {
-    // Force the container to be full width but not too wide to cause scrolling
-    const appContainer = document.getElementById('app-container');
-    if (appContainer) {
-        // Set the exact dimensions
-        appContainer.style.width = '96vw';
-        appContainer.style.height = '96vh';
-        appContainer.style.maxWidth = 'none';
-        
-        // Make sure everything inside stays contained
-        appContainer.style.overflow = 'hidden';
-        
-        // Force the body to center the container
-        document.body.style.display = 'flex';
-        document.body.style.justifyContent = 'center';
-        document.body.style.alignItems = 'center';
-        document.body.style.overflow = 'hidden';
-        document.body.style.margin = '0';
-        document.body.style.padding = '0';
-        document.body.style.width = '100%';
-        document.body.style.height = '100%';
-        
-        // Ensure background color extends to edge
-        document.body.style.backgroundColor = '#121212';
-    }
-}
-
 // Initialize
 function init() {
+    console.log('Initializing app.js');
+    
+    // Listen for tiling manager ready event
+    document.addEventListener('tiling:ready', () => {
+        console.log('Received tiling:ready event, initializing UI');
+        initializeUI();
+    });
+    
+    // Listen for layout changes to re-initialize UI elements
+    document.addEventListener('layout:changed', () => {
+        console.log('Layout changed, reinitializing UI');
+        initializeUI();
+    });
+    
+    // As a fallback, also wait a moment to try initialization
+    setTimeout(() => {
+        if (!chatInput) {
+            console.log('Attempting UI initialization via timeout');
+            initializeUI();
+        }
+    }, 300);
+    
     // Create session ID if not exists
     if (!sessionId) {
         sessionId = generateUUID();
         localStorage.setItem('radbot_session_id', sessionId);
     }
     
-    // Initialize panels state
-    eventsPanel.classList.add('hidden');
-    eventsPanelVisible = false;
+    // Connect to WebSocket immediately
+    connectWebSocket();
     
-    tasksPanel.classList.add('hidden');
-    tasksPanelVisible = false;
+    // Fetch tasks, projects, and events directly from API
+    fetchTasks();
+    fetchEvents();
+}
+
+// Make functions globally available for tiling manager
+window.initializeUI = initializeUI;
+window.renderTasks = renderTasks;
+window.renderEvents = renderEvents;
+
+// Initialize UI elements after DOM is ready
+function initializeUI() {
+    // Initialize DOM references
+    chatMessages = document.getElementById('chat-messages');
+    chatInput = document.getElementById('chat-input');
+    sendButton = document.getElementById('send-button');
+    resetButton = document.getElementById('reset-button');
     
-    // Apply border fix
-    fixBorderAlignment();
-    window.addEventListener('resize', fixBorderAlignment);
+    // Status Bar Elements
+    agentStatus = document.getElementById('agent-status');
+    timeStatus = document.getElementById('time-status');
+    connectionStatus = document.getElementById('connection-status');
+    
+    // Event panel buttons
+    toggleEventsButton = document.getElementById('toggle-events-button');
+    toggleTasksButton = document.getElementById('toggle-tasks-button');
+    
+    // Theme and matrix toggle buttons have been removed
+    
+    // Emoji suggestions
+    emojiSuggestionsElement = document.getElementById('emoji-suggestions');
+    
+    // If any critical elements are missing, try again in a moment
+    if (!chatInput || !chatMessages) {
+        console.log('Critical UI elements not found, retrying initialization...');
+        setTimeout(initializeUI, 200);
+        return;
+    }
+    
+    console.log('UI elements initialized successfully');
     
     // Initialize voice wave animation
     initVoiceWaveAnimation();
@@ -140,63 +128,57 @@ function init() {
     updateClock();
     setInterval(updateClock, 1000);
     
-    connectWebSocket();
-    
-    // Load task API settings
-    loadTaskSettings();
-    
-    // Chat event listeners
-    chatInput.addEventListener('keydown', handleInputKeydown);
-    sendButton.addEventListener('click', sendMessage);
-    resetButton.addEventListener('click', resetConversation);
-    
-    // Events panel event listeners
-    toggleEventsButton.addEventListener('click', toggleEventsPanel);
-    clearEventsButton.addEventListener('click', clearEvents);
-    eventTypeFilter.addEventListener('change', filterEvents);
-    closeDetailsButton.addEventListener('click', closeEventDetails);
-    
-    // Tasks panel event listeners
-    toggleTasksButton.addEventListener('click', toggleTasksPanel);
-    refreshTasksButton.addEventListener('click', refreshTasks);
-    settingsTasksButton.addEventListener('click', showTaskSettings);
-    projectFilterBtn.addEventListener('click', toggleProjectFilter);
-    statusFilterBtn.addEventListener('click', toggleStatusFilter);
-    projectAllCheckbox.addEventListener('change', handleProjectAllCheckbox);
-    statusAllCheckbox.addEventListener('change', handleStatusAllCheckbox);
-    taskSearch.addEventListener('input', filterTasks);
-    
-    // Close the dropdowns when clicking outside of them
-    document.addEventListener('click', handleClickOutsideDropdowns);
-    
-    // Task details view event listeners
-    closeTaskDetailsButton.addEventListener('click', closeTaskDetails);
-    backToTasksButton.addEventListener('click', closeTaskDetails);
-    
-    // Settings dialog event listeners
-    closeDialogButton.addEventListener('click', hideTaskSettings);
-    saveSettingsButton.addEventListener('click', saveTaskSettings);
-    testConnectionButton.addEventListener('click', testTaskApiConnection);
-    
-    // Auto-resize textarea as user types
-    chatInput.addEventListener('input', function(event) {
-        resizeTextarea();
-        handleEmojiAutocomplete(event);
-    });
-    
-    // Handle keyboard navigation for emoji suggestions
-    chatInput.addEventListener('keydown', handleEmojiKeyNavigation);
-    
-    // Initialize task panel if settings are available
-    if (taskApiSettings.endpoint) {
-        // Setup status checkboxes
-        setupStatusCheckboxes();
+    // Add chat event listeners (only if elements exist)
+    if (chatInput) {
+        chatInput.addEventListener('keydown', handleInputKeydown);
         
-        // Fetch projects and tasks
-        fetchProjects().then(() => {
-            fetchTasks();
+        // Auto-resize textarea as user types
+        chatInput.addEventListener('input', function(event) {
+            resizeTextarea();
+            handleEmojiAutocomplete(event);
+            handleCommandAutocomplete(event);
+        });
+        
+        // Handle keyboard navigation for emoji suggestions
+        chatInput.addEventListener('keydown', handleEmojiKeyNavigation);
+        
+        // Handle keyboard navigation for command suggestions
+        chatInput.addEventListener('keydown', handleCommandKeyNavigation);
+    }
+    
+    if (sendButton) {
+        sendButton.addEventListener('click', sendMessage);
+    }
+    
+    if (resetButton) {
+        resetButton.addEventListener('click', resetConversation);
+    }
+    
+    // Panel toggle buttons
+    if (toggleEventsButton) {
+        toggleEventsButton.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('command:events'));
         });
     }
+    
+    if (toggleTasksButton) {
+        toggleTasksButton.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('command:tasks'));
+        });
+    }
+    
+    // Theme and matrix toggle functionality has been removed
+    // Always set dark theme
+    isDarkTheme = true;
+    document.body.classList.remove('light-theme');
+    
+    // Settings functionality has been removed
+    
+    // Set up slash commands
+    setupSlashCommands();
+    
+    // Set up filter controls
+    setupFilterControls();
 }
 
 // Connect to WebSocket
@@ -222,6 +204,10 @@ function connectWebSocket() {
                 // Process incoming events
                 console.log('Received events data:', data.content);
                 handleEvents(data.content);
+            } else if (data.type === 'tasks') {
+                // Process incoming tasks
+                console.log('Received tasks data:', data.content);
+                handleTasks(data.content);
             }
         };
         
@@ -285,6 +271,14 @@ function sendMessage() {
         
         // Force a status update to update all UI elements consistently
         setStatus('ready');
+    }
+    
+    // Check if this is a slash command
+    if (message.startsWith('/')) {
+        executeCommand(message);
+        chatInput.value = '';
+        resizeTextarea();
+        return;
     }
     
     // Convert emoji shortcodes to unicode emojis for display, but send original text to server
@@ -448,6 +442,15 @@ function convertEmoji(text) {
 
 // Add a message to the chat UI
 function addMessage(role, content) {
+    // Ensure chatMessages element exists
+    if (!chatMessages) {
+        chatMessages = document.getElementById('chat-messages');
+        if (!chatMessages) {
+            console.error('Chat messages container not found, message not added');
+            return;
+        }
+    }
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     
@@ -473,7 +476,11 @@ function addMessage(role, content) {
     }
     
     // Use marked.js to render markdown
-    contentDiv.innerHTML = marked.parse(content);
+    if (typeof marked !== 'undefined') {
+        contentDiv.innerHTML = marked.parse(content);
+    } else {
+        contentDiv.textContent = content;
+    }
     
     // For system messages, add animations to simulate terminal loading
     if (role === 'system') {
@@ -498,10 +505,28 @@ function addMessage(role, content) {
     }
     
     messageDiv.appendChild(contentDiv);
+    
+    // Verify chat messages container exists
+    if (!chatMessages) {
+        chatMessages = document.getElementById('chat-messages');
+        if (!chatMessages) {
+            console.error('Chat messages container not found, creating fallback');
+            // Create a fallback container if one doesn't exist
+            chatMessages = document.createElement('div');
+            chatMessages.id = 'chat-messages';
+            chatMessages.className = 'chat-messages';
+            document.body.appendChild(chatMessages);
+        }
+    }
+    
+    // Append the message
     chatMessages.appendChild(messageDiv);
     
-    // Scroll to bottom
-    scrollToBottom();
+    // Scroll to bottom with a slight delay to ensure DOM updates
+    setTimeout(scrollToBottom, 10);
+    
+    // Also try scrolling after a longer delay just to be sure
+    setTimeout(scrollToBottom, 300);
 }
 
 // Handle status updates
@@ -589,8 +614,13 @@ async function resetConversation() {
 
 // Handle input keydown (send on Enter, new line on Shift+Enter)
 function handleInputKeydown(event) {
+    // Check if command-suggestions element exists
+    const commandSuggestionsElement = document.getElementById('command-suggestions');
+    
     // If emoji suggestions are showing, don't send on Enter
-    if (event.key === 'Enter' && !event.shiftKey && emojiSuggestions.length === 0) {
+    if (event.key === 'Enter' && !event.shiftKey && 
+        emojiSuggestions.length === 0 && 
+        (!commandSuggestionsElement || !commandSuggestionsElement.classList.contains('visible'))) {
         event.preventDefault();
         sendMessage();
     }
@@ -664,6 +694,9 @@ function updateEmojiSuggestions(fragment) {
 
 // Show emoji suggestions
 function showEmojiSuggestions() {
+    // Check if element exists
+    if (!emojiSuggestionsElement) return;
+    
     // Clear existing suggestions
     emojiSuggestionsElement.innerHTML = '';
     
@@ -706,6 +739,8 @@ function showEmojiSuggestions() {
 
 // Hide emoji suggestions
 function hideEmojiSuggestions() {
+    if (!emojiSuggestionsElement) return;
+    
     emojiSuggestionsElement.classList.add('hidden');
     emojiSuggestions = [];
     activeSuggestionIndex = -1;
@@ -715,8 +750,8 @@ function hideEmojiSuggestions() {
 
 // Handle keyboard navigation for emoji suggestions
 function handleEmojiKeyNavigation(event) {
-    // Only process if suggestions are visible
-    if (emojiSuggestions.length === 0 || emojiSuggestionsElement.classList.contains('hidden')) {
+    // Only process if suggestions are visible and element exists
+    if (!emojiSuggestionsElement || emojiSuggestions.length === 0 || emojiSuggestionsElement.classList.contains('hidden')) {
         return;
     }
     
@@ -754,6 +789,9 @@ function handleEmojiKeyNavigation(event) {
 
 // Update active suggestion highlighting
 function updateActiveSuggestion() {
+    // Check if element exists
+    if (!emojiSuggestionsElement) return;
+    
     // Remove active class from all items
     const items = emojiSuggestionsElement.querySelectorAll('.emoji-suggestion-item');
     items.forEach(item => item.classList.remove('active'));
@@ -808,99 +846,636 @@ function insertEmojiSuggestion(index) {
     }
 }
 
-// Auto-resize textarea
-function resizeTextarea() {
-    chatInput.style.height = 'auto';
-    chatInput.style.height = Math.min(chatInput.scrollHeight, 150) + 'px';
+// Slash commands functionality
+const commands = [
+    { name: '/tasks', description: 'Toggle tasks panel' },
+    { name: '/events', description: 'Toggle events panel' },
+    { name: '/clear', description: 'Clear conversation history' },
+    { name: '/help', description: 'Show available commands' },
+    { name: '/details', description: 'Show details for an item by ID', requiresArg: true },
+    { name: '/matrix', description: 'Control matrix background - toggle, opacity, speed', requiresArg: true }
+];
+
+let activeCommandIndex = -1;
+let commandSuggestions = [];
+
+function setupSlashCommands() {
+    // Create command suggestions element if it doesn't exist
+    let commandSuggestionsElement = document.getElementById('command-suggestions');
+    if (!commandSuggestionsElement) {
+        commandSuggestionsElement = document.createElement('div');
+        commandSuggestionsElement.id = 'command-suggestions';
+        commandSuggestionsElement.className = 'command-suggestions';
+        document.querySelector('.chat-input-wrapper').appendChild(commandSuggestionsElement);
+    }
 }
 
-// Scroll chat to bottom
-function scrollToBottom() {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-// Update status bar
-function updateStatusBar() {
-    if (agentStatus) {
-        // Always display agent name in uppercase in the status bar
-        const displayName = currentAgentName.toUpperCase();
+function handleCommandAutocomplete(event) {
+    const input = chatInput;
+    const text = input.value;
+    const cursorPosition = input.selectionStart;
+    
+    // Find if we're typing a command (line starts with /)
+    const lastLineStart = text.lastIndexOf('\n', cursorPosition - 1) + 1;
+    const currentLine = text.substring(lastLineStart, cursorPosition);
+    
+    // If current line starts with slash, show command suggestions
+    if (currentLine.startsWith('/')) {
+        const commandText = currentLine.split(' ')[0]; // Get just the command part
         
-        // Special handling for SCOUT agent
-        if (currentAgentName.toUpperCase() === 'SCOUT') {
-            console.log("SCOUT AGENT DETECTED - Updating status bar");
+        // Filter matching commands
+        commandSuggestions = commands.filter(cmd => 
+            cmd.name.startsWith(commandText.toLowerCase())
+        );
+        
+        if (commandSuggestions.length > 0) {
+            showCommandSuggestions();
+            input.classList.add('has-command');
+        } else {
+            hideCommandSuggestions();
         }
-        
-        agentStatus.textContent = `AGENT: ${displayName}`;
-        console.log(`Updated status bar with agent name: ${displayName}`);
-        
-        // Force the status bar to update immediately
-        agentStatus.style.color = displayName === 'SCOUT' ? 'var(--term-blue)' : 'var(--term-amber)';
-        setTimeout(() => {
-            agentStatus.style.color = 'var(--term-amber)';
-        }, 100);
     } else {
-        console.error('Agent status element not found in DOM. Element ID: agent-status');
-    }
-    
-    // Update clock
-    updateClock();
-    
-    // Set initial connection status if needed
-    if (connectionStatus && !connectionStatus.textContent) {
-        connectionStatus.textContent = 'CONNECTION: ACTIVE';
+        hideCommandSuggestions();
+        input.classList.remove('has-command');
     }
 }
 
-// Update clock in status bar
-function updateClock() {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
+function showCommandSuggestions() {
+    const commandSuggestionsElement = document.getElementById('command-suggestions');
+    commandSuggestionsElement.innerHTML = '';
+    
+    // Create suggestion elements
+    commandSuggestions.forEach((cmd, index) => {
+        const item = document.createElement('div');
+        item.className = 'command-item';
+        item.dataset.index = index;
+        
+        const name = document.createElement('span');
+        name.className = 'command-name';
+        name.textContent = cmd.name;
+        
+        const description = document.createElement('span');
+        description.className = 'command-description';
+        description.textContent = cmd.description;
+        
+        item.appendChild(name);
+        item.appendChild(description);
+        
+        // Add click handler
+        item.addEventListener('click', () => {
+            insertCommand(index);
+        });
+        
+        commandSuggestionsElement.appendChild(item);
     });
     
-    if (timeStatus) {
-        timeStatus.textContent = `TIME: ${timeString}`;
+    // Reset active suggestion
+    activeCommandIndex = -1;
+    
+    // Show suggestions
+    commandSuggestionsElement.classList.add('visible');
+}
+
+function hideCommandSuggestions() {
+    const commandSuggestionsElement = document.getElementById('command-suggestions');
+    commandSuggestionsElement.classList.remove('visible');
+    commandSuggestions = [];
+    activeCommandIndex = -1;
+}
+
+function handleCommandKeyNavigation(event) {
+    const commandSuggestionsElement = document.getElementById('command-suggestions');
+    
+    // Only process if command suggestions are visible
+    if (!commandSuggestionsElement.classList.contains('visible') || commandSuggestions.length === 0) {
+        return;
+    }
+    
+    switch (event.key) {
+        case 'ArrowDown':
+            // Move selection down
+            event.preventDefault();
+            activeCommandIndex = (activeCommandIndex + 1) % commandSuggestions.length;
+            updateActiveCommand();
+            break;
+            
+        case 'ArrowUp':
+            // Move selection up
+            event.preventDefault();
+            activeCommandIndex = (activeCommandIndex - 1 + commandSuggestions.length) % commandSuggestions.length;
+            updateActiveCommand();
+            break;
+            
+        case 'Tab':
+        case 'Enter':
+            // Insert selected command
+            if (activeCommandIndex >= 0) {
+                event.preventDefault();
+                insertCommand(activeCommandIndex);
+            } else if (commandSuggestions.length === 1) {
+                event.preventDefault();
+                insertCommand(0);
+            }
+            break;
+            
+        case 'Escape':
+            // Close suggestions
+            event.preventDefault();
+            hideCommandSuggestions();
+            break;
     }
 }
 
-// Generate a UUID
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
+function updateActiveCommand() {
+    const commandSuggestionsElement = document.getElementById('command-suggestions');
+    // Remove active class from all items
+    const items = commandSuggestionsElement.querySelectorAll('.command-item');
+    items.forEach(item => item.classList.remove('selected'));
+    
+    // Add active class to selected item
+    if (activeCommandIndex >= 0 && activeCommandIndex < items.length) {
+        items[activeCommandIndex].classList.add('selected');
+        
+        // Ensure the active item is visible in the scroll area
+        const activeItem = items[activeCommandIndex];
+        const container = commandSuggestionsElement;
+        
+        const itemTop = activeItem.offsetTop;
+        const itemBottom = itemTop + activeItem.offsetHeight;
+        const containerTop = container.scrollTop;
+        const containerBottom = containerTop + container.offsetHeight;
+        
+        if (itemTop < containerTop) {
+            container.scrollTop = itemTop;
+        } else if (itemBottom > containerBottom) {
+            container.scrollTop = itemBottom - container.offsetHeight;
+        }
+    }
 }
 
-// Event panel functions
-function toggleEventsPanel() {
-    // If events panel is not visible, we're about to show it
-    if (!eventsPanelVisible) {
-        // Hide tasks panel if it's visible
-        if (tasksPanelVisible) {
-            tasksPanel.classList.add('hidden');
-            tasksPanelVisible = false;
+function insertCommand(index) {
+    const input = chatInput;
+    const text = input.value;
+    const cursorPosition = input.selectionStart;
+    
+    // Find the start of the current line
+    const lastLineStart = text.lastIndexOf('\n', cursorPosition - 1) + 1;
+    
+    // Replace the partial command with the full command
+    const cmd = commandSuggestions[index];
+    const beforeCommand = text.substring(0, lastLineStart);
+    const afterCommand = text.substring(cursorPosition);
+    
+    input.value = beforeCommand + cmd.name + ' ' + afterCommand;
+    
+    // Set cursor position after the command
+    const newPosition = lastLineStart + cmd.name.length + 1;
+    input.setSelectionRange(newPosition, newPosition);
+    
+    // Focus the input
+    input.focus();
+    
+    // Hide suggestions
+    hideCommandSuggestions();
+}
+
+function executeCommand(command) {
+    const parts = command.split(' ');
+    const cmdName = parts[0].toLowerCase();
+    const args = parts.slice(1);
+    
+    switch (cmdName) {
+        case '/tasks':
+            document.dispatchEvent(new CustomEvent('command:tasks'));
+            addMessage('system', 'Tasks panel toggled');
+            break;
+        
+        case '/events':
+            document.dispatchEvent(new CustomEvent('command:events'));
+            addMessage('system', 'Events panel toggled');
+            break;
+        
+        case '/clear':
+            resetConversation();
+            break;
+        
+        case '/help':
+            showHelp();
+            break;
+        
+        case '/details':
+            if (args.length > 0) {
+                showItemDetails(args[0]);
+            } else {
+                addMessage('system', 'Error: Please provide an item ID');
+            }
+            break;
+            
+        case '/matrix':
+            if (args.length === 0) {
+                addMessage('system', `Matrix background commands:
+- /matrix toggle: Turn the effect on/off
+- /matrix opacity 0.1-1.0: Set transparency (0.1=subtle, 1.0=opaque)
+- /matrix speed 0.5-2.0: Set animation speed
+- /matrix density 10-50: Set character density (lower=more characters)`);
+                return;
+            }
+            
+            const subcommand = args[0].toLowerCase();
+            const param = args[1];
+            
+            if (subcommand === 'toggle') {
+                document.dispatchEvent(new CustomEvent('command:matrix', { 
+                    detail: { toggle: true }
+                }));
+                addMessage('system', 'Matrix background effect toggled');
+            } else if (subcommand === 'opacity' && param) {
+                const opacity = parseFloat(param);
+                if (isNaN(opacity) || opacity < 0 || opacity > 1) {
+                    addMessage('system', 'Error: Opacity must be between 0 and 1 (e.g., 0.1, 0.5, 0.8)');
+                    return;
+                }
+                document.dispatchEvent(new CustomEvent('command:matrix', { 
+                    detail: { opacity }
+                }));
+                addMessage('system', `Matrix background opacity set to ${opacity}`);
+            } else if (subcommand === 'speed' && param) {
+                const speed = parseFloat(param);
+                if (isNaN(speed) || speed < 0.1 || speed > 3) {
+                    addMessage('system', 'Error: Speed must be between 0.1 and 3 (e.g., 0.5, 1, 2)');
+                    return;
+                }
+                document.dispatchEvent(new CustomEvent('command:matrix', { 
+                    detail: { speed }
+                }));
+                addMessage('system', `Matrix background speed set to ${speed}`);
+            } else if (subcommand === 'density' && param) {
+                const density = parseFloat(param);
+                if (isNaN(density) || density < 5 || density > 100) {
+                    addMessage('system', 'Error: Density must be between 5 and 100 (lower = more characters)');
+                    return;
+                }
+                document.dispatchEvent(new CustomEvent('command:matrix', { 
+                    detail: { density }
+                }));
+                addMessage('system', `Matrix background density set to ${density}`);
+            } else {
+                addMessage('system', `Unknown matrix command. Try: toggle, opacity, speed, density`);
+            }
+            break;
+        
+        default:
+            addMessage('system', `Unknown command: ${cmdName}`);
+    }
+}
+
+function showHelp() {
+    const helpText = commands.map(cmd => `${cmd.name} - ${cmd.description}`).join('\n');
+    addMessage('system', `Available commands:\n\`\`\`\n${helpText}\n\`\`\``);
+}
+
+function showItemDetails(id) {
+    // Check if this is a task ID
+    if (window.tilingManager) {
+        // First check if it's a task
+        if (tasks && tasks.find(t => t.task_id === id)) {
+            window.tilingManager.showTaskDetails(id);
+            addMessage('system', `Showing details for task ${id}`);
+            return;
         }
         
-        // Show events panel
-        eventsPanel.classList.remove('hidden');
-        eventsPanelVisible = true;
+        // Then check if it's an event
+        if (events && events.find(e => e.id === id)) {
+            window.tilingManager.showEventDetails(id);
+            addMessage('system', `Showing details for event ${id}`);
+            return;
+        }
+        
+        addMessage('system', `No item found with ID ${id}`);
     } else {
-        // Hide events panel
-        eventsPanel.classList.add('hidden');
-        eventsPanelVisible = false;
+        addMessage('system', 'The tiling manager is not initialized yet. Try again in a moment.');
     }
 }
 
-function clearEvents() {
-    events = [];
-    renderEvents();
-    closeEventDetails();
+// Function to show a detail panel for tasks or events
+function showDetailPanel(type, item) {
+    console.log(`Showing ${type} details:`, item);
+    
+    // Create or get the detail panel
+    let detailPanel = document.getElementById('detail-panel');
+    if (!detailPanel) {
+        detailPanel = document.createElement('div');
+        detailPanel.id = 'detail-panel';
+        detailPanel.className = 'detail-panel';
+        document.body.appendChild(detailPanel);
+    }
+    
+    // Clear previous content
+    detailPanel.innerHTML = '';
+    
+    // Create close button
+    const closeButton = document.createElement('button');
+    closeButton.className = 'detail-close-button';
+    closeButton.innerHTML = '&times;';
+    closeButton.addEventListener('click', () => {
+        detailPanel.classList.remove('visible');
+    });
+    
+    // Create title
+    const title = document.createElement('h2');
+    title.className = 'detail-title';
+    
+    // Create content container
+    const content = document.createElement('div');
+    content.className = 'detail-content';
+    
+    // Add class for styling based on type
+    detailPanel.className = `detail-panel ${type}-details`;
+    
+    // Generate content based on type
+    if (type === 'task') {
+        title.textContent = 'Task Details';
+        
+        // Format task details
+        const taskDetails = document.createElement('div');
+        taskDetails.className = 'task-details';
+        
+        // Description
+        const description = document.createElement('div');
+        description.className = 'detail-description';
+        description.innerHTML = `<strong>Description:</strong> ${item.description || 'No description'}`;
+        
+        // Status with color
+        const status = document.createElement('div');
+        status.className = 'detail-status';
+        const statusValue = item.status || 'backlog';
+        status.innerHTML = `<strong>Status:</strong> <span class="status-${statusValue.toLowerCase()}">${statusValue}</span>`;
+        
+        // Project
+        const project = document.createElement('div');
+        project.className = 'detail-project';
+        project.innerHTML = `<strong>Project:</strong> ${item.project_name || 'No project'}`;
+        
+        // Created date
+        const created = document.createElement('div');
+        created.className = 'detail-created';
+        if (item.created_at) {
+            try {
+                const date = new Date(item.created_at);
+                created.innerHTML = `<strong>Created:</strong> ${date.toLocaleString()}`;
+            } catch (e) {
+                created.innerHTML = `<strong>Created:</strong> ${item.created_at}`;
+            }
+        } else {
+            created.innerHTML = '<strong>Created:</strong> Unknown';
+        }
+        
+        // Category
+        if (item.category) {
+            const category = document.createElement('div');
+            category.className = 'detail-category';
+            category.innerHTML = `<strong>Category:</strong> ${item.category}`;
+            taskDetails.appendChild(category);
+        }
+        
+        // Origin
+        if (item.origin) {
+            const origin = document.createElement('div');
+            origin.className = 'detail-origin';
+            origin.innerHTML = `<strong>Origin:</strong> ${item.origin}`;
+            taskDetails.appendChild(origin);
+        }
+        
+        // ID (for reference)
+        const id = document.createElement('div');
+        id.className = 'detail-id';
+        id.innerHTML = `<strong>ID:</strong> <span class="monospace">${item.task_id || 'Unknown'}</span>`;
+        
+        // Append all sections
+        taskDetails.appendChild(description);
+        taskDetails.appendChild(status);
+        taskDetails.appendChild(project);
+        taskDetails.appendChild(created);
+        taskDetails.appendChild(id);
+        
+        content.appendChild(taskDetails);
+    } else if (type === 'event') {
+        title.textContent = 'Event Details';
+        
+        // Format event details
+        const eventDetails = document.createElement('div');
+        eventDetails.className = 'event-details';
+        
+        // Type/Category
+        const eventType = document.createElement('div');
+        eventType.className = 'detail-type';
+        eventType.innerHTML = `<strong>Type:</strong> ${item.type || item.category || 'Unknown'}`;
+        
+        // Timestamp
+        const timestamp = document.createElement('div');
+        timestamp.className = 'detail-timestamp';
+        if (item.timestamp) {
+            try {
+                const date = new Date(item.timestamp);
+                timestamp.innerHTML = `<strong>Time:</strong> ${date.toLocaleString()}`;
+            } catch (e) {
+                timestamp.innerHTML = `<strong>Time:</strong> ${item.timestamp}`;
+            }
+        } else {
+            timestamp.innerHTML = '<strong>Time:</strong> Unknown';
+        }
+        
+        // Summary
+        const summary = document.createElement('div');
+        summary.className = 'detail-summary';
+        summary.innerHTML = `<strong>Summary:</strong> ${
+            item.summary || item.description || 'No summary available'
+        }`;
+        
+        // Details (if available)
+        if (item.details) {
+            const details = document.createElement('div');
+            details.className = 'detail-full-details';
+            
+            // Format based on type
+            if (typeof item.details === 'string') {
+                details.innerHTML = `<strong>Details:</strong><br>${item.details}`;
+            } else {
+                try {
+                    const detailsStr = JSON.stringify(item.details, null, 2);
+                    details.innerHTML = `<strong>Details:</strong><br><pre>${detailsStr}</pre>`;
+                } catch (e) {
+                    details.innerHTML = `<strong>Details:</strong> Unable to format details`;
+                }
+            }
+            eventDetails.appendChild(details);
+        }
+        
+        // ID (for reference)
+        const id = document.createElement('div');
+        id.className = 'detail-id';
+        id.innerHTML = `<strong>ID:</strong> <span class="monospace">${item.id || 'Unknown'}</span>`;
+        
+        // Append all sections
+        eventDetails.appendChild(eventType);
+        eventDetails.appendChild(timestamp);
+        eventDetails.appendChild(summary);
+        eventDetails.appendChild(id);
+        
+        content.appendChild(eventDetails);
+    }
+    
+    // Assemble the panel
+    detailPanel.appendChild(closeButton);
+    detailPanel.appendChild(title);
+    detailPanel.appendChild(content);
+    
+    // Add CSS to the detail panel if it doesn't exist
+    if (!document.getElementById('detail-panel-style')) {
+        const style = document.createElement('style');
+        style.id = 'detail-panel-style';
+        style.textContent = `
+            .detail-panel {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) scale(0.9);
+                width: 80%;
+                max-width: 500px;
+                max-height: 80vh;
+                background-color: var(--panel-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 4px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+                padding: 20px;
+                overflow-y: auto;
+                z-index: 1000;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.2s ease-in-out;
+            }
+            
+            .detail-panel.visible {
+                opacity: 1;
+                visibility: visible;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            
+            .detail-close-button {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: none;
+                border: none;
+                color: var(--text-color);
+                font-size: 20px;
+                cursor: pointer;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+            }
+            
+            .detail-close-button:hover {
+                background-color: var(--hover-color);
+            }
+            
+            .detail-title {
+                margin: 0 0 15px 0;
+                padding-bottom: 10px;
+                border-bottom: 1px solid var(--border-color);
+                color: var(--term-amber);
+            }
+            
+            .detail-content {
+                font-family: var(--terminal-font);
+                line-height: 1.5;
+            }
+            
+            .detail-content > div {
+                margin-bottom: 15px;
+            }
+            
+            .detail-content strong {
+                color: var(--accent-blue);
+                font-weight: bold;
+            }
+            
+            .status-backlog {
+                color: var(--term-amber);
+            }
+            
+            .status-inprogress, .status-in_progress {
+                color: var(--term-blue);
+            }
+            
+            .status-done, .status-completed {
+                color: var(--term-green);
+            }
+            
+            .detail-content pre {
+                background-color: rgba(0, 0, 0, 0.2);
+                padding: 10px;
+                border-radius: 4px;
+                overflow: auto;
+                font-family: var(--mono-font);
+                max-height: 200px;
+            }
+            
+            .monospace {
+                font-family: var(--mono-font);
+            }
+            
+            .detail-id {
+                font-size: 0.9em;
+                opacity: 0.7;
+                margin-top: 15px;
+            }
+            
+            /* Add an overlay behind the panel */
+            .detail-panel::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: -1;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Display the panel
+    detailPanel.classList.add('visible');
+    
+    // Close on ESC key
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            detailPanel.classList.remove('visible');
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+    
+    // Close when clicking outside
+    const outsideClickHandler = (e) => {
+        if (detailPanel.classList.contains('visible') && 
+            !detailPanel.contains(e.target)) {
+            detailPanel.classList.remove('visible');
+            document.removeEventListener('click', outsideClickHandler, true);
+        }
+    };
+    // Use capture phase to handle click before other handlers
+    setTimeout(() => {
+        document.addEventListener('click', outsideClickHandler, true);
+    }, 100); // Small delay to avoid immediate closing
 }
 
+// Event handler for events
 function handleEvents(newEvents) {
     console.log('Received events:', newEvents);
     
@@ -920,9 +1495,9 @@ function handleEvents(newEvents) {
                 
                 // Check various properties where agent name might be found
                 const targetAgent = event.to_agent || 
-                                   event.target_agent || 
-                                   (event.details && (event.details.to_agent || event.details.agent)) || 
-                                   (event.summary && event.summary.includes('SCOUT') ? 'SCOUT' : null);
+                               event.target_agent || 
+                               (event.details && (event.details.to_agent || event.details.agent)) || 
+                               (event.summary && event.summary.includes('SCOUT') ? 'SCOUT' : null);
                 
                 if (targetAgent) {
                     // Update the current agent name - force uppercase for consistency
@@ -986,1013 +1561,957 @@ function handleEvents(newEvents) {
         // Add to events array
         events = events.concat(newEvents);
         
-        // Update UI
-        renderEvents();
-    }
-}
-
-// Function to update status text with current agent name
-function updateStatusText() {
-    // Update the agent name in the status bar
-    if (agentStatus) {
-        // Always display agent name in uppercase in the status bar
-        const displayName = currentAgentName.toUpperCase();
-        agentStatus.textContent = `AGENT: ${displayName}`;
-        console.log(`Status text updated with agent name: ${currentAgentName.toUpperCase()}`);
-    }
-    
-    // Make sure time is up to date
-    updateClock();
-}
-
-function renderEvents() {
-    const currentFilter = eventTypeFilter.value;
-    const filteredEvents = filterEventsByType(currentFilter);
-    
-    // Clear container
-    eventsContainer.innerHTML = '';
-    
-    if (filteredEvents.length === 0) {
-        eventsContainer.innerHTML = '<div class="event-empty-state">No events recorded yet.</div>';
-        return;
-    }
-    
-    // Add events to container
-    filteredEvents.forEach(event => {
-        const eventElement = createEventElement(event);
-        eventsContainer.appendChild(eventElement);
-    });
-    
-    // Scroll to bottom
-    eventsContainer.scrollTop = eventsContainer.scrollHeight;
-}
-
-function filterEvents() {
-    renderEvents();
-}
-
-function filterEventsByType(filter) {
-    if (filter === 'all') {
-        return events;
-    }
-    
-    return events.filter(event => event.type === filter || event.category === filter);
-}
-
-function createEventElement(event) {
-    const eventElement = document.createElement('div');
-    eventElement.className = `event-item ${event.category || 'other'}`;
-    eventElement.dataset.eventId = event.id;
-    
-    // Add event type
-    const eventType = document.createElement('div');
-    eventType.className = 'event-type';
-    eventType.textContent = event.type || 'Unknown';
-    eventElement.appendChild(eventType);
-    
-    // Add timestamp
-    const timestamp = document.createElement('div');
-    timestamp.className = 'event-timestamp';
-    timestamp.textContent = event.timestamp || formatTimestamp(new Date());
-    eventElement.appendChild(timestamp);
-    
-    // Add summary
-    const summary = document.createElement('div');
-    summary.className = 'event-summary';
-    summary.textContent = event.summary || (event.category ? `${event.category} event` : 'Event');
-    eventElement.appendChild(summary);
-    
-    // Add click handler
-    eventElement.addEventListener('click', () => {
-        showEventDetails(event);
-        
-        // Mark this event as active
-        document.querySelectorAll('.event-item.active').forEach(item => {
-            item.classList.remove('active');
-        });
-        eventElement.classList.add('active');
-        activeEventId = event.id;
-    });
-    
-    return eventElement;
-}
-
-function showEventDetails(event) {
-    // Unhide details panel
-    eventDetails.classList.remove('hidden');
-    
-    // Clear existing content
-    const detailsContent = document.querySelector('.event-details-content');
-    detailsContent.innerHTML = '';
-    
-    // Create details content
-    const detailsHTML = createEventDetailsHTML(event);
-    detailsContent.innerHTML = detailsHTML;
-}
-
-function closeEventDetails() {
-    eventDetails.classList.add('hidden');
-    
-    // Remove active state from events
-    document.querySelectorAll('.event-item.active').forEach(item => {
-        item.classList.remove('active');
-    });
-    activeEventId = null;
-}
-
-function createEventDetailsHTML(event) {
-    let html = '';
-    
-    // Event type and category
-    html += `<div class="detail-section">
-                <h4>Type: <span>${event.type || 'Unknown'}</span></h4>
-                ${event.category ? `<h4>Category: <span>${event.category}</span></h4>` : ''}
-                <div class="detail-timestamp">${event.timestamp || formatTimestamp(new Date())}</div>
-            </div>`;
-    
-    // Event summary
-    if (event.summary) {
-        html += `<div class="detail-section">
-                    <h4>Summary</h4>
-                    <div>${event.summary}</div>
-                </div>`;
-    }
-    
-    // Tool call specific details
-    if (event.category === 'tool_call') {
-        // Tool name
-        if (event.tool_name) {
-            html += `<div class="detail-section">
-                        <h4>Tool Name</h4>
-                        <div>${event.tool_name}</div>
-                    </div>`;
-        }
-        
-        // Input
-        if (event.input) {
-            html += `<div class="detail-section">
-                        <h4>Input</h4>
-                        <pre>${formatJSON(event.input)}</pre>
-                    </div>`;
-        }
-        
-        // Output
-        if (event.output) {
-            html += `<div class="detail-section">
-                        <h4>Output</h4>
-                        <pre>${formatJSON(event.output)}</pre>
-                    </div>`;
-        }
-    }
-    
-    // Agent transfer specific details
-    if (event.category === 'agent_transfer') {
-        // From agent
-        if (event.from_agent) {
-            html += `<div class="detail-section">
-                        <h4>From Agent</h4>
-                        <div>${event.from_agent}</div>
-                    </div>`;
-        }
-        
-        // To agent
-        if (event.to_agent) {
-            html += `<div class="detail-section">
-                        <h4>To Agent</h4>
-                        <div>${event.to_agent}</div>
-                    </div>`;
-        }
-    }
-    
-    // Planner specific details
-    if (event.category === 'planner') {
-        // Plan
-        if (event.plan) {
-            html += `<div class="detail-section">
-                        <h4>Plan</h4>
-                        <pre>${formatJSON(event.plan)}</pre>
-                    </div>`;
-        }
-        
-        // Plan step
-        if (event.plan_step) {
-            html += `<div class="detail-section">
-                        <h4>Plan Step</h4>
-                        <pre>${formatJSON(event.plan_step)}</pre>
-                    </div>`;
-        }
-    }
-    
-    // Model response specific details
-    if (event.category === 'model_response') {
-        // Text
-        if (event.text) {
-            html += `<div class="detail-section">
-                        <h4>Response Text</h4>
-                        <div>${event.text}</div>
-                    </div>`;
-        }
-    }
-    
-    // Raw details (if available)
-    if (event.details) {
-        html += `<div class="detail-section">
-                    <h4>Raw Details</h4>
-                    <pre>${formatJSON(event.details)}</pre>
-                </div>`;
-    }
-    
-    return html;
-}
-
-function formatJSON(obj) {
-    if (typeof obj === 'string') {
-        try {
-            // Try to parse it as JSON first
-            const parsed = JSON.parse(obj);
-            return JSON.stringify(parsed, null, 2);
-        } catch (e) {
-            // If it's not valid JSON, try to extract JSON-like content
-            // This helps with string representations of objects
-            try {
-                // Match content between curly braces including nested structures
-                const matches = obj.match(/\{(?:[^{}]|(\{(?:[^{}]|\{[^{}]*\})*\}))*\}/g);
-                if (matches && matches.length > 0) {
-                    // Try to parse each match
-                    const results = matches.map(match => {
-                        try {
-                            // Replace single quotes with double quotes for JSON parsing
-                            const fixedJson = match.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":')
-                                                  .replace(/'/g, '"');
-                            const parsed = JSON.parse(fixedJson);
-                            return JSON.stringify(parsed, null, 2);
-                        } catch (e) {
-                            return match; // Return as is if parsing fails
-                        }
-                    });
-                    
-                    // Join the results
-                    return results.join('\n\n');
-                }
-                
-                // Try Python dict format: convert to JSON and parse
-                const pyDictMatch = obj.match(/\{[^}]*\}/g);
-                if (pyDictMatch) {
-                    // Replace Python-style quotes and formatting with JSON style
-                    const jsonLike = obj.replace(/'/g, '"')
-                                       .replace(/None/g, 'null')
-                                       .replace(/True/g, 'true')
-                                       .replace(/False/g, 'false');
-                    try {
-                        const parsed = JSON.parse(jsonLike);
-                        return JSON.stringify(parsed, null, 2);
-                    } catch (e) {
-                        // If still fails, do basic formatting
-                        return obj.replace(/,/g, ',\n  ')
-                                 .replace(/{/g, '{\n  ')
-                                 .replace(/}/g, '\n}');
-                    }
-                }
-            } catch (innerError) {
-                // If all fails, return with basic formatting
-                return obj.replace(/,/g, ',\n')
-                         .replace(/{/g, '{\n  ')
-                         .replace(/}/g, '\n}');
-            }
-            
-            // If all formatting attempts fail, return as is
-            return obj;
-        }
-    }
-    
-    try {
-        return JSON.stringify(obj, null, 2);
-    } catch (e) {
-        // For non-JSON objects, try to format the string representation
-        const str = String(obj);
-        return str.replace(/,/g, ',\n  ')
-                 .replace(/{/g, '{\n  ')
-                 .replace(/}/g, '\n}');
-    }
-}
-
-function formatTimestamp(date) {
-    return date.toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit',
-        fractionalSecondDigits: 3
-    });
-}
-
-// Task API Functions
-
-// Tasks Panel Toggle
-function toggleTasksPanel() {
-    // If tasks panel is not visible, we're about to show it
-    if (!tasksPanelVisible) {
-        // Hide events panel if it's visible
-        if (eventsPanelVisible) {
-            eventsPanel.classList.add('hidden');
-            eventsPanelVisible = false;
-        }
-        
-        // Show tasks panel
-        tasksPanel.classList.remove('hidden');
-        tasksPanelVisible = true;
-        
-        // Fetch tasks if needed
-        if (!tasks.length && taskApiSettings.endpoint) {
-            refreshTasks();
-        }
-    } else {
-        // Hide tasks panel
-        tasksPanel.classList.add('hidden');
-        tasksPanelVisible = false;
-    }
-}
-
-// Load task settings from localStorage
-function loadTaskSettings() {
-    // Set input values from stored settings
-    apiEndpointInput.value = taskApiSettings.endpoint;
-    apiKeyInput.value = taskApiSettings.apiKey;
-    
-    // Populate default project later when projects are loaded
-}
-
-// Show task settings dialog
-function showTaskSettings() {
-    taskSettingsDialog.classList.remove('hidden');
-    
-    // Load current settings
-    apiEndpointInput.value = taskApiSettings.endpoint;
-    apiKeyInput.value = taskApiSettings.apiKey;
-    
-    // If projects are already loaded, set the default project
-    populateDefaultProjectDropdown();
-}
-
-// Hide task settings dialog
-function hideTaskSettings() {
-    taskSettingsDialog.classList.add('hidden');
-}
-
-// Save task settings
-function saveTaskSettings() {
-    // Get values from form
-    const endpoint = apiEndpointInput.value.trim();
-    const apiKey = apiKeyInput.value.trim();
-    const defaultProject = defaultProjectSelect.value;
-    
-    // Update settings
-    taskApiSettings.endpoint = endpoint;
-    taskApiSettings.apiKey = apiKey;
-    taskApiSettings.defaultProject = defaultProject;
-    
-    // Save to localStorage
-    localStorage.setItem('task_api_endpoint', endpoint);
-    localStorage.setItem('task_api_key', apiKey);
-    localStorage.setItem('task_default_project', defaultProject);
-    
-    // Hide dialog
-    hideTaskSettings();
-    
-    // Refresh tasks and projects
-    fetchProjects().then(() => {
-        fetchTasks();
-    });
-}
-
-// Test connection to task API
-async function testTaskApiConnection() {
-    const endpoint = apiEndpointInput.value.trim();
-    const apiKey = apiKeyInput.value.trim();
-    
-    if (!endpoint) {
-        alert('Please enter an API endpoint');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${endpoint}/api/v1/health`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                ...apiKey && { 'Authorization': `Bearer ${apiKey}` }
-            }
-        });
-        
-        if (response.ok) {
-            alert('Connection successful! API is reachable.');
+        // Update events display if the events panel is visible
+        const eventsContainer = document.getElementById('events-container');
+        if (eventsContainer) {
+            console.log('Events container found, updating display');
+            renderEvents();
         } else {
-            alert(`Connection failed with status: ${response.status}`);
+            console.log('Events container not found, skipping render');
         }
-    } catch (error) {
-        alert(`Connection failed: ${error.message}`);
     }
 }
 
-// Fetch projects from API
-async function fetchProjects() {
-    if (!taskApiSettings.endpoint) {
-        console.warn('Task API endpoint not configured');
+// Handler for tasks data received from server
+function handleTasks(newTasks) {
+    console.log('Received tasks:', newTasks);
+    
+    if (Array.isArray(newTasks)) {
+        // Add to tasks array
+        tasks = newTasks;
+        
+        // Update tasks display if the tasks panel is visible
+        const tasksContainer = document.getElementById('tasks-container');
+        if (tasksContainer) {
+            console.log('Tasks container found, updating display');
+            renderTasks();
+        } else {
+            console.log('Tasks container not found, skipping render');
+        }
+    }
+}
+
+// Fetch tasks directly from the Task API endpoint
+function fetchTasks() {
+    console.log('Fetching tasks from Task API');
+    
+    // Use the task API setting from localStorage or default to localhost:8001
+    const taskApiEndpoint = taskApiSettings.endpoint || 'http://localhost:8001';
+    
+    fetch(`${taskApiEndpoint}/api/v1/tasks`, {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': taskApiSettings.apiKey || ''
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Successfully fetched tasks from Task API:', data);
+            
+            // Update tasks array
+            if (Array.isArray(data)) {
+                // Direct array response format
+                tasks = data.map(task => ({
+                    task_id: task.task_id,
+                    description: task.description,
+                    status: task.status,
+                    category: task.category,
+                    project_id: task.project_id,
+                    project_name: task.project_name,
+                    created_at: task.created_at,
+                    origin: task.origin
+                }));
+                console.log('Parsed tasks directly from array response');
+            } else if (Array.isArray(data.tasks)) {
+                // Wrapped in 'tasks' property format
+                tasks = data.tasks.map(task => ({
+                    task_id: task.id || task.task_id,
+                    description: task.description,
+                    status: task.status,
+                    category: task.category,
+                    project_id: task.project_id,
+                    project_name: task.project_name,
+                    created_at: task.created_at,
+                    updated_at: task.updated_at,
+                    origin: task.origin
+                }));
+                console.log('Parsed tasks from data.tasks property');
+            } else {
+                console.error('No tasks found in response:', data);
+            }
+            
+            // Render tasks if container exists and we have tasks
+            if (tasks && tasks.length > 0) {
+                const tasksContainer = document.getElementById('tasks-container');
+                if (tasksContainer) {
+                    console.log('Tasks container found, rendering tasks from API fetch');
+                    renderTasks();
+                } else {
+                    console.log('Tasks container not found when fetching tasks, will render later');
+                }
+            }
+            
+            // After fetching tasks, also fetch projects
+            fetchProjects();
+        })
+        .catch(error => {
+            console.error('Error fetching tasks:', error);
+            
+            // Check if it could be a CORS error
+            if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+                console.warn('Possible CORS issue when fetching tasks. Make sure the Task API has CORS enabled.');
+                addMessage('system', 'Error connecting to Task API. Possible CORS issue - make sure the Task API server is running and has CORS enabled for this origin.');
+            } else {
+                // Add a system message in the chat
+                addMessage('system', 'Error fetching tasks. Tasks feature might not be available.');
+            }
+            
+            // Still try to fetch projects
+            fetchProjects();
+        });
+}
+
+// Fetch projects directly from the Task API endpoint
+function fetchProjects() {
+    console.log('Fetching projects from Task API');
+    
+    // Use the task API setting from localStorage or default to localhost:8001
+    const taskApiEndpoint = taskApiSettings.endpoint || 'http://localhost:8001';
+    
+    fetch(`${taskApiEndpoint}/api/v1/projects`, {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': taskApiSettings.apiKey || ''
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Successfully fetched projects from Task API:', data);
+            
+            // Update projects array
+            if (Array.isArray(data)) {
+                // Direct array response format
+                projects = data.map(project => ({
+                    project_id: project.project_id,
+                    name: project.name,
+                    description: project.description,
+                    created_at: project.created_at
+                }));
+                console.log('Parsed projects directly from array response');
+            } else if (Array.isArray(data.projects)) {
+                // Wrapped in 'projects' property format
+                projects = data.projects.map(project => ({
+                    project_id: project.id || project.project_id,
+                    name: project.name,
+                    description: project.description,
+                    created_at: project.created_at,
+                    updated_at: project.updated_at
+                }));
+                console.log('Parsed projects from data.projects property');
+            } else {
+                console.error('No projects found in response:', data);
+            }
+            
+            // Update project filter dropdown if we have projects
+            if (projects && projects.length > 0) {
+                updateProjectFilterOptions();
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching projects:', error);
+            
+            // Check if it could be a CORS error
+            if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+                console.warn('Possible CORS issue when fetching projects. Make sure the Task API has CORS enabled.');
+            }
+        });
+}
+
+// Update project filter options
+function updateProjectFilterOptions() {
+    const projectFilterContent = document.getElementById('project-filter-content');
+    if (!projectFilterContent) {
+        console.log('Project filter content not found, skipping update');
         return;
     }
     
-    console.log('Fetching projects from:', `${taskApiSettings.endpoint}/api/v1/projects`);
+    console.log('Updating project filter options with projects:', projects);
     
-    try {
-        const response = await fetch(`${taskApiSettings.endpoint}/api/v1/projects`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                ...taskApiSettings.apiKey && { 'Authorization': `Bearer ${taskApiSettings.apiKey}` }
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        console.log('Projects API response:', data);
-        
-        // Check if the response is directly an array of projects
-        if (Array.isArray(data)) {
-            projects = data;
-            console.log('Found', projects.length, 'projects');
-            
-            // Update project filter dropdown
-            updateProjectFilter();
-            
-            // Update default project dropdown in settings
-            populateDefaultProjectDropdown();
-            
-            return projects;
-        } 
-        // Check if it's wrapped in a data.projects property (API format fallback)
-        else if (data.status === 'success' && Array.isArray(data.projects)) {
-            projects = data.projects;
-            
-            // Update project filter dropdown
-            updateProjectFilter();
-            
-            // Update default project dropdown in settings
-            populateDefaultProjectDropdown();
-            
-            return projects;
-        } else {
-            console.error('Invalid API response format', data);
-            return [];
-        }
-    } catch (error) {
-        console.error('Error fetching projects:', error);
-        return [];
+    // Keep the "All Projects" option
+    const allProjectsOption = projectFilterContent.querySelector('#project-all');
+    if (!allProjectsOption) {
+        console.log('All Projects option not found, cannot update filter options');
+        return;
     }
-}
-
-// Update project filter dropdown
-function updateProjectFilter() {
-    // Remove all dynamically added project options
+    
+    // Clear existing project options (except "All Projects")
     const existingOptions = projectFilterContent.querySelectorAll('.filter-option:not(:first-child)');
     existingOptions.forEach(option => option.remove());
     
-    // Add project options as checkboxes
+    // Add new project options
     projects.forEach(project => {
-        const optionDiv = document.createElement('div');
-        optionDiv.className = 'filter-option';
+        const projectId = project.project_id;
+        const projectName = project.name || projectId;
+        
+        // Create new option
+        const option = document.createElement('div');
+        option.className = 'filter-option';
         
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.id = `project-${project.project_id}`;
-        checkbox.value = project.project_id;
-        checkbox.addEventListener('change', function() {
-            handleProjectCheckboxChange(this);
-        });
+        checkbox.id = `project-${projectId}`;
+        checkbox.value = projectId;
         
         const label = document.createElement('label');
-        label.htmlFor = `project-${project.project_id}`;
-        label.textContent = project.name;
+        label.htmlFor = `project-${projectId}`;
+        label.textContent = projectName;
         
-        optionDiv.appendChild(checkbox);
-        optionDiv.appendChild(label);
-        projectFilterContent.appendChild(optionDiv);
+        checkbox.addEventListener('change', () => {
+            const allCheckbox = document.getElementById('project-all');
+            
+            if (checkbox.checked) {
+                // Uncheck "All Projects"
+                if (allCheckbox) allCheckbox.checked = false;
+                
+                // Add to selected projects
+                if (!selectedProjects.includes(projectId)) {
+                    selectedProjects = selectedProjects.filter(id => id !== 'all');
+                    selectedProjects.push(projectId);
+                }
+            } else {
+                // Remove from selected projects
+                selectedProjects = selectedProjects.filter(id => id !== projectId);
+                
+                // If no projects selected, check "All Projects"
+                if (selectedProjects.length === 0 && allCheckbox) {
+                    allCheckbox.checked = true;
+                    selectedProjects = ['all'];
+                }
+            }
+            
+            // Update button text
+            const projectFilterBtn = document.getElementById('project-filter-btn');
+            if (projectFilterBtn) {
+                if (selectedProjects.includes('all')) {
+                    projectFilterBtn.textContent = 'All Projects';
+                } else if (selectedProjects.length === 1) {
+                    const selectedProject = projects.find(p => p.project_id === selectedProjects[0]);
+                    projectFilterBtn.textContent = selectedProject ? (selectedProject.name || selectedProject.project_id) : selectedProjects[0];
+                } else {
+                    projectFilterBtn.textContent = `${selectedProjects.length} Projects`;
+                }
+            }
+            
+            renderTasks();
+        });
+        
+        option.appendChild(checkbox);
+        option.appendChild(label);
+        projectFilterContent.appendChild(option);
     });
+    
+    console.log('Project filter options updated');
 }
 
-// Populate default project dropdown in settings
-function populateDefaultProjectDropdown() {
-    // Clear all options except first empty option
-    while (defaultProjectSelect.options.length > 1) {
-        defaultProjectSelect.remove(1);
-    }
+// Fetch events directly from the API endpoint
+function fetchEvents() {
+    console.log('Fetching events from API directly');
     
-    // Add project options
-    projects.forEach(project => {
-        const option = document.createElement('option');
-        option.value = project.project_id;
-        option.textContent = project.name;
-        defaultProjectSelect.appendChild(option);
-    });
-    
-    // Set previously selected default project
-    if (taskApiSettings.defaultProject) {
-        defaultProjectSelect.value = taskApiSettings.defaultProject;
-    }
+    fetch('/api/events')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Successfully fetched events from API:', data);
+            
+            // Update events array
+            if (Array.isArray(data)) {
+                events = data;
+                
+                // Render events if container exists
+                const eventsContainer = document.getElementById('events-container');
+                if (eventsContainer) {
+                    console.log('Events container found, rendering events from API fetch');
+                    renderEvents();
+                } else {
+                    console.log('Events container not found when fetching events, will render later');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching events:', error);
+        });
 }
 
-// Fetch tasks from API
-async function fetchTasks() {
-    if (!taskApiSettings.endpoint) {
-        console.warn('Task API endpoint not configured');
+// Auto-resize textarea
+function resizeTextarea() {
+    if (!chatInput) return;
+    
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 150) + 'px';
+}
+
+// Render tasks to tasks container
+function renderTasks() {
+    console.log('Rendering tasks to container');
+    const tasksContainer = document.getElementById('tasks-container');
+    if (!tasksContainer) {
+        console.error('Tasks container not found');
         return;
     }
     
-    // Always fetch all tasks - the filtering will be done client-side
-    const endpoint = `${taskApiSettings.endpoint}/api/v1/tasks`;
-    console.log('Fetching tasks from:', endpoint);
-    
-    try {
-        const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                ...taskApiSettings.apiKey && { 'Authorization': `Bearer ${taskApiSettings.apiKey}` }
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        console.log('Tasks API response:', data);
-        
-        // Check if the response is directly an array of tasks
-        if (Array.isArray(data)) {
-            tasks = data;
-            console.log('Found', tasks.length, 'tasks');
-            
-            // Render tasks
-            renderTasks();
-            
-            return tasks;
-        }
-        // Check if it's wrapped in a data.tasks property (API format fallback)
-        else if (data.status === 'success' && Array.isArray(data.tasks)) {
-            tasks = data.tasks;
-            
-            // Render tasks
-            renderTasks();
-            
-            return tasks;
-        } else {
-            console.error('Invalid API response format', data);
-            return [];
-        }
-    } catch (error) {
-        console.error('Error fetching tasks:', error);
-        return [];
-    }
-}
-
-// Refresh tasks
-function refreshTasks() {
-    fetchTasks();
-}
-
-// Toggle project filter dropdown
-function toggleProjectFilter(event) {
-    event.stopPropagation();
-    
-    // Toggle the dropdown
-    projectFilterOpen = !projectFilterOpen;
-    statusFilterOpen = false; // Close the other dropdown
-    
-    // Show/hide dropdowns
-    projectFilterContent.classList.toggle('show', projectFilterOpen);
-    statusFilterContent.classList.remove('show');
-}
-
-// Toggle status filter dropdown
-function toggleStatusFilter(event) {
-    event.stopPropagation();
-    
-    // Toggle the dropdown
-    statusFilterOpen = !statusFilterOpen;
-    projectFilterOpen = false; // Close the other dropdown
-    
-    // Show/hide dropdowns
-    statusFilterContent.classList.toggle('show', statusFilterOpen);
-    projectFilterContent.classList.remove('show');
-}
-
-// Handle click outside dropdowns
-function handleClickOutsideDropdowns(event) {
-    // Check if click is outside filter dropdowns
-    if (!event.target.closest('.filter-dropdown')) {
-        projectFilterContent.classList.remove('show');
-        statusFilterContent.classList.remove('show');
-        projectFilterOpen = false;
-        statusFilterOpen = false;
-    }
-}
-
-// Handle "All Projects" checkbox
-function handleProjectAllCheckbox(event) {
-    const checked = event.target.checked;
-    
-    // Get all project checkboxes
-    const projectCheckboxes = projectFilterContent.querySelectorAll('input[type="checkbox"]:not(#project-all)');
-    
-    // If "All Projects" is checked, uncheck all others but don't disable them
-    projectCheckboxes.forEach(checkbox => {
-        checkbox.checked = false;
-        // Remove the disabling of checkboxes so they can still be clicked
-        // checkbox.disabled = checked;
-    });
-    
-    // Update selected projects
-    if (checked) {
-        selectedProjects = ['all'];
-    } else {
-        selectedProjects = [];
-    }
-    
-    // Update filter button text
-    updateProjectFilterButtonText();
-    
-    // Filter tasks
-    filterTasks();
-}
-
-// Handle individual project checkbox changes
-function handleProjectCheckboxChange(checkbox) {
-    // If any individual project is checked, uncheck "All Projects"
-    if (checkbox.checked) {
-        projectAllCheckbox.checked = false;
-        
-        // Add to selected projects
-        selectedProjects = selectedProjects.filter(p => p !== 'all');
-        selectedProjects.push(checkbox.value);
-    } else {
-        // Remove from selected projects
-        selectedProjects = selectedProjects.filter(p => p !== checkbox.value);
-        
-        // If no projects are selected, check "All Projects"
-        if (selectedProjects.length === 0) {
-            projectAllCheckbox.checked = true;
-            selectedProjects = ['all'];
-        }
-    }
-    
-    // Update filter button text
-    updateProjectFilterButtonText();
-    
-    // Filter tasks
-    filterTasks();
-}
-
-// Handle "All Statuses" checkbox
-function handleStatusAllCheckbox(event) {
-    const checked = event.target.checked;
-    
-    // Get all status checkboxes
-    const statusCheckboxes = statusFilterContent.querySelectorAll('input[type="checkbox"]:not(#status-all)');
-    
-    // If "All Statuses" is checked, uncheck all others but don't disable them
-    statusCheckboxes.forEach(checkbox => {
-        checkbox.checked = false;
-        // Remove the disabling of checkboxes so they can still be clicked
-        // checkbox.disabled = checked;
-    });
-    
-    // Update selected statuses
-    if (checked) {
-        selectedStatuses = ['all'];
-    } else {
-        selectedStatuses = [];
-    }
-    
-    // Update filter button text
-    updateStatusFilterButtonText();
-    
-    // Filter tasks
-    filterTasks();
-}
-
-// Update project filter button text based on selection
-function updateProjectFilterButtonText() {
-    if (selectedProjects.includes('all')) {
-        projectFilterBtn.textContent = 'All Projects';
-    } else if (selectedProjects.length === 1) {
-        const project = projects.find(p => p.project_id === selectedProjects[0]);
-        projectFilterBtn.textContent = project ? project.name : 'Unknown Project';
-    } else {
-        projectFilterBtn.textContent = `${selectedProjects.length} Projects`;
-    }
-}
-
-// Update status filter button text based on selection
-function updateStatusFilterButtonText() {
-    if (selectedStatuses.includes('all')) {
-        statusFilterBtn.textContent = 'All Statuses';
-    } else if (selectedStatuses.length === 0) {
-        statusFilterBtn.textContent = 'No Status';
-    } else if (selectedStatuses.length === 1) {
-        const statusMap = {
-            'backlog': 'Backlog',
-            'inprogress': 'In Progress',
-            'done': 'Done'
-        };
-        statusFilterBtn.textContent = statusMap[selectedStatuses[0]] || selectedStatuses[0];
-    } else {
-        statusFilterBtn.textContent = `${selectedStatuses.length} Statuses`;
-    }
-}
-
-// Add status checkbox change event listeners
-function setupStatusCheckboxes() {
-    const statusCheckboxes = statusFilterContent.querySelectorAll('input[type="checkbox"]:not(#status-all)');
-    statusCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            handleStatusCheckboxChange(this);
-        });
-    });
-}
-
-// Handle individual status checkbox changes
-function handleStatusCheckboxChange(checkbox) {
-    // If any individual status is checked, uncheck "All Statuses"
-    if (checkbox.checked) {
-        statusAllCheckbox.checked = false;
-        
-        // Add to selected statuses
-        selectedStatuses = selectedStatuses.filter(s => s !== 'all');
-        selectedStatuses.push(checkbox.value);
-    } else {
-        // Remove from selected statuses
-        selectedStatuses = selectedStatuses.filter(s => s !== checkbox.value);
-        
-        // If no statuses are selected, check "All Statuses"
-        if (selectedStatuses.length === 0) {
-            statusAllCheckbox.checked = true;
-            selectedStatuses = ['all'];
-        }
-    }
-    
-    // Update filter button text
-    updateStatusFilterButtonText();
-    
-    // Filter tasks
-    filterTasks();
-}
-
-// Filter tasks based on selected statuses, projects, and search
-function filterTasks() {
-    const searchQuery = taskSearch.value.toLowerCase();
-    
-    console.log('Filtering tasks - Statuses:', selectedStatuses, 'Projects:', selectedProjects, 'Search:', searchQuery);
-    
-    // Get all task elements
-    const taskElements = document.querySelectorAll('.task-item');
-    
-    // Loop through all tasks and show/hide based on filters
-    taskElements.forEach(taskElement => {
-        const taskId = taskElement.dataset.taskId;
-        const task = tasks.find(t => t.task_id === taskId);
-        
-        if (!task) return;
-        
-        // Check if task matches status filter
-        const statusMatch = selectedStatuses.includes('all') || 
-                         selectedStatuses.includes(task.status);
-        
-        // Check if task matches project filter
-        const projectMatch = selectedProjects.includes('all') || 
-                          selectedProjects.includes(task.project_id);
-        
-        // Check if task matches search query
-        const searchMatch = searchQuery === '' || 
-            task.description.toLowerCase().includes(searchQuery) ||
-            (task.category && task.category.toLowerCase().includes(searchQuery));
-        
-        // Show or hide task
-        if (statusMatch && projectMatch && searchMatch) {
-            taskElement.style.display = '';
-        } else {
-            taskElement.style.display = 'none';
-        }
-    });
-}
-
-// Render tasks in container
-function renderTasks() {
-    // Clear container
+    // Clear the container completely
     tasksContainer.innerHTML = '';
     
-    if (tasks.length === 0) {
-        tasksContainer.innerHTML = '<div class="tasks-empty-state">No tasks found.</div>';
+    // Create empty state message if needed
+    const emptyState = document.createElement('div');
+    emptyState.className = 'tasks-empty-state';
+    emptyState.textContent = 'No tasks found.';
+    
+    // If no tasks array or it's empty, show empty state
+    if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+        console.log('No tasks to display');
+        tasksContainer.appendChild(emptyState);
         return;
     }
     
-    // Sort tasks by status (inprogress first, then backlog, then done)
-    const sortedTasks = [...tasks].sort((a, b) => {
-        const statusOrder = { 'inprogress': 0, 'backlog': 1, 'done': 2 };
-        return statusOrder[a.status] - statusOrder[b.status];
-    });
-    
-    // Add tasks to container
-    sortedTasks.forEach(task => {
-        const taskElement = createTaskElement(task);
-        tasksContainer.appendChild(taskElement);
-    });
+    console.log(`Rendering ${tasks.length} tasks`);
     
     // Apply filters
-    filterTasks();
-}
-
-// Create a task element
-function createTaskElement(task) {
-    const taskElement = document.createElement('div');
-    taskElement.className = `task-item ${task.status || 'backlog'}`;
-    taskElement.dataset.taskId = task.task_id;
+    let filteredTasks = [...tasks];
     
-    // Status indicator (instead of interactive checkbox)
-    const statusIndicator = document.createElement('div');
-    statusIndicator.className = `task-status-indicator ${task.status}`;
-    statusIndicator.title = `Status: ${task.status}`;
-    taskElement.appendChild(statusIndicator);
+    // Log selected projects and statuses for debugging
+    console.log('Selected projects:', selectedProjects);
+    console.log('Selected statuses:', selectedStatuses);
     
-    // Add task content
-    const content = document.createElement('div');
-    content.className = 'task-content';
-    content.textContent = task.description;
-    taskElement.appendChild(content);
-    
-    // Add project label if projects are available
-    if (task.project_id) {
-        const project = projects.find(p => p.project_id === task.project_id);
-        console.log('Task project ID:', task.project_id, 'Found project:', project);
-        
-        // Check for project_name directly on the task (some APIs return this)
-        if (task.project_name) {
-            const projectLabel = document.createElement('div');
-            projectLabel.className = 'task-project';
-            projectLabel.textContent = task.project_name;
-            taskElement.appendChild(projectLabel);
-        }
-        // Otherwise try to look up the project in our projects list
-        else if (project) {
-            const projectLabel = document.createElement('div');
-            projectLabel.className = 'task-project';
-            projectLabel.textContent = project.name;
-            taskElement.appendChild(projectLabel);
-        }
+    // Filter by project (make sure we handle both project_id and project_name)
+    if (selectedProjects.length > 0 && !selectedProjects.includes('all')) {
+        console.log('Filtering by projects:', selectedProjects);
+        filteredTasks = filteredTasks.filter(task => {
+            // Check if either project_id or project_name matches any selected project
+            const taskProjectId = task.project_id ? String(task.project_id) : null;
+            const taskProjectName = task.project_name ? String(task.project_name) : null;
+            
+            return selectedProjects.some(projectId => 
+                projectId === taskProjectId || projectId === taskProjectName
+            );
+        });
+        console.log(`After project filtering: ${filteredTasks.length} tasks`);
     }
     
-    // View details icon
-    const viewIcon = document.createElement('div');
-    viewIcon.className = 'task-view-icon';
-    viewIcon.innerHTML = '→';
-    viewIcon.title = 'View task details';
-    taskElement.appendChild(viewIcon);
+    // Filter by status
+    if (selectedStatuses.length > 0 && !selectedStatuses.includes('all')) {
+        console.log('Filtering by statuses:', selectedStatuses);
+        filteredTasks = filteredTasks.filter(task => {
+            const taskStatus = task.status ? String(task.status).toLowerCase() : 'backlog';
+            return selectedStatuses.includes(taskStatus);
+        });
+        console.log(`After status filtering: ${filteredTasks.length} tasks`);
+    }
     
-    // Add click handler for the entire task item
-    taskElement.addEventListener('click', () => {
-        showTaskDetails(task);
+    // Filter by search term
+    const searchInput = document.getElementById('task-search');
+    if (searchInput && searchInput.value.trim()) {
+        const searchTerm = searchInput.value.trim().toLowerCase();
+        console.log('Filtering by search term:', searchTerm);
+        
+        filteredTasks = filteredTasks.filter(task => {
+            // Safely access properties
+            const description = task.description ? String(task.description).toLowerCase() : '';
+            const project = task.project_name ? String(task.project_name).toLowerCase() : 
+                           (task.project_id ? String(task.project_id).toLowerCase() : '');
+            const category = task.category ? String(task.category).toLowerCase() : '';
+            
+            return description.includes(searchTerm) || 
+                   project.includes(searchTerm) || 
+                   category.includes(searchTerm);
+        });
+        console.log(`After search filtering: ${filteredTasks.length} tasks`);
+    }
+    
+    // Sort tasks (in progress first, then backlog, then done)
+    filteredTasks.sort((a, b) => {
+        const statusOrder = { 'inprogress': 0, 'in_progress': 0, 'backlog': 1, 'pending': 1, 'done': 2, 'completed': 2 };
+        
+        // Get status with fallback
+        const statusA = (a.status ? String(a.status).toLowerCase() : 'backlog');
+        const statusB = (b.status ? String(b.status).toLowerCase() : 'backlog');
+        
+        // Get order value with fallback to backlog (1)
+        const orderA = statusOrder[statusA] !== undefined ? statusOrder[statusA] : 1;
+        const orderB = statusOrder[statusB] !== undefined ? statusOrder[statusB] : 1;
+        
+        return orderA - orderB;
     });
     
-    return taskElement;
+    console.log(`Final filtered tasks count: ${filteredTasks.length}`);
+    
+    // If no filtered tasks, show empty state
+    if (filteredTasks.length === 0) {
+        console.log('No tasks match the filters');
+        tasksContainer.appendChild(emptyState);
+        return;
+    }
+    
+    // Create task items
+    filteredTasks.forEach(task => {
+        // Create task item container
+        const taskItem = document.createElement('div');
+        
+        // Get status with fallback
+        const status = task.status ? String(task.status).toLowerCase() : 'backlog';
+        
+        // Map various status formats to standard ones
+        let normalizedStatus = status;
+        if (status === 'in_progress' || status === 'inprogress') normalizedStatus = 'inprogress';
+        if (status === 'pending' || status === 'backlog') normalizedStatus = 'backlog';
+        if (status === 'completed' || status === 'done') normalizedStatus = 'done';
+        
+        // Set classes
+        taskItem.className = `task-item ${normalizedStatus}`;
+        taskItem.dataset.taskId = task.task_id ? String(task.task_id) : "unknown";
+        
+        // Status indicator
+        const statusIndicator = document.createElement('div');
+        statusIndicator.className = `task-status-indicator ${normalizedStatus}`;
+        
+        // Task content
+        const taskContent = document.createElement('div');
+        taskContent.className = 'task-content';
+        taskContent.textContent = task.description ? String(task.description) : "No description";
+        
+        // Project tag
+        const taskProject = document.createElement('div');
+        taskProject.className = 'task-project';
+        taskProject.textContent = task.project_name ? String(task.project_name) : 
+                                 (task.project_id ? String(task.project_id) : 'Default');
+        
+        // Assemble task item
+        taskItem.appendChild(statusIndicator);
+        taskItem.appendChild(taskContent);
+        taskItem.appendChild(taskProject);
+        
+        // Add click handler to show task details
+        taskItem.addEventListener('click', () => {
+            // Get the task ID from the data attribute
+            const taskId = taskItem.dataset.taskId;
+            console.log('Task clicked:', taskId);
+            
+            // Show task details using our panel function
+            showDetailPanel('task', task);
+        });
+        
+        // Add task item to container
+        tasksContainer.appendChild(taskItem);
+    });
+    
+    console.log('Tasks rendering complete');
 }
 
-// Task-related functions have been removed since the UI is now read-only
-// The task detail view is now used to display task information when a task is clicked
-
-// Show task details
-function showTaskDetails(task) {
-    // Clear existing content
-    taskDetailsContent.innerHTML = '';
-    
-    // Create HTML for task details
-    let html = '';
-    
-    // Task ID and Description (header)
-    html += `<div class="task-field">
-                <div class="task-field-label">Task ID</div>
-                <div class="task-field-value">${task.task_id}</div>
-            </div>`;
-    
-    // Description
-    html += `<div class="task-field">
-                <div class="task-field-label">Description</div>
-                <div class="task-field-value description">${task.description}</div>
-            </div>`;
-    
-    // Status
-    html += `<div class="task-field">
-                <div class="task-field-label">Status</div>
-                <div class="task-field-value">
-                    <span class="task-status-indicator ${task.status}"></span>
-                    ${task.status}
-                </div>
-            </div>`;
-    
-    // Project (if available)
-    if (task.project_id) {
-        const projectName = task.project_name || 
-            (projects.find(p => p.project_id === task.project_id)?.name || 'Unknown Project');
-        
-        html += `<div class="task-field">
-                    <div class="task-field-label">Project</div>
-                    <div class="task-field-value">${projectName}</div>
-                </div>`;
+// Render events to events container
+function renderEvents() {
+    console.log('Rendering events to container');
+    const eventsContainer = document.getElementById('events-container');
+    if (!eventsContainer) {
+        console.error('Events container not found');
+        return;
     }
     
-    // Created Date (if available)
-    if (task.created_at) {
-        html += `<div class="task-field">
-                    <div class="task-field-label">Created</div>
-                    <div class="task-field-value">${new Date(task.created_at).toLocaleString()}</div>
-                </div>`;
+    // Clear the container completely
+    eventsContainer.innerHTML = '';
+    
+    // Create empty state message if needed
+    const emptyState = document.createElement('div');
+    emptyState.className = 'event-empty-state';
+    emptyState.textContent = 'No events recorded yet.';
+    
+    // If no events array or it's empty, show empty state
+    if (!events || !Array.isArray(events) || events.length === 0) {
+        console.log('No events to display');
+        eventsContainer.appendChild(emptyState);
+        return;
     }
     
-    // Updated Date (if available)
-    if (task.updated_at) {
-        html += `<div class="task-field">
-                    <div class="task-field-label">Last Updated</div>
-                    <div class="task-field-value">${new Date(task.updated_at).toLocaleString()}</div>
-                </div>`;
+    console.log(`Rendering ${events.length} events`);
+    
+    // Filter events based on selected type
+    const eventTypeFilter = document.getElementById('event-type-filter');
+    const selectedType = eventTypeFilter ? eventTypeFilter.value : 'all';
+    
+    console.log('Event type filter value:', selectedType);
+    
+    let filteredEvents = [...events];
+    
+    // Apply type filter if not 'all'
+    if (selectedType !== 'all') {
+        console.log('Filtering events by type:', selectedType);
+        filteredEvents = filteredEvents.filter(event => {
+            // Apply case-insensitive comparison for safety
+            const eventType = event.type ? String(event.type).toLowerCase() : '';
+            const eventCategory = event.category ? String(event.category).toLowerCase() : '';
+            
+            return eventType === selectedType.toLowerCase() || 
+                   eventCategory === selectedType.toLowerCase();
+        });
+        console.log(`After type filtering: ${filteredEvents.length} events`);
     }
     
-    // Due Date (if available)
-    if (task.due_date) {
-        html += `<div class="task-field">
-                    <div class="task-field-label">Due Date</div>
-                    <div class="task-field-value">${new Date(task.due_date).toLocaleString()}</div>
-                </div>`;
-    }
-    
-    // Priority (if available)
-    if (task.priority) {
-        html += `<div class="task-field">
-                    <div class="task-field-label">Priority</div>
-                    <div class="task-field-value">${task.priority}</div>
-                </div>`;
-    }
-    
-    // Category (if available)
-    if (task.category) {
-        html += `<div class="task-field">
-                    <div class="task-field-label">Category</div>
-                    <div class="task-field-value">${task.category}</div>
-                </div>`;
-    }
-    
-    // Tags (if available)
-    if (task.tags && task.tags.length > 0) {
-        html += `<div class="task-field">
-                    <div class="task-field-label">Tags</div>
-                    <div class="task-field-value">${task.tags.join(', ')}</div>
-                </div>`;
-    }
-    
-    // Related Info (if available)
-    if (task.related_info) {
-        let relatedInfoContent = '';
-        
-        if (typeof task.related_info === 'string') {
-            // Try to parse as JSON first
-            try {
-                const parsed = JSON.parse(task.related_info);
-                relatedInfoContent = formatJSON(parsed);
-            } catch (e) {
-                relatedInfoContent = task.related_info;
+    // Sort events by timestamp (newest first)
+    try {
+        filteredEvents.sort((a, b) => {
+            // Try parsing timestamp strings as Date objects first
+            const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            
+            // If both timestamps are valid numbers, compare them
+            if (!isNaN(timeA) && !isNaN(timeB)) {
+                return timeB - timeA;
             }
-        } else {
-            relatedInfoContent = formatJSON(task.related_info);
+            
+            // Otherwise, sort lexicographically as fallback
+            const strA = a.timestamp ? String(a.timestamp) : '';
+            const strB = b.timestamp ? String(b.timestamp) : '';
+            return strB.localeCompare(strA);
+        });
+    } catch (e) {
+        console.error('Error sorting events by timestamp:', e);
+    }
+    
+    console.log(`Final filtered events count: ${filteredEvents.length}`);
+    
+    // If no filtered events, show empty state
+    if (filteredEvents.length === 0) {
+        console.log('No events match the filter');
+        eventsContainer.appendChild(emptyState);
+        return;
+    }
+    
+    // Create event items
+    filteredEvents.forEach(event => {
+        try {
+            // Create event item container
+            const eventItem = document.createElement('div');
+            
+            // Determine event category for styling
+            let eventCategory = 'other';
+            
+            // Safely check event type and category
+            const type = event.type ? String(event.type).toLowerCase() : '';
+            const category = event.category ? String(event.category).toLowerCase() : '';
+            
+            if (type === 'tool_call' || category === 'tool_call') {
+                eventCategory = 'tool-call';
+            } else if (type === 'agent_transfer' || category === 'agent_transfer') {
+                eventCategory = 'agent-transfer';
+            } else if (type === 'planner' || category === 'planner') {
+                eventCategory = 'planner';
+            }
+            
+            // Set classes
+            eventItem.className = `event-item ${eventCategory}`;
+            eventItem.dataset.eventId = event.id ? String(event.id) : "event-" + Math.random().toString(36).substring(2, 9);
+            
+            // Event type
+            const eventType = document.createElement('div');
+            eventType.className = 'event-type';
+            eventType.textContent = event.type || event.category || 'Event';
+            
+            // Event timestamp
+            const eventTimestamp = document.createElement('div');
+            eventTimestamp.className = 'event-timestamp';
+            
+            if (event.timestamp) {
+                // Try to format timestamp
+                try {
+                    const date = new Date(event.timestamp);
+                    if (!isNaN(date.getTime())) {
+                        // Valid date, use time format
+                        eventTimestamp.textContent = date.toLocaleTimeString();
+                    } else {
+                        // Not a valid date, use as-is
+                        eventTimestamp.textContent = event.timestamp;
+                    }
+                } catch (e) {
+                    // If there's an error formatting, use the original string
+                    eventTimestamp.textContent = String(event.timestamp);
+                }
+            } else {
+                eventTimestamp.textContent = 'Unknown time';
+            }
+            
+            // Event summary
+            const eventSummary = document.createElement('div');
+            eventSummary.className = 'event-summary';
+            
+            // Get the summary from any available field, in order of preference
+            const summaryText = event.summary || 
+                              event.description || 
+                              (event.details ? (typeof event.details === 'string' ? event.details : JSON.stringify(event.details)) : 
+                              'No details available');
+                              
+            eventSummary.textContent = summaryText;
+            
+            // Append elements
+            eventItem.appendChild(eventType);
+            eventItem.appendChild(eventTimestamp);
+            eventItem.appendChild(eventSummary);
+            
+            // Set click handler to show full details
+            eventItem.addEventListener('click', () => {
+                // Log the event details for now
+                console.log('Event clicked:', event.id);
+                
+                // Show task details using our panel
+                showDetailPanel('event', event);
+            });
+            
+            // Add the event item to the container
+            eventsContainer.appendChild(eventItem);
+        } catch (error) {
+            console.error('Error rendering event:', error, event);
+        }
+    });
+    
+    console.log('Events rendering complete');
+}
+
+// Setup filter controls
+function setupFilterControls() {
+    console.log('Setting up filter controls');
+    
+    // Event type filter
+    const eventTypeFilter = document.getElementById('event-type-filter');
+    if (eventTypeFilter) {
+        eventTypeFilter.addEventListener('change', () => {
+            console.log(`Event type filter changed to: ${eventTypeFilter.value}`);
+            renderEvents();
+        });
+    }
+    
+    // Project filter
+    const projectFilterBtn = document.getElementById('project-filter-btn');
+    const projectFilterContent = document.getElementById('project-filter-content');
+    
+    if (projectFilterBtn && projectFilterContent) {
+        // Toggle dropdown
+        projectFilterBtn.addEventListener('click', () => {
+            projectFilterContent.classList.toggle('show');
+        });
+        
+        // Handle "All Projects" checkbox
+        const allProjectsCheckbox = document.getElementById('project-all');
+        if (allProjectsCheckbox) {
+            allProjectsCheckbox.addEventListener('change', (e) => {
+                const projectCheckboxes = projectFilterContent.querySelectorAll('input[type="checkbox"]:not(#project-all)');
+                
+                if (e.target.checked) {
+                    // Uncheck all other projects
+                    projectCheckboxes.forEach(cb => {
+                        cb.checked = false;
+                    });
+                    
+                    selectedProjects = ['all'];
+                    projectFilterBtn.textContent = 'All Projects';
+                } else {
+                    // Ensure at least one project is selected
+                    const anyChecked = Array.from(projectCheckboxes).some(cb => cb.checked);
+                    if (!anyChecked) {
+                        e.target.checked = true;  // Recheck "All Projects" if nothing else is selected
+                    }
+                }
+                
+                renderTasks();
+            });
         }
         
-        html += `<div class="task-field">
-                    <div class="task-field-label">Related Information</div>
-                    <div class="task-field-value related-info">${relatedInfoContent}</div>
-                </div>`;
+        // Add project checkboxes dynamically from available projects
+        if (projects && projects.length > 0) {
+            projects.forEach(project => {
+                const projectId = project.project_id;
+                const projectName = project.name || projectId;
+                
+                // Check if this project checkbox already exists
+                const existingCheckbox = document.getElementById(`project-${projectId}`);
+                if (!existingCheckbox) {
+                    const option = document.createElement('div');
+                    option.className = 'filter-option';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = `project-${projectId}`;
+                    checkbox.value = projectId;
+                    
+                    const label = document.createElement('label');
+                    label.htmlFor = `project-${projectId}`;
+                    label.textContent = projectName;
+                    
+                    checkbox.addEventListener('change', () => {
+                        const allCheckbox = document.getElementById('project-all');
+                        
+                        if (checkbox.checked) {
+                            // Uncheck "All Projects"
+                            if (allCheckbox) allCheckbox.checked = false;
+                            
+                            // Add to selected projects
+                            if (!selectedProjects.includes(projectId)) {
+                                selectedProjects = selectedProjects.filter(id => id !== 'all');
+                                selectedProjects.push(projectId);
+                            }
+                        } else {
+                            // Remove from selected projects
+                            selectedProjects = selectedProjects.filter(id => id !== projectId);
+                            
+                            // If no projects selected, check "All Projects"
+                            if (selectedProjects.length === 0 && allCheckbox) {
+                                allCheckbox.checked = true;
+                                selectedProjects = ['all'];
+                            }
+                        }
+                        
+                        // Update button text
+                        if (selectedProjects.includes('all')) {
+                            projectFilterBtn.textContent = 'All Projects';
+                        } else if (selectedProjects.length === 1) {
+                            const selectedProject = projects.find(p => p.project_id === selectedProjects[0]);
+                            projectFilterBtn.textContent = selectedProject ? (selectedProject.name || selectedProject.project_id) : selectedProjects[0];
+                        } else {
+                            projectFilterBtn.textContent = `${selectedProjects.length} Projects`;
+                        }
+                        
+                        renderTasks();
+                    });
+                    
+                    option.appendChild(checkbox);
+                    option.appendChild(label);
+                    projectFilterContent.appendChild(option);
+                }
+            });
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!projectFilterBtn.contains(e.target) && !projectFilterContent.contains(e.target)) {
+                projectFilterContent.classList.remove('show');
+            }
+        });
     }
     
-    // Set the content
-    taskDetailsContent.innerHTML = html;
+    // Status filter
+    const statusFilterBtn = document.getElementById('status-filter-btn');
+    const statusFilterContent = document.getElementById('status-filter-content');
     
-    // Show the task details view
-    taskDetailsView.classList.remove('hidden');
+    if (statusFilterBtn && statusFilterContent) {
+        // Toggle dropdown
+        statusFilterBtn.addEventListener('click', () => {
+            statusFilterContent.classList.toggle('show');
+        });
+        
+        // Handle "All Statuses" checkbox
+        const allStatusesCheckbox = document.getElementById('status-all');
+        if (allStatusesCheckbox) {
+            allStatusesCheckbox.addEventListener('change', (e) => {
+                const statusCheckboxes = statusFilterContent.querySelectorAll('input[type="checkbox"]:not(#status-all)');
+                
+                if (e.target.checked) {
+                    // Uncheck all other statuses
+                    statusCheckboxes.forEach(cb => {
+                        cb.checked = false;
+                    });
+                    
+                    selectedStatuses = ['all'];
+                    statusFilterBtn.textContent = 'All Statuses';
+                } else {
+                    // Ensure at least one status is selected
+                    const anyChecked = Array.from(statusCheckboxes).some(cb => cb.checked);
+                    if (!anyChecked) {
+                        e.target.checked = true;  // Recheck "All Statuses" if nothing else is selected
+                    }
+                }
+                
+                renderTasks();
+            });
+        }
+        
+        // Status checkboxes event handlers
+        const statusCheckboxes = statusFilterContent.querySelectorAll('input[type="checkbox"]:not(#status-all)');
+        statusCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                const allCheckbox = document.getElementById('status-all');
+                
+                if (checkbox.checked) {
+                    // Uncheck "All Statuses"
+                    if (allCheckbox) allCheckbox.checked = false;
+                    
+                    // Add to selected statuses
+                    if (!selectedStatuses.includes(checkbox.value)) {
+                        selectedStatuses = selectedStatuses.filter(status => status !== 'all');
+                        selectedStatuses.push(checkbox.value);
+                    }
+                } else {
+                    // Remove from selected statuses
+                    selectedStatuses = selectedStatuses.filter(status => status !== checkbox.value);
+                    
+                    // If no statuses selected, check "All Statuses"
+                    if (selectedStatuses.length === 0 && allCheckbox) {
+                        allCheckbox.checked = true;
+                        selectedStatuses = ['all'];
+                    }
+                }
+                
+                // Update button text
+                if (selectedStatuses.includes('all')) {
+                    statusFilterBtn.textContent = 'All Statuses';
+                } else if (selectedStatuses.length === 1) {
+                    const statusLabel = {
+                        'backlog': 'Backlog',
+                        'inprogress': 'In Progress',
+                        'done': 'Done'
+                    }[selectedStatuses[0]] || selectedStatuses[0];
+                    statusFilterBtn.textContent = statusLabel;
+                } else {
+                    statusFilterBtn.textContent = `${selectedStatuses.length} Statuses`;
+                }
+                
+                renderTasks();
+            });
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!statusFilterBtn.contains(e.target) && !statusFilterContent.contains(e.target)) {
+                statusFilterContent.classList.remove('show');
+            }
+        });
+    }
+    
+    // Task search
+    const taskSearch = document.getElementById('task-search');
+    if (taskSearch) {
+        taskSearch.addEventListener('input', () => {
+            renderTasks();
+        });
+    }
 }
 
-// Close task details view
-function closeTaskDetails() {
-    taskDetailsView.classList.add('hidden');
+// Scroll chat to bottom
+function scrollToBottom() {
+    if (!chatMessages) {
+        chatMessages = document.getElementById('chat-messages');
+        if (!chatMessages) return;
+    }
+    
+    // Define a function to perform the scroll
+    const performScroll = () => {
+        // Check if element exists and has scrollHeight
+        if (!chatMessages || !chatMessages.scrollHeight) return;
+        
+        // Calculate the amount to scroll (full height - visible height)
+        const scrollAmount = chatMessages.scrollHeight - chatMessages.clientHeight;
+        if (scrollAmount > 0) {
+            chatMessages.scrollTop = scrollAmount;
+            
+            // Log for debugging
+            console.log(`Scrolling to ${scrollAmount}px (scrollHeight: ${chatMessages.scrollHeight}px, clientHeight: ${chatMessages.clientHeight}px)`);
+        }
+    };
+    
+    // First attempt - immediate
+    performScroll();
+    
+    // Second attempt - after a short delay (for browsers that need it)
+    setTimeout(performScroll, 10);
+    
+    // Third attempt - after layout (most reliable)
+    requestAnimationFrame(() => {
+        performScroll();
+        
+        // Fourth attempt - after another layout cycle (for extreme cases)
+        requestAnimationFrame(performScroll);
+    });
+    
+    // Final attempt - after everything else has settled
+    setTimeout(performScroll, 100);
+}
+
+// Update status bar
+function updateStatusBar() {
+    // Try to get status elements if they're not already defined
+    if (!agentStatus) agentStatus = document.getElementById('agent-status');
+    if (!timeStatus) timeStatus = document.getElementById('time-status');
+    if (!connectionStatus) connectionStatus = document.getElementById('connection-status');
+    
+    if (agentStatus) {
+        // Always display agent name in uppercase in the status bar
+        const displayName = currentAgentName.toUpperCase();
+        
+        // Special handling for SCOUT agent
+        if (currentAgentName.toUpperCase() === 'SCOUT') {
+            console.log("SCOUT AGENT DETECTED - Updating status bar");
+        }
+        
+        agentStatus.textContent = `AGENT: ${displayName}`;
+        console.log(`Updated status bar with agent name: ${displayName}`);
+        
+        // Force the status bar to update immediately
+        agentStatus.style.color = displayName === 'SCOUT' ? 'var(--term-blue)' : 'var(--term-amber)';
+        setTimeout(() => {
+            agentStatus.style.color = 'var(--term-amber)';
+        }, 100);
+    } else {
+        console.log('Agent status element not found yet, will retry later');
+    }
+    
+    // Update clock
+    updateClock();
+    
+    // Set initial connection status if needed
+    if (connectionStatus && !connectionStatus.textContent) {
+        connectionStatus.textContent = 'CONNECTION: ACTIVE';
+    }
+}
+
+// Update clock in status bar
+function updateClock() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    
+    // Try to get time status element if it's not already defined
+    if (!timeStatus) timeStatus = document.getElementById('time-status');
+    
+    if (timeStatus) {
+        timeStatus.textContent = `TIME: ${timeString}`;
+    }
+}
+
+// Generate a UUID
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 }
 
 // Initialize voice wave animation
@@ -2002,18 +2521,18 @@ function initVoiceWaveAnimation() {
     
     // Set random heights for voice bars
     voiceBars.forEach(bar => {
-        const randomHeight = 5 + Math.floor(Math.random() * 11); // Random height between 5-15px
+        const randomHeight = 4 + Math.floor(Math.random() * 9); // Random height between 4-12px
         bar.style.height = `${randomHeight}px`;
         
-        // Set color to green (term-text)
-        bar.style.backgroundColor = 'var(--term-text)';
+        // Set color to accent blue
+        bar.style.backgroundColor = 'var(--accent-blue)';
     });
     
     // Animate voice bars with random heights
     setInterval(() => {
         voiceBars.forEach(bar => {
             setTimeout(() => {
-                const randomHeight = 5 + Math.floor(Math.random() * 11); // Random height between 5-15px
+                const randomHeight = 4 + Math.floor(Math.random() * 9); // Random height between 4-12px
                 bar.style.height = `${randomHeight}px`;
             }, Math.random() * 200); // Random delay up to 200ms
         });
@@ -2022,12 +2541,27 @@ function initVoiceWaveAnimation() {
 
 // Close emoji suggestions when clicking outside
 document.addEventListener('click', function(event) {
-    // Check if click is outside the emoji suggestions and input
-    if (!emojiSuggestionsElement.contains(event.target) && 
+    // Check if emoji suggestions element exists and if click is outside of it
+    if (emojiSuggestionsElement && 
+        !emojiSuggestionsElement.contains(event.target) && 
         event.target !== chatInput) {
         hideEmojiSuggestions();
     }
+    
+    // Check if click is outside the command suggestions and input
+    const commandSuggestionsElement = document.getElementById('command-suggestions');
+    if (commandSuggestionsElement && 
+        !commandSuggestionsElement.contains(event.target) && 
+        event.target !== chatInput) {
+        hideCommandSuggestions();
+    }
 });
+
+// Theme functionality has been removed
+
+// Matrix effect functionality has been removed
+
+// Settings dialog functionality has been removed
 
 // Initialize when document is loaded
 document.addEventListener('DOMContentLoaded', init);

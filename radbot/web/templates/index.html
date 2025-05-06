@@ -8,8 +8,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>RadBot Linux Interface</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/fix.css">
-    <link rel="stylesheet" href="/static/css/header-status.css">
     <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/emoji-toolkit@7.0.0/lib/js/joypixels.min.js"></script>
@@ -17,8 +15,12 @@
 </head>
 <body>
     <div class="app-container" id="app-container">
-        <div class="main-content-container">
-            <div class="chat-container">
+        <!-- The layout will be generated dynamically by the tiling system -->
+    </div>
+    
+    <!-- Template elements (hidden by default) -->
+    <template id="chat-template">
+        <div class="chat-container">
             <div class="chat-header">
                 <div class="header-left">
                     <h1>RadBot V8.8.Beta</h1>
@@ -35,16 +37,15 @@
                         <div class="voice-bar"></div>
                         <div class="voice-bar"></div>
                     </div>
-                    <!-- Status Info Added to Header -->
                     <div class="header-status">
                         <span id="agent-status">AGENT: BETO</span> | <span id="time-status">TIME: 00:00:00</span> | <span id="connection-status">CONNECTION: ACTIVE</span>
                     </div>
                 </div>
                 <div class="controls">
-                    <button id="toggle-tasks-button" title="Show/hide tasks panel (closes events panel if open)">
+                    <button id="toggle-tasks-button" title="Show/hide tasks panel">
                         TASKS
                     </button>
-                    <button id="toggle-events-button" title="Show/hide events panel (closes tasks panel if open)">
+                    <button id="toggle-events-button" title="Show/hide events panel">
                         EVENTS
                     </button>
                     <button id="reset-button" title="Reset conversation">
@@ -59,8 +60,8 @@
                         <p>Agent active: BETO</p>
                         <p>Session started: Mon May 5 12:00:00 PDT 2025</p>
                         <p>Welcome to RadBot Interface</p>
-                        <p>Type 'help' for available commands.</p>
-                        <p>Type a message and press ENTER to begin.</p>
+                        <p>Type 'help' for available commands. Type message + ENTER to begin.</p>
+                        <p>Use /tasks or /events to control the interface.</p>
                     </div>
                 </div>
             </div>
@@ -68,58 +69,22 @@
                 <div class="chat-input-wrapper">
                     <textarea 
                         id="chat-input" 
-                        placeholder="Type here... (Use : for emoji suggestions)" 
+                        placeholder="Type here... (Use / for commands, : for emoji)" 
                         rows="1"
                         autofocus
                     ></textarea>
                     <button id="send-button">
                         SEND
                     </button>
+                    <div id="command-suggestions" class="command-suggestions"></div>
                     <div id="emoji-suggestions" class="emoji-suggestions hidden"></div>
                 </div>
             </div>
-            <!-- Status bar removed as it's now in the header -->
         </div>
-        
-        <!-- Events Panel -->
-        <div class="events-panel" id="events-panel">
-            <div class="events-header">
-                <h2>Event Log</h2>
-                <button id="clear-events-button" title="Clear events log">CLEAR</button>
-            </div>
-            <div class="events-filter">
-                <select id="event-type-filter">
-                    <option value="all">All Events</option>
-                    <option value="tool_call">Tool Calls</option>
-                    <option value="agent_transfer">Agent Transfers</option>
-                    <option value="planner">Planner</option>
-                    <option value="other">Other</option>
-                </select>
-            </div>
-            <div class="events-container" id="events-container">
-                <!-- Events will be added here dynamically -->
-                <div class="event-empty-state">No events recorded yet.</div>
-            </div>
-            <div class="event-details" id="event-details">
-                <div class="event-details-header">
-                    <h3>Event Details</h3>
-                    <button id="close-details-button">×</button>
-                </div>
-                <div class="event-details-content">
-                    <p>Select an event to view details.</p>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Tasks Panel -->
-        <div class="tasks-panel" id="tasks-panel">
-            <div class="tasks-header">
-                <h2>Task List</h2>
-                <div class="tasks-controls">
-                    <button id="refresh-tasks-button" title="Refresh tasks">↻</button>
-                    <button id="settings-tasks-button" title="Task settings">⚙</button>
-                </div>
-            </div>
+    </template>
+    
+    <template id="tasks-template">
+        <div class="tasks-content">
             <div class="tasks-filter">
                 <div class="filter-group">
                     <div class="filter-dropdown">
@@ -129,7 +94,6 @@
                                 <input type="checkbox" id="project-all" value="all" checked>
                                 <label for="project-all">All Projects</label>
                             </div>
-                            <!-- Projects will be added dynamically -->
                         </div>
                     </div>
                     <div class="filter-dropdown">
@@ -162,54 +126,42 @@
                 <!-- Tasks will be added here dynamically -->
                 <div class="tasks-empty-state">No tasks found.</div>
             </div>
-            
-            <!-- Task Details View -->
-            <div class="task-details-view hidden" id="task-details-view">
-                <div class="task-details-header">
-                    <h3>Task Details</h3>
-                    <button id="close-task-details-button" class="close-button">×</button>
-                </div>
-                <div class="task-details-content" id="task-details-content">
-                    <!-- Task details will be populated here -->
-                </div>
-                <div class="task-details-footer">
-                    <button id="back-to-tasks-button">Back to Tasks</button>
-                </div>
+        </div>
+    </template>
+    
+    <template id="events-template">
+        <div class="events-content">
+            <div class="events-filter">
+                <select id="event-type-filter">
+                    <option value="all">All Events</option>
+                    <option value="tool_call">Tool Calls</option>
+                    <option value="agent_transfer">Agent Transfers</option>
+                    <option value="planner">Planner</option>
+                    <option value="other">Other</option>
+                </select>
             </div>
-            <!-- No Add Task Input Since Modification Is Not Allowed -->
-            
-            <!-- Task Settings Dialog -->
-            <div class="settings-dialog hidden" id="task-settings-dialog">
-                <div class="settings-header">
-                    <h3>Task API Settings</h3>
-                    <button class="close-dialog-button">×</button>
-                </div>
-                <div class="settings-content">
-                    <div class="settings-group">
-                        <label for="api-endpoint">API Endpoint</label>
-                        <input type="text" id="api-endpoint" placeholder="http://localhost:8001">
-                    </div>
-                    <div class="settings-group">
-                        <label for="api-key">API Key (Optional)</label>
-                        <input type="password" id="api-key" placeholder="Leave blank if not required">
-                    </div>
-                    <div class="settings-group">
-                        <label for="default-project">Default Project</label>
-                        <select id="default-project">
-                            <!-- Will be populated dynamically -->
-                            <option value="">Select a project</option>
-                        </select>
-                    </div>
-                    <div class="settings-actions">
-                        <button id="save-settings-button">Save</button>
-                        <button id="test-connection-button">Test Connection</button>
-                    </div>
-                </div>
+            <div class="events-container" id="events-container">
+                <!-- Events will be added here dynamically -->
+                <div class="event-empty-state">No events recorded yet.</div>
             </div>
         </div>
+    </template>
+    
+    <template id="task-details-template">
+        <div class="task-details-content" id="task-details-content">
+            <!-- Task details will be populated here -->
         </div>
-    </div>
+    </template>
+    
+    <template id="event-details-template">
+        <div class="event-details-content" id="event-details-content">
+            <!-- Event details will be populated here -->
+        </div>
+    </template>
+    
+    <!-- Settings Dialog Removed -->
+    
+    <script src="/static/js/tiling.js"></script>
     <script src="/static/js/app.js"></script>
-    <script src="/static/js/border-fix.js"></script>
 </body>
 </html>

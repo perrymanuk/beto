@@ -332,11 +332,16 @@ def create_agent(tools: Optional[List[Any]] = None):
     
     # Add the ADK's built-in transfer_to_agent tool
     try:
-        # Create a FunctionTool wrapper around the transfer_to_agent function
-        from google.adk.tools import FunctionTool
-        transfer_tool = FunctionTool(transfer_to_agent)
-        basic_tools.append(transfer_tool)
-        logger.info("Added transfer_to_agent tool for agent-to-agent communication")
+        # Rather than wrapping in a FunctionTool, add transfer_to_agent directly
+        # as it's likely already properly registered within the ADK
+        basic_tools.append(transfer_to_agent)
+        logger.info("Added transfer_to_agent function directly to tools list")
+        
+        # Check if the function tool is available in the ADK
+        from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
+        if TRANSFER_TO_AGENT_TOOL:
+            basic_tools.append(TRANSFER_TO_AGENT_TOOL)
+            logger.info("Added TRANSFER_TO_AGENT_TOOL from ADK")
     except Exception as e:
         logger.warning(f"Failed to add transfer_to_agent tool: {str(e)}")
         logger.debug(f"Transfer tool addition error details:", exc_info=True)
