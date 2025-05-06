@@ -935,7 +935,7 @@ function showEventDetails(event) {
             if (event.function_call.args) {
                 const argsValue = document.createElement('pre');
                 argsValue.className = 'detail-json';
-                argsValue.textContent = JSON.stringify(event.function_call.args, null, 2);
+                argsValue.innerHTML = formatJsonSyntax(event.function_call.args);
                 functionCallSection.appendChild(argsValue);
             }
             
@@ -961,7 +961,7 @@ function showEventDetails(event) {
             if (event.function_response.response) {
                 const responseValue = document.createElement('pre');
                 responseValue.className = 'detail-json';
-                responseValue.textContent = JSON.stringify(event.function_response.response, null, 2);
+                responseValue.innerHTML = formatJsonSyntax(event.function_response.response);
                 functionResponseSection.appendChild(responseValue);
             }
             
@@ -979,7 +979,7 @@ function showEventDetails(event) {
             
             const inputValue = document.createElement('pre');
             inputValue.className = 'detail-json';
-            inputValue.textContent = JSON.stringify(event.input, null, 2);
+            inputValue.innerHTML = formatJsonSyntax(event.input);
             inputSection.appendChild(inputValue);
             
             detailsContainer.appendChild(inputSection);
@@ -996,7 +996,7 @@ function showEventDetails(event) {
             
             const outputValue = document.createElement('pre');
             outputValue.className = 'detail-json';
-            outputValue.textContent = JSON.stringify(event.output, null, 2);
+            outputValue.innerHTML = formatJsonSyntax(event.output);
             outputSection.appendChild(outputValue);
             
             detailsContainer.appendChild(outputSection);
@@ -1114,7 +1114,7 @@ function showEventDetails(event) {
             // Format the value based on its type
             let displayValue = value;
             if (typeof value === 'object' && value !== null) {
-                displayValue = `<pre>${JSON.stringify(value, null, 2)}</pre>`;
+                displayValue = `<pre>${formatJsonSyntax(value)}</pre>`;
             }
             
             // Format key for display (convert snake_case to Title Case)
@@ -1167,7 +1167,11 @@ function showEventDetails(event) {
         return value;
     }));
     
-    rawJson.textContent = JSON.stringify(cleanedEvent, null, 2);
+    // Format the JSON with proper indentation and structure
+    const formattedJson = JSON.stringify(cleanedEvent, null, 2);
+    
+    // For better readability, we'll syntax highlight the JSON
+    rawJson.innerHTML = formatJsonSyntax(formattedJson);
     rawContent.appendChild(rawJson);
     rawSection.appendChild(rawContent);
     
@@ -1179,6 +1183,40 @@ function showEventDetails(event) {
     });
     
     detailsContainer.appendChild(rawSection);
+}
+
+// Format JSON with syntax highlighting
+function formatJsonSyntax(json) {
+    if (!json) return '';
+    
+    // Handle the case where json is already an object
+    if (typeof json !== 'string') {
+        json = JSON.stringify(json, null, 2);
+    }
+    
+    // Replace potentially harmful characters
+    json = json.replace(/&/g, '&amp;')
+               .replace(/</g, '&lt;')
+               .replace(/>/g, '&gt;');
+    
+    // Format different parts of JSON with specific colors
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function(match) {
+        let cls = 'json-number'; // default is number
+        
+        if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+                cls = 'json-key'; // keys
+            } else {
+                cls = 'json-string'; // strings
+            }
+        } else if (/true|false/.test(match)) {
+            cls = 'json-boolean'; // booleans
+        } else if (/null/.test(match)) {
+            cls = 'json-null'; // null
+        }
+        
+        return '<span class="' + cls + '">' + match + '</span>';
+    });
 }
 
 // Generate a UUID for session ID

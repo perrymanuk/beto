@@ -1381,6 +1381,29 @@ body {
   word-break: break-word;
 }
 
+/* JSON syntax highlighting */
+.json-key {
+  color: var(--term-amber);
+  font-weight: bold;
+}
+
+.json-string {
+  color: #3dd28d; /* light green */
+}
+
+.json-number {
+  color: #7eb6ff; /* light blue */
+}
+
+.json-boolean {
+  color: #ff7e7e; /* light red */
+}
+
+.json-null {
+  color: #bdbdbd; /* light gray */
+  font-style: italic;
+}
+
 .detail-item.status-success strong {
   color: var(--term-green);
 }
