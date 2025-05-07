@@ -44,5 +44,9 @@ python -m tools.test_adk_builtin_transfers --web
 1. **ADK 0.4.0 Changes**: In ADK 0.4.0+, for agent A to transfer to agent B, agent B must be in agent A's sub_agents list
 2. **Bidirectional Transfers**: For bidirectional transfers, agents must be in each other's sub_agents lists
 3. **Agent Naming**: Agent names must be consistent for transfers to work properly
-4. **Tool Availability**: All agents must have the transfer_to_agent tool available
+4. **Tool Availability**: All agents must have the transfer_to_agent tool available (except in Vertex AI)
 5. **Proxy Agents**: For complex relationships, proxy agents can be used to establish proper parent-child relationships
+6. **Vertex AI Limitations**: Vertex AI currently only supports one tool per agent, requiring special handling:
+   - For specialized agents, prioritize their primary tool (e.g., built_in_code_execution or google_search)
+   - Use instruction text to tell agents to say "TRANSFER_BACK_TO_BETO" instead of using the transfer_to_agent tool
+   - Main agent must recognize this phrase and manually handle the transfer back

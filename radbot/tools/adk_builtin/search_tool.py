@@ -10,7 +10,6 @@ from typing import Optional, Any
 
 from google.adk.agents import Agent, LlmAgent
 from google.adk.tools import google_search
-from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
 
 from radbot.config import config_manager
 from radbot.config.settings import ConfigManager
@@ -23,7 +22,6 @@ def create_search_agent(
     model: Optional[str] = None,
     config: Optional[ConfigManager] = None,
     instruction_name: str = "search_agent",
-    include_transfer_tool: bool = True,
 ) -> Agent:
     """
     Create an agent with Google Search capabilities.
@@ -33,8 +31,6 @@ def create_search_agent(
         model: Optional model override (defaults to config's main_model)
         config: Optional config manager (uses global if not provided)
         instruction_name: Name of instruction to load from config
-        include_transfer_tool: Whether to include transfer_to_agent tool (default: True)
-                              Set to False for standalone usage with Vertex AI
         
     Returns:
         Agent with Google Search tool
@@ -69,16 +65,10 @@ def create_search_agent(
             "or facts that may have changed since your training, use the Google Search "
             "tool to find current information. Always cite your sources clearly. "
             "When you don't need to search, answer from your knowledge. "
-            "When your task is complete, transfer back to the main agent using "
-            "transfer_to_agent(agent_name='beto') or transfer to another agent "
-            "if needed using transfer_to_agent(agent_name='agent_name')."
+            "When your task is complete, say 'TRANSFER_BACK_TO_BETO' to return to the main agent."
         )
     
-    # Import transfer_to_agent
-    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
-    
-    # Due to Vertex AI limitations, we can only use one tool at a time
-    # Prioritize the google_search tool for this agent
+    # Vertex AI only supports one tool at a time, so just use the google_search tool
     tools = [google_search]
     
     # Create the agent with just the search tool
@@ -183,13 +173,13 @@ def register_search_agent(parent_agent: Agent, search_agent: Optional[Agent] = N
         # Add parent to search agent's sub_agents if not already there
         if not parent_exists:
             from google.adk.agents import Agent
-            # Create a proxy for the parent (minimal version with just enough for transfers)
+            # Create a proxy for the parent (minimal version without tools for Vertex AI compatibility)
             parent_proxy = Agent(
                 name=parent_agent.name if hasattr(parent_agent, 'name') else "beto",
                 model=parent_agent.model if hasattr(parent_agent, 'model') else None,
                 instruction="Main coordinating agent",
                 description="Main agent for coordinating tasks",
-                tools=[transfer_to_agent]  # Critical to have transfer_to_agent
+                tools=[]  # No tools for Vertex AI compatibility
             )
             
             search_sub_agents.append(parent_proxy)
@@ -198,20 +188,15 @@ def register_search_agent(parent_agent: Agent, search_agent: Optional[Agent] = N
     except Exception as e:
         logger.warning(f"Failed to add parent to search agent's sub_agents: {str(e)}")
     
-    # For Vertex AI compatibility, we don't add transfer_to_agent tool
-    # as Vertex AI only supports one tool at a time.
-    # Instead, we rely on the instruction to tell the agent to say "TRANSFER_BACK_TO_BETO"
-    
-    # Check if agent is already using more than one tool
+    # For Vertex AI compatibility, ensure we're only using one tool
+    # as Vertex AI only supports one tool at a time
     if hasattr(agent_to_register, 'tools') and len(agent_to_register.tools) > 1:
-        # If we're using Vertex AI, restrict to only google_search
-        if config_manager.is_using_vertex_ai():
-            # Keep only the google_search tool
-            agent_to_register.tools = [google_search]
-            logger.warning(
-                f"Restricted search agent '{agent_to_register.name}' to only "
-                "google_search tool for Vertex AI compatibility"
-            )
+        # Restrict to only google_search tool
+        agent_to_register.tools = [google_search]
+        logger.info(
+            f"Restricted search agent '{agent_to_register.name}' to only "
+            "google_search tool for Vertex AI compatibility"
+        )
     
     # Ensure the agent has the transfer_back instruction
     if hasattr(agent_to_register, 'instruction') and "TRANSFER_BACK_TO_BETO" not in agent_to_register.instruction:

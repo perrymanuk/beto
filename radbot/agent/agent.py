@@ -961,18 +961,9 @@ def create_core_agent_for_web(
             if include_google_search:
                 try:
                     search_agent = create_search_agent(name="search_agent")
-                    # Make sure search_agent has transfer_to_agent
-                    if hasattr(search_agent, 'tools'):
-                        has_transfer_tool = False
-                        for tool in search_agent.tools:
-                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                            if tool_name == 'transfer_to_agent':
-                                has_transfer_tool = True
-                                break
-                                
-                        if not has_transfer_tool:
-                            search_agent.tools.append(transfer_to_agent)
-                            
+                    # We don't add transfer_to_agent tool for Vertex AI compatibility
+                    # Specialized agents use "TRANSFER_BACK_TO_BETO" message instead
+                    
                     sub_agents.append(search_agent)
                     logger.info("Created search_agent as sub-agent")
                 except Exception as e:
@@ -981,17 +972,8 @@ def create_core_agent_for_web(
             if include_code_execution:
                 try:
                     code_agent = create_code_execution_agent(name="code_execution_agent")
-                    # Make sure code_agent has transfer_to_agent
-                    if hasattr(code_agent, 'tools'):
-                        has_transfer_tool = False
-                        for tool in code_agent.tools:
-                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                            if tool_name == 'transfer_to_agent':
-                                has_transfer_tool = True
-                                break
-                                
-                        if not has_transfer_tool:
-                            code_agent.tools.append(transfer_to_agent)
+                    # We don't add transfer_to_agent tool for Vertex AI compatibility
+                    # Specialized agents use "TRANSFER_BACK_TO_BETO" message instead
                             
                     sub_agents.append(code_agent)
                     logger.info("Created code_execution_agent as sub-agent")

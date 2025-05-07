@@ -22,7 +22,6 @@ def create_code_execution_agent(
     model: Optional[str] = None,
     config: Optional[ConfigManager] = None,
     instruction_name: str = "code_execution_agent",
-    include_transfer_tool: bool = True,
 ) -> Agent:
     """
     Create an agent with Code Execution capabilities.
@@ -32,8 +31,6 @@ def create_code_execution_agent(
         model: Optional model override (defaults to config's main_model)
         config: Optional config manager (uses global if not provided)
         instruction_name: Name of instruction to load from config
-        include_transfer_tool: Whether to include transfer_to_agent tool (default: True)
-                              Set to False for standalone usage with Vertex AI
         
     Returns:
         Agent with Code Execution tool
@@ -68,16 +65,10 @@ def create_code_execution_agent(
             "Python code to perform calculations, data manipulation, or solve problems. "
             "When asked to write code, use the built_in_code_execution tool to run the code "
             "and return the results. Always explain the code you write and its output. "
-            "When your task is complete, transfer back to the main agent using "
-            "transfer_to_agent(agent_name='beto') or transfer to another agent "
-            "if needed using transfer_to_agent(agent_name='agent_name')."
+            "When your task is complete, say 'TRANSFER_BACK_TO_BETO' to return to the main agent."
         )
     
-    # Import transfer_to_agent
-    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
-    
-    # Due to Vertex AI limitations, we can only use one tool at a time
-    # Prioritize the code_execution tool for this agent
+    # Vertex AI only supports one tool at a time, so just use the code execution tool
     tools = [built_in_code_execution]
     
     # Create the agent with just the code execution tool
@@ -182,13 +173,13 @@ def register_code_execution_agent(parent_agent: Agent, code_agent: Optional[Agen
         # Add parent to code agent's sub_agents if not already there
         if not parent_exists:
             from google.adk.agents import Agent
-            # Create a proxy for the parent (minimal version with just enough for transfers)
+            # Create a proxy for the parent (minimal version without tools for Vertex AI compatibility)
             parent_proxy = Agent(
                 name=parent_agent.name if hasattr(parent_agent, 'name') else "beto",
                 model=parent_agent.model if hasattr(parent_agent, 'model') else None,
                 instruction="Main coordinating agent",
                 description="Main agent for coordinating tasks",
-                tools=[transfer_to_agent]  # Critical to have transfer_to_agent
+                tools=[]  # No tools for Vertex AI compatibility
             )
             
             code_sub_agents.append(parent_proxy)
@@ -197,20 +188,15 @@ def register_code_execution_agent(parent_agent: Agent, code_agent: Optional[Agen
     except Exception as e:
         logger.warning(f"Failed to add parent to code agent's sub_agents: {str(e)}")
     
-    # For Vertex AI compatibility, we don't add transfer_to_agent tool
-    # as Vertex AI only supports one tool at a time.
-    # Instead, we rely on the instruction to tell the agent to say "TRANSFER_BACK_TO_BETO"
-    
-    # Check if agent is already using more than one tool
+    # For Vertex AI compatibility, ensure we're only using one tool
+    # as Vertex AI only supports one tool at a time
     if hasattr(agent_to_register, 'tools') and len(agent_to_register.tools) > 1:
-        # If we're using Vertex AI, restrict to only built_in_code_execution
-        if config_manager.is_using_vertex_ai():
-            # Keep only the built_in_code_execution tool
-            agent_to_register.tools = [built_in_code_execution]
-            logger.warning(
-                f"Restricted code execution agent '{agent_to_register.name}' to only "
-                "built_in_code_execution tool for Vertex AI compatibility"
-            )
+        # Restrict to only built_in_code_execution tool
+        agent_to_register.tools = [built_in_code_execution]
+        logger.info(
+            f"Restricted code execution agent '{agent_to_register.name}' to only "
+            "built_in_code_execution tool for Vertex AI compatibility"
+        )
     
     # Ensure the agent has the transfer_back instruction
     if hasattr(agent_to_register, 'instruction') and "TRANSFER_BACK_TO_BETO" not in agent_to_register.instruction:

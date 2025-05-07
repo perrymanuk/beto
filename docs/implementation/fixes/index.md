@@ -12,6 +12,7 @@ This directory contains documentation for various fixes implemented in the RadBo
 - [ADK Built-in Tools Fix](adk_builtin_tools_fix.md) - Fix for parameter order issue with ADK built-in tools
 - [ADK Built-in Tools Transfer Fix](adk_builtin_tools_transfer_fix.md) - Fix for transfers to and from Google search and code execution agents
 - [ADK Built-in Tools Transfer Test](adk_builtin_tools_transfer_test.md) - Test script for validating transfers with ADK built-in tools
+- [Vertex AI Single Tool Fix](vertex_ai_single_tool_fix.md) - Fix for Vertex AI's one-tool-per-agent limitation
 - [Agent Name Emphasis Fix](agent_name_emphasis_fix.md) - Fix for agent name recognition in LLM prompts
 - [ADK Agent Tool Approach](adk_agent_tool_approach.md) - Alternative implementation using ADK's AgentTool pattern
 
