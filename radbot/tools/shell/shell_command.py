@@ -106,16 +106,56 @@ def execute_shell_command(
             f"SECURITY WARNING: Executing non-allow-listed command '{command}' with strict_mode=False"
         )
 
-    # --- Security Check 2: Basic Argument Validation ---
-    # This is a basic placeholder. Consider implementing more robust validation
-    # based on the specific needs and expected argument patterns.
+    # --- Security Check 2: Smart Argument Validation ---
+    # More robust validation that provides reasonable flexibility 
+    # while maintaining security controls
     sanitized_arguments = []
-    high_risk_chars = [';', '|', '&', '$', '`', '<', '>', '(', ')', '\\']
+    
+    # High-risk shell metacharacters that could allow command chaining or injection
+    high_risk_chars = [';', '|', '&', '$', '`']
+    
+    # Exempt certain commands from strict character filtering
+    # These commands commonly need special characters in their arguments
+    command_exemptions = {
+        # Git commands often use special characters
+        "git": ['<', '>', '(', ')', '\\', '..' ],
+        "gh": ['<', '>', '(', ')', '\\', '..' ],
+        
+        # Search tools often need regex patterns with special characters
+        "grep": ['|', '(', ')', '[', ']', '{', '}', '\\', '.'],
+        "egrep": ['|', '(', ')', '[', ']', '{', '}', '\\', '.'],
+        "fgrep": ['|', '(', ')', '[', ']', '{', '}', '\\', '.'],
+        "rg": ['|', '(', ')', '[', ']', '{', '}', '\\', '.'],
+        "ripgrep": ['|', '(', ')', '[', ']', '{', '}', '\\', '.'],
+        
+        # Text processing tools that use regex or special syntax
+        "sed": ['|', '(', ')', '[', ']', '{', '}', '\\', '.', '/'],
+        "awk": ['|', '(', ')', '[', ']', '{', '}', '\\', '.', '/'],
+        "tr": ['[', ']', '\\'],
+        
+        # Shell utilities that might need path traversal
+        "cd": ['..'],
+        "cp": ['..'],
+        "mv": ['..'],
+        "find": ['..', '(', ')', '\\'],
+        
+        # Package managers often use URLs or complex arguments
+        "pip": ['<', '>', '@', '=', '+', '..' ],
+        "uv": ['<', '>', '@', '=', '+', '..' ],
+    }
+    
+    # Get the list of characters exempted for this command
+    exempted_chars = command_exemptions.get(command, [])
     
     for arg in arguments:
-        # Basic checks: prevent shell metacharacters and path traversal
-        if any(meta in arg for meta in high_risk_chars) or '..' in arg:
-            error_message = f"Error: Argument '{arg}' contains potentially unsafe characters."
+        # Filter out high-risk characters that aren't exempted for this command
+        risky_chars_present = [char for char in high_risk_chars if char in arg and char not in exempted_chars]
+        
+        # Check for potential path traversal (.. in paths) unless exempted
+        path_traversal_risk = '..' in arg and '..' not in exempted_chars
+        
+        if risky_chars_present:
+            error_message = f"Error: Argument '{arg}' contains potentially unsafe characters: {', '.join(risky_chars_present)}"
             logger.warning(f"Rejected unsafe argument for command '{command}': {arg}")
             return {
                 "stdout": "",
@@ -123,6 +163,17 @@ def execute_shell_command(
                 "return_code": -1,
                 "error": error_message,
             }
+        
+        if path_traversal_risk:
+            error_message = f"Error: Argument '{arg}' contains path traversal sequences which are not allowed for this command."
+            logger.warning(f"Rejected path traversal in argument for command '{command}': {arg}")
+            return {
+                "stdout": "",
+                "stderr": error_message,
+                "return_code": -1,
+                "error": error_message,
+            }
+            
         sanitized_arguments.append(arg)
 
     command_to_run = [command] + sanitized_arguments
