@@ -63,13 +63,21 @@ def create_code_execution_agent(
         )
     
     # Create the code execution agent
+    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
     code_agent = Agent(
         name=name,
         model=model_name,
         instruction=instruction,
         description="A specialized agent that can execute Python code securely.",
-        tools=[built_in_code_execution]
+        tools=[built_in_code_execution, transfer_to_agent]
     )
+    
+    # Enable code execution explicitly if using Vertex AI
+    if cfg.is_using_vertex_ai():
+        from google.genai import types
+        code_agent.config = types.GenerateContentConfig()
+        code_agent.config.tools = [types.Tool(code_execution=types.ToolCodeExecution())]
+        logger.info("Explicitly configured code execution tool for Vertex AI")
     
     logger.info(f"Created code execution agent '{name}' with built_in_code_execution tool")
     return code_agent

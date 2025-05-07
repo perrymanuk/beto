@@ -709,6 +709,8 @@ def create_agent(
     name: str = "beto",
     config: Optional[ConfigManager] = None,
     include_memory_tools: bool = True,
+    include_google_search: bool = False,
+    include_code_execution: bool = False,
     for_web: bool = False,
     register_tools: bool = True,
     app_name: str = "beto"
@@ -724,6 +726,8 @@ def create_agent(
         name: Name for the agent
         config: Optional ConfigManager instance (uses global if not provided)
         include_memory_tools: If True, includes memory tools automatically
+        include_google_search: If True, register a google_search sub-agent
+        include_code_execution: If True, register a code_execution sub-agent
         for_web: If True, returns an ADK Agent for web interface
         register_tools: Whether to register common tool handlers
         app_name: Application name for session management
@@ -770,6 +774,28 @@ def create_agent(
             register_tools=register_tools
         )
         logger.info(f"Created web agent with {len(all_tools)} tools")
+        
+        # Add built-in tool agents if requested
+        if include_google_search or include_code_execution:
+            try:
+                from radbot.tools.adk_builtin import register_search_agent, register_code_execution_agent
+                
+                if include_google_search:
+                    try:
+                        register_search_agent(agent)
+                        logger.info(f"Registered Google Search agent with parent {name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to register search agent: {str(e)}")
+                
+                if include_code_execution:
+                    try:
+                        register_code_execution_agent(agent)
+                        logger.info(f"Registered Code Execution agent with parent {name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to register code execution agent: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Failed to import built-in tool factories: {str(e)}")
+        
         return agent
     
     # Otherwise, create a RadBotAgent instance
@@ -787,6 +813,27 @@ def create_agent(
     if register_tools:
         agent.register_tool_handlers()
     
+    # Add built-in tool agents if requested
+    if include_google_search or include_code_execution:
+        try:
+            from radbot.tools.adk_builtin import register_search_agent, register_code_execution_agent
+            
+            if include_google_search:
+                try:
+                    register_search_agent(agent.root_agent)
+                    logger.info(f"Registered Google Search agent with parent {name}")
+                except Exception as e:
+                    logger.warning(f"Failed to register search agent: {str(e)}")
+            
+            if include_code_execution:
+                try:
+                    register_code_execution_agent(agent.root_agent)
+                    logger.info(f"Registered Code Execution agent with parent {name}")
+                except Exception as e:
+                    logger.warning(f"Failed to register code execution agent: {str(e)}")
+        except Exception as e:
+            logger.warning(f"Failed to import built-in tool factories: {str(e)}")
+    
     # Log the tools included in the agent
     if agent.root_agent and agent.root_agent.tools:
         tool_names = []
@@ -802,7 +849,13 @@ def create_agent(
     return agent
 
 
-def create_core_agent_for_web(tools: Optional[List[Any]] = None, name: str = "beto", app_name: str = "beto") -> Agent:
+def create_core_agent_for_web(
+    tools: Optional[List[Any]] = None, 
+    name: str = "beto", 
+    app_name: str = "beto",
+    include_google_search: bool = False,
+    include_code_execution: bool = False
+) -> Agent:
     """
     Create an ADK Agent for web interface with all necessary configurations.
     This is the function used by the root agent.py.
@@ -811,6 +864,8 @@ def create_core_agent_for_web(tools: Optional[List[Any]] = None, name: str = "be
         tools: Optional list of tools to include
         name: Name for the agent
         app_name: Application name for the agent, should match agent name for transfers
+        include_google_search: If True, register a google_search sub-agent
+        include_code_execution: If True, register a code_execution sub-agent
         
     Returns:
         Configured ADK Agent for web interface
@@ -820,5 +875,7 @@ def create_core_agent_for_web(tools: Optional[List[Any]] = None, name: str = "be
         name=name, 
         for_web=True, 
         register_tools=True,
+        include_google_search=include_google_search,
+        include_code_execution=include_code_execution,
         app_name=app_name
     )

@@ -45,6 +45,8 @@ All main modules are implemented and integrated. The agent consolidation has bee
 - [x] Fixed MCP fileserver issues
 - [x] Documented agent consolidation in core implementation
 - [x] Created comprehensive agent transfer guide for ADK 0.4.0
+- [x] Fixed bug in patched_llm_get_agent_to_run with incorrect parameter order causing error with ADK built-in tools
+- [x] Fixed agent transfers to and from Google search and code execution built-in tool agents
 
 ## 📋 Pending Tasks
 

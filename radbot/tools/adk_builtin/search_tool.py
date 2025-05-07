@@ -63,13 +63,21 @@ def create_search_agent(
         )
     
     # Create the search agent
+    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
     search_agent = Agent(
         name=name,
         model=model_name,
         instruction=instruction,
         description="A specialized agent that can search the web using Google Search.",
-        tools=[google_search]
+        tools=[google_search, transfer_to_agent]
     )
+    
+    # Enable search explicitly if using Vertex AI
+    if cfg.is_using_vertex_ai():
+        from google.genai import types
+        search_agent.config = types.GenerateContentConfig()
+        search_agent.config.tools = [types.Tool(google_search=types.ToolGoogleSearch())]
+        logger.info("Explicitly configured Google Search tool for Vertex AI")
     
     logger.info(f"Created search agent '{name}' with google_search tool")
     return search_agent

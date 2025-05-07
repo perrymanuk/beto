@@ -40,6 +40,16 @@
           "type": ["string", "null"],
           "description": "Path to Google Cloud service account JSON file for Vertex AI authentication"
         },
+        "enable_adk_search": {
+          "type": "boolean",
+          "description": "Enable/disable ADK Google Search built-in tool",
+          "default": false
+        },
+        "enable_adk_code_execution": {
+          "type": "boolean",
+          "description": "Enable/disable ADK Code Execution built-in tool",
+          "default": false
+        },
         "instruction_dir": {
           "type": "string",
           "description": "Directory containing instruction prompts",

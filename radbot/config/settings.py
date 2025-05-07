@@ -67,7 +67,13 @@ class ConfigManager:
             "vertex_location": agent_config.get("vertex_location") or os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
             
             # Vertex AI service account file
-            "service_account_file": agent_config.get("service_account_file") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+            "service_account_file": agent_config.get("service_account_file") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+            
+            # ADK Built-in Tools Configuration
+            "enable_adk_search": agent_config.get("enable_adk_search", False) if "enable_adk_search" in agent_config else os.getenv("RADBOT_ENABLE_ADK_SEARCH", "FALSE").upper() == "TRUE",
+            
+            # Enable ADK Code Execution Tool
+            "enable_adk_code_execution": agent_config.get("enable_adk_code_execution", False) if "enable_adk_code_execution" in agent_config else os.getenv("RADBOT_ENABLE_ADK_CODE_EXEC", "FALSE").upper() == "TRUE"
         }
 
     def _load_home_assistant_config(self) -> Dict[str, Any]:
@@ -205,6 +211,24 @@ class ConfigManager:
             The service account file path or None if not configured
         """
         return self.model_config.get("service_account_file")
+        
+    def is_adk_search_enabled(self) -> bool:
+        """
+        Check if the ADK Google Search built-in tool is enabled.
+        
+        Returns:
+            True if ADK Google Search is enabled, False otherwise
+        """
+        return self.model_config.get("enable_adk_search", False)
+        
+    def is_adk_code_execution_enabled(self) -> bool:
+        """
+        Check if the ADK Code Execution built-in tool is enabled.
+        
+        Returns:
+            True if ADK Code Execution is enabled, False otherwise
+        """
+        return self.model_config.get("enable_adk_code_execution", False)
     
     def get_home_assistant_config(self) -> Dict[str, Any]:
         """

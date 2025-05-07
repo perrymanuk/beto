@@ -45,6 +45,8 @@ class ResearchAgent:
         tools: Optional[List[FunctionTool]] = None,
         output_key: Optional[str] = "research_summary",
         enable_sequential_thinking: bool = True,
+        enable_google_search: bool = False,
+        enable_code_execution: bool = False,
         app_name: str = "beto"
     ):
         """
@@ -58,6 +60,8 @@ class ResearchAgent:
             tools: List of tools to provide to the agent (defaults to standard research tools)
             output_key: Session state key to store the agent's output (default: "research_summary")
             enable_sequential_thinking: Whether to enable sequential thinking trigger (default: True)
+            enable_google_search: Whether to enable Google Search capability (default: False)
+            enable_code_execution: Whether to enable Code Execution capability (default: False)
             app_name: Application name for agent transfers, must match parent agent name in ADK 0.4.0+ (default: "beto")
         """
         logger.info(f"Initializing ResearchAgent with name: {name}")
@@ -106,6 +110,27 @@ class ResearchAgent:
         logger.info(f"ResearchAgent successfully initialized with {len(tools)} tools")
         if self.enable_sequential_thinking:
             logger.info(f"Sequential thinking feature enabled for {name}")
+        
+        # Add built-in tool agents if requested
+        if enable_google_search or enable_code_execution:
+            try:
+                from radbot.tools.adk_builtin import register_search_agent, register_code_execution_agent
+                
+                if enable_google_search:
+                    try:
+                        register_search_agent(self.agent)
+                        logger.info(f"Google Search capability enabled for {name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to register search agent: {str(e)}")
+                
+                if enable_code_execution:
+                    try:
+                        register_code_execution_agent(self.agent)
+                        logger.info(f"Code Execution capability enabled for {name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to register code execution agent: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Failed to import built-in tool factories: {str(e)}")
     
     def get_adk_agent(self):
         """

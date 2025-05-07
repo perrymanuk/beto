@@ -138,7 +138,40 @@ research_agent = ResearchAgent(
 2. Integration tests with the main agent system
 3. End-to-end tests with conversation flows
 
+## Authentication Setup
+
+### Google Search Tool Authentication
+
+The `google_search` built-in tool requires Google Cloud authentication. Follow these steps to set it up:
+
+1. Authenticate with Google Cloud:
+   ```bash
+   gcloud auth login
+   ```
+
+2. Set up application default credentials:
+   ```bash
+   gcloud auth application-default login
+   ```
+
+3. Enable the Vertex AI API in your Google Cloud project.
+
+4. Add the following environment variables:
+   ```
+   # Google Cloud settings for ADK built-in tools
+   GOOGLE_CLOUD_PROJECT="your-project-id"
+   GOOGLE_CLOUD_LOCATION="your-location"  # e.g., us-central1
+   GOOGLE_GENAI_USE_VERTEXAI="True"
+   ```
+
+5. Policy Compliance: When the Google Search tool returns search suggestions, you must display these suggestions in your application. The search suggestions are returned as HTML in the Gemini response's `renderedContent` field.
+
+### Code Execution Tool Authentication
+
+The `built_in_code_execution` tool doesn't require additional authentication beyond what's needed for the Gemini model itself, which is handled by the same Google Cloud authentication as above.
+
 ## References
 
 - [ADK Built-in Tools Documentation](https://google.github.io/adk-docs/tools/built-in-tools/)
 - [ADK Tool Limitations](https://google.github.io/adk-docs/tools/built-in-tools/#limitations)
+- [Google Cloud Authentication](https://cloud.google.com/docs/authentication/provide-credentials-adc)

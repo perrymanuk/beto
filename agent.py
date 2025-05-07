@@ -45,6 +45,26 @@ logger.info(f"Main model from config: '{config_manager.get_main_model()}'")
 logger.info(f"Environment RADBOT_MAIN_MODEL: '{os.environ.get('RADBOT_MAIN_MODEL')}'")
 logger.info(f"Using Vertex AI: {config_manager.is_using_vertex_ai()}")
 
+# Check Google Cloud credentials for built-in tools
+google_cloud_project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+google_cloud_location = os.environ.get("GOOGLE_CLOUD_LOCATION")
+if google_cloud_project and google_cloud_location:
+    logger.info(f"Google Cloud credentials found: Project={google_cloud_project}, Location={google_cloud_location}")
+    # Set up Application Default Credentials access
+    try:
+        from google.auth import default
+        creds, project = default()
+        logger.info(f"Successfully loaded ADC credentials for project: {project}")
+    except Exception as e:
+        logger.warning(f"Failed to load ADC credentials: {e}")
+        logger.warning("ADK built-in tools like google_search may not work properly without valid ADC credentials")
+        logger.warning("Run 'gcloud auth application-default login' to set up ADC credentials")
+else:
+    logger.warning("Google Cloud credentials not found in environment variables")
+    logger.warning("Set GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION for ADK built-in tools")
+    logger.warning("Also ensure you've run 'gcloud auth application-default login'")
+
+
 # Import tools
 from radbot.tools.basic import get_current_time, get_weather
 from radbot.tools.memory import search_past_conversations, store_important_information
@@ -511,11 +531,60 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
     model_name = config_manager.get_main_model()
     logger.info(f"Creating agent with model: {model_name}")
     
+    # Check if we should enable built-in tools
+    enable_google_search = os.environ.get("RADBOT_ENABLE_ADK_SEARCH", "false").lower() in ["true", "1", "yes", "enable"]
+    enable_code_execution = os.environ.get("RADBOT_ENABLE_ADK_CODE_EXEC", "false").lower() in ["true", "1", "yes", "enable"]
+    
+    if enable_google_search:
+        logger.info("Google Search ADK built-in tool is enabled")
+    
+    if enable_code_execution:
+        logger.info("Code Execution ADK built-in tool is enabled")
+    
     # Use the core implementation to create the web agent with explicit app_name
-    agent = create_core_agent_for_web(tools=all_tools, name="beto", app_name="beto")
+    agent = create_core_agent_for_web(
+        tools=all_tools, 
+        name="beto", 
+        app_name="beto",
+        include_google_search=enable_google_search,
+        include_code_execution=enable_code_execution
+    )
     
     # Manually set the instruction with the extended one we created
     agent.instruction = instruction
+    
+    # Add built-in tools instructions if enabled
+    if enable_google_search or enable_code_execution:
+        builtin_instruction = """
+        You have access to ADK built-in tools through specialized sub-agents:
+        """
+        
+        if enable_google_search:
+            search_instruction = """
+            You can perform web searches using the Google Search tool through a sub-agent.
+            To use this capability, transfer control to the search_agent:
+            - transfer_to_agent(agent_name="search_agent")
+            
+            The search agent has access to Google Search and can find up-to-date information
+            from the web. Use this for current events, recent information, or any factual
+            queries that may have changed since your training.
+            """
+            builtin_instruction += "\n\n" + search_instruction
+            
+        if enable_code_execution:
+            code_instruction = """
+            You can execute Python code using the Code Execution tool through a sub-agent.
+            To use this capability, transfer control to the code_execution_agent:
+            - transfer_to_agent(agent_name="code_execution_agent")
+            
+            The code execution agent can run Python code to perform calculations, data analysis,
+            or other computational tasks. Use this for mathematical operations, data processing,
+            or any task that benefits from programmatic execution.
+            """
+            builtin_instruction += "\n\n" + code_instruction
+            
+        agent.instruction += "\n\n" + builtin_instruction
+        logger.info("Added built-in tools instructions to main agent")
     
     # Add research agent as a subagent if available
     try:
@@ -556,7 +625,9 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
         research_agent = create_research_agent(
             model=model_name,
             tools=research_tools,
-            as_subagent=False  # Get the ADK agent directly
+            as_subagent=False,  # Get the ADK agent directly
+            enable_google_search=enable_google_search,
+            enable_code_execution=enable_code_execution
         )
         
         # Explicitly set the name to 'scout' for transfers
@@ -608,12 +679,22 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
             agent.name = "beto"
             research_agent.name = "scout"
             
-            # Clear existing sub-agents
-            agent.sub_agents = []
+            # Get current sub-agents (may include built-in tool agents)
+            current_sub_agents = list(agent.sub_agents) if hasattr(agent, 'sub_agents') and agent.sub_agents else []
             
-            # Add scout as a sub-agent of beto
-            agent.sub_agents.append(research_agent)
-            logger.info(f"Registered scout agent as sub-agent of beto - ADK will set parent_agent automatically")
+            # Add scout as a sub-agent if not already there
+            scout_already_added = False
+            for sa in current_sub_agents:
+                if hasattr(sa, 'name') and sa.name == "scout":
+                    scout_already_added = True
+                    break
+                    
+            if not scout_already_added:
+                current_sub_agents.append(research_agent)
+                agent.sub_agents = current_sub_agents
+                logger.info(f"Registered scout agent as sub-agent of beto")
+            else:
+                logger.info(f"Scout agent already registered as sub-agent")
             
             # Verify registration
             sub_agent_names = [sa.name for sa in agent.sub_agents if hasattr(sa, 'name')]
@@ -782,6 +863,10 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
     return agent
 
 # Create a root_agent instance for ADK web to use directly 
+# Check if we should enable built-in tools from config
+enable_google_search = config_manager.is_adk_search_enabled()
+enable_code_execution = config_manager.is_adk_code_execution_enabled()
+
 # CRITICAL: app_name must match the name attribute EXACTLY in ADK 0.4.0
 root_agent = create_agent(app_name="beto")
 logger.info(f"Created root_agent instance for ADK web with name '{root_agent.name}' and {len(root_agent.sub_agents) if hasattr(root_agent, 'sub_agents') else 0} sub-agents")

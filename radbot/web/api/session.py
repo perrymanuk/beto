@@ -195,9 +195,25 @@ class SessionRunner:
         from google.adk.flows.llm_flows.base_llm_flow import BaseLlmFlow
         original_llm_get_agent_to_run = BaseLlmFlow._get_agent_to_run
         
-        def patched_llm_get_agent_to_run(self, agent_name: str, invocation_context: Any) -> BaseAgent:
+        def patched_llm_get_agent_to_run(self, invocation_context: Any, agent_name: str) -> BaseAgent:
             """Patched method to prevent the 'Agent not found' error"""
             logger.info(f"PATCHED LLM _get_agent_to_run called for agent: '{agent_name}'")
+            
+            # Log information about the invocation_context for debugging
+            if not isinstance(agent_name, str):
+                logger.warning(f"agent_name is not a string: {type(agent_name).__name__}, value: {agent_name}")
+                # Try to convert to string if possible
+                try:
+                    agent_name = str(agent_name)
+                    logger.info(f"Converted agent_name to string: '{agent_name}'")
+                except Exception as e:
+                    logger.error(f"Failed to convert agent_name to string: {e}")
+                    # Default to 'beto' if conversion fails
+                    agent_name = "beto"
+                    logger.info(f"Using default agent_name 'beto'")
+            
+            # Log the invocation_context type
+            logger.info(f"invocation_context type: {type(invocation_context).__name__}")
             
             # Use direct lookup for our agent names
             if agent_name == "beto":
@@ -210,26 +226,63 @@ class SessionRunner:
                         logger.info("LLM Flow patched lookup returning scout agent")
                         return sa
                 logger.warning("LLM Flow patched lookup could not find scout in sub_agents")
+            # Check for ADK built-in agents
+            elif agent_name == "search_agent" or agent_name == "code_execution_agent":
+                # Find the requested built-in agent in root_agent's sub_agents
+                for sa in root_agent.sub_agents:
+                    if hasattr(sa, 'name') and sa.name == agent_name:
+                        logger.info(f"LLM Flow patched lookup returning built-in agent '{agent_name}'")
+                        return sa
+                logger.warning(f"LLM Flow patched lookup could not find built-in agent '{agent_name}' in sub_agents")
+                
+            # Always try our direct lookup first - much more reliable
+            # Check for known built-in agents first
+            agent_lookup = {
+                "beto": root_agent,
+                "scout": None,
+                "search_agent": None,
+                "code_execution_agent": None
+            }
+            
+            # Find scout in sub_agents
+            if hasattr(root_agent, 'sub_agents'):
+                for subagent in root_agent.sub_agents:
+                    if hasattr(subagent, 'name'):
+                        agent_lookup[subagent.name] = subagent
+            
+            # Check if we have a direct match
+            if agent_name in agent_lookup and agent_lookup[agent_name] is not None:
+                logger.info(f"Found agent '{agent_name}' through direct lookup")
+                return agent_lookup[agent_name]
                 
             # Try the original method but handle errors
             try:
-                logger.info(f"Trying original method for '{agent_name}'")
-                result = original_llm_get_agent_to_run(self, agent_name, invocation_context)
-                logger.info(f"Original method found agent: {result.name if hasattr(result, 'name') else 'unnamed'}")
-                return result
+                # Only try the original method if invocation_context is an object and not a string
+                if not isinstance(invocation_context, str):
+                    logger.info(f"Direct lookup failed, trying original method for '{agent_name}'")
+                    result = original_llm_get_agent_to_run(self, invocation_context, agent_name)
+                    logger.info(f"Original method found agent: {result.name if hasattr(result, 'name') else 'unnamed'}")
+                    return result
+                else:
+                    logger.warning(f"Skipping original method call - invocation_context is a string: '{invocation_context}'")
+                    raise TypeError("invocation_context is a string, not an object")
             except Exception as e:
                 logger.warning(f"Original LLM _get_agent_to_run failed: {e}")
                 
-                # Fallback - look in the root_agent's tree
-                agent = invocation_context.agent
-                root = agent.root_agent if hasattr(agent, 'root_agent') and agent.root_agent else agent
-                logger.info(f"Using root agent ({root.name if hasattr(root, 'name') else 'unnamed'}) to find '{agent_name}'")
-                
-                # Try explicit lookup
-                found_agent = root.find_agent(agent_name)
-                if found_agent:
-                    logger.info(f"Fallback found agent '{agent_name}' through root.find_agent()")
-                    return found_agent
+                # Check if invocation_context is the expected object type
+                if hasattr(invocation_context, 'agent'):
+                    # Fallback - look in the root_agent's tree
+                    agent = invocation_context.agent
+                    root = agent.root_agent if hasattr(agent, 'root_agent') and agent.root_agent else agent
+                    logger.info(f"Using root agent ({root.name if hasattr(root, 'name') else 'unnamed'}) to find '{agent_name}'")
+                    
+                    # Try explicit lookup
+                    found_agent = root.find_agent(agent_name)
+                    if found_agent:
+                        logger.info(f"Fallback found agent '{agent_name}' through root.find_agent()")
+                        return found_agent
+                else:
+                    logger.warning(f"invocation_context doesn't have 'agent' attribute. Type: {type(invocation_context).__name__}")
                     
                 # Last resort - return root_agent
                 logger.warning(f"All lookup methods failed, defaulting to root_agent")
@@ -273,6 +326,44 @@ class SessionRunner:
             logger.info(f"SUB-AGENTS COUNT: {sub_agent_count}")
             logger.info(f"SUB-AGENT NAMES: {sub_agent_names}")
             
+            # List all built-in tool agents separately for clarity
+            builtin_agents = [sa for sa in root_agent.sub_agents if hasattr(sa, 'name') and 
+                             sa.name in ['search_agent', 'code_execution_agent']]
+            if builtin_agents:
+                logger.info(f"BUILT-IN TOOL AGENTS: {[a.name for a in builtin_agents]}")
+                # Check if they have the right tools
+                for i, ba in enumerate(builtin_agents):
+                    # Check correct tools for each type of agent
+                    if ba.name == 'search_agent':
+                        has_google_search = False
+                        has_transfer_tool = False
+                        
+                        if hasattr(ba, 'tools') and ba.tools:
+                            for tool in ba.tools:
+                                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+                                if tool_name == 'google_search':
+                                    has_google_search = True
+                                elif tool_name == 'transfer_to_agent':
+                                    has_transfer_tool = True
+                        
+                        logger.info(f"  SEARCH AGENT: Has google_search: {has_google_search}, Has transfer_to_agent: {has_transfer_tool}")
+                    
+                    elif ba.name == 'code_execution_agent':
+                        has_code_exec = False
+                        has_transfer_tool = False
+                        
+                        if hasattr(ba, 'tools') and ba.tools:
+                            for tool in ba.tools:
+                                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+                                if tool_name == 'built_in_code_execution':
+                                    has_code_exec = True
+                                elif tool_name == 'transfer_to_agent':
+                                    has_transfer_tool = True
+                        
+                        logger.info(f"  CODE EXECUTION AGENT: Has built_in_code_execution: {has_code_exec}, Has transfer_to_agent: {has_transfer_tool}")
+            elif os.environ.get("RADBOT_ENABLE_ADK_SEARCH", "false").lower() in ["true", "1", "yes", "enable"] or os.environ.get("RADBOT_ENABLE_ADK_CODE_EXEC", "false").lower() in ["true", "1", "yes", "enable"]:
+                logger.warning("NO BUILT-IN TOOL AGENTS FOUND BUT THEY SHOULD BE ENABLED!")
+            
             for i, sa in enumerate(root_agent.sub_agents):
                 sa_name = sa.name if hasattr(sa, 'name') else f"unnamed-{i}"
                 sa_parent = "CORRECT-PARENT" if (hasattr(sa, 'parent') and sa.parent is root_agent) else "WRONG-PARENT"
@@ -281,6 +372,18 @@ class SessionRunner:
                 # Check if sub-agent also knows root agent is 'beto'
                 if hasattr(sa, 'parent') and hasattr(sa.parent, 'name'):
                     logger.info(f"SUB-AGENT {i}'s PARENT NAME: '{sa.parent.name}'")
+                
+                # Check if the transfer_to_agent tool is available on this sub-agent
+                if hasattr(sa, 'tools') and sa.tools:
+                    has_transfer_tool = False
+                    for tool in sa.tools:
+                        tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+                        if tool_name == 'transfer_to_agent':
+                            has_transfer_tool = True
+                            break
+                    logger.info(f"SUB-AGENT {i}: Has transfer_to_agent tool: {has_transfer_tool}")
+                else:
+                    logger.warning(f"SUB-AGENT {i}: No tools found!")
         else:
             logger.warning("NO SUB-AGENTS FOUND IN ROOT AGENT!")
             
@@ -818,17 +921,20 @@ class SessionRunner:
                 except Exception as e:
                     logger.error(f"Failed to add name attribute: {e}")
             
-            # 2. Look for scout agent and fix it
-            scout_agent = None
+            # 2. Look for sub-agents and identify them
+            existing_sub_agents = {}
             if hasattr(root_agent, 'sub_agents') and root_agent.sub_agents:
-                # Find the scout agent, if it exists
+                # Find all existing sub-agents
                 for i, sa in enumerate(root_agent.sub_agents):
-                    if hasattr(sa, 'name') and sa.name == 'scout':
-                        scout_agent = sa
-                        logger.info(f"Found existing scout agent in sub_agents[{i}]")
-                        break
-                    elif hasattr(sa, 'name'):
-                        logger.warning(f"Found non-scout agent: '{sa.name}' in sub_agents")
+                    if hasattr(sa, 'name'):
+                        existing_sub_agents[sa.name] = sa
+                        logger.info(f"Found existing sub-agent '{sa.name}' in sub_agents[{i}]")
+                    else:
+                        logger.warning(f"Found unnamed sub-agent at index {i}")
+            
+            scout_agent = existing_sub_agents.get('scout')
+            search_agent = existing_sub_agents.get('search_agent')
+            code_execution_agent = existing_sub_agents.get('code_execution_agent')
             
             # 3. If we don't have a scout agent, create one (last resort)
             if not scout_agent:
@@ -846,31 +952,98 @@ class SessionRunner:
                     logger.error(f"Failed to create emergency scout agent: {e}")
                     
             # 4. COMPLETELY REBUILD THE AGENT TREE PROPERLY FOR ADK 0.4.0
-            if scout_agent:
-                # First, forcibly clear the agent's sub_agents list
-                logger.info("Completely rebuilding agent tree from scratch for ADK 0.4.0")
-                if hasattr(root_agent, 'sub_agents'):
-                    root_agent.sub_agents = []
-                    logger.info("Cleared root_agent.sub_agents list")
-                else:
-                    try:
-                        setattr(root_agent, 'sub_agents', [])
-                        logger.info("Created new root_agent.sub_agents list")
-                    except Exception as e:
-                        logger.error(f"Failed to create sub_agents list: {e}")
+            # First, preserve or create the sub_agents list
+            logger.info("Completely rebuilding agent tree from scratch for ADK 0.4.0")
+            if hasattr(root_agent, 'sub_agents'):
+                root_agent.sub_agents = []
+                logger.info("Cleared root_agent.sub_agents list")
+            else:
+                try:
+                    setattr(root_agent, 'sub_agents', [])
+                    logger.info("Created new root_agent.sub_agents list")
+                except Exception as e:
+                    logger.error(f"Failed to create sub_agents list: {e}")
+            
+            # Add scout agent to the tree if available
+            if scout_agent and hasattr(root_agent, 'sub_agents'):
+                # First make sure the name is correct
+                if hasattr(scout_agent, 'name') and scout_agent.name != 'scout':
+                    logger.warning(f"FIXING scout_agent name: '{scout_agent.name}' to 'scout'")
+                    scout_agent.name = 'scout'
                 
-                # Add scout to the root agent
-                if hasattr(root_agent, 'sub_agents'):
-                    # First make sure the name is correct
-                    if hasattr(scout_agent, 'name') and scout_agent.name != 'scout':
-                        logger.warning(f"FIXING scout_agent name: '{scout_agent.name}' to 'scout'")
-                        scout_agent.name = 'scout'
+                # Now add it to the tree - this is the ADK 0.4.0 way to establish parent-child relationship
+                root_agent.sub_agents.append(scout_agent)
+                logger.info(f"Added scout_agent to root_agent.sub_agents")
+            
+            # Add search_agent to the tree if available
+            if search_agent and hasattr(root_agent, 'sub_agents'):
+                # First make sure the name is correct
+                if hasattr(search_agent, 'name') and search_agent.name != 'search_agent':
+                    logger.warning(f"FIXING search_agent name: '{search_agent.name}' to 'search_agent'")
+                    search_agent.name = 'search_agent'
+                
+                # Add to the tree
+                root_agent.sub_agents.append(search_agent)
+                logger.info(f"Added search_agent to root_agent.sub_agents")
+            # If search_agent isn't found but should be enabled, create one
+            elif os.environ.get("RADBOT_ENABLE_ADK_SEARCH", "false").lower() in ["true", "1", "yes", "enable"] and hasattr(root_agent, 'sub_agents'):
+                logger.warning("Search agent should be enabled but not found - creating emergency replacement")
+                try:
+                    # Import what we need
+                    from google.adk.agents import Agent
+                    from google.adk.tools import google_search
+                    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
                     
-                    # Now add it to the tree - this is the ADK 0.4.0 way to establish parent-child relationship
-                    root_agent.sub_agents.append(scout_agent)
-                    logger.info(f"Added scout_agent to root_agent.sub_agents")
+                    # Create a minimal search agent
+                    search_agent = Agent(
+                        name="search_agent",
+                        model=getattr(root_agent, 'model', None),
+                        instruction="You are a web search agent that can search for current information on the internet. Transfer back to 'beto' when you're done.",
+                        description="A specialized agent that can search the web using Google Search.",
+                        tools=[google_search, transfer_to_agent]
+                    )
+                    
+                    # Add to the agent tree
+                    root_agent.sub_agents.append(search_agent)
+                    logger.info("Created and added emergency search_agent to root_agent.sub_agents")
+                except Exception as e:
+                    logger.error(f"Failed to create emergency search_agent: {e}")
+            
+            # Add code_execution_agent to the tree if available
+            if code_execution_agent and hasattr(root_agent, 'sub_agents'):
+                # First make sure the name is correct
+                if hasattr(code_execution_agent, 'name') and code_execution_agent.name != 'code_execution_agent':
+                    logger.warning(f"FIXING code_execution_agent name: '{code_execution_agent.name}' to 'code_execution_agent'")
+                    code_execution_agent.name = 'code_execution_agent'
                 
-                # 5. Add transfer_to_agent tool to BOTH agents
+                # Add to the tree
+                root_agent.sub_agents.append(code_execution_agent)
+                logger.info(f"Added code_execution_agent to root_agent.sub_agents")
+            # If code_execution_agent isn't found but should be enabled, create one
+            elif os.environ.get("RADBOT_ENABLE_ADK_CODE_EXEC", "false").lower() in ["true", "1", "yes", "enable"] and hasattr(root_agent, 'sub_agents'):
+                logger.warning("Code execution agent should be enabled but not found - creating emergency replacement")
+                try:
+                    # Import what we need
+                    from google.adk.agents import Agent
+                    from google.adk.tools import built_in_code_execution
+                    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+                    
+                    # Create a minimal code execution agent
+                    code_execution_agent = Agent(
+                        name="code_execution_agent",
+                        model=getattr(root_agent, 'model', None),
+                        instruction="You are a code execution agent that can write and run Python code. Transfer back to 'beto' when you're done.",
+                        description="A specialized agent that can execute Python code securely.",
+                        tools=[built_in_code_execution, transfer_to_agent]
+                    )
+                    
+                    # Add to the agent tree
+                    root_agent.sub_agents.append(code_execution_agent)
+                    logger.info("Created and added emergency code_execution_agent to root_agent.sub_agents")
+                except Exception as e:
+                    logger.error(f"Failed to create emergency code_execution_agent: {e}")
+                
+                # 5. Add transfer_to_agent tool to ALL agents
                 try:
                     # In ADK 0.4.0, just use the transfer_to_agent function
                     from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
@@ -909,6 +1082,54 @@ class SessionRunner:
                             logger.info("Created tools list for scout_agent with transfer_to_agent")
                         except Exception as e:
                             logger.error(f"Failed to create tools list: {e}")
+                    
+                    # Add to search_agent if available
+                    if search_agent:
+                        if hasattr(search_agent, 'tools'):
+                            # Check if tool already exists
+                            has_transfer_tool = False
+                            for tool in search_agent.tools:
+                                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+                                if tool_name == 'transfer_to_agent':
+                                    has_transfer_tool = True
+                                    break
+                                    
+                            if not has_transfer_tool:
+                                search_agent.tools.append(transfer_to_agent)
+                                logger.info("Added transfer_to_agent to search_agent.tools")
+                        else:
+                            # Create tools list if missing
+                            try:
+                                # Keep existing google_search tool AND add transfer_to_agent
+                                from google.adk.tools import google_search
+                                search_agent.tools = [google_search, transfer_to_agent]
+                                logger.info("Created tools list for search_agent with required tools")
+                            except Exception as e:
+                                logger.error(f"Failed to create tools list for search_agent: {e}")
+                    
+                    # Add to code_execution_agent if available
+                    if code_execution_agent:
+                        if hasattr(code_execution_agent, 'tools'):
+                            # Check if tool already exists
+                            has_transfer_tool = False
+                            for tool in code_execution_agent.tools:
+                                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+                                if tool_name == 'transfer_to_agent':
+                                    has_transfer_tool = True
+                                    break
+                                    
+                            if not has_transfer_tool:
+                                code_execution_agent.tools.append(transfer_to_agent)
+                                logger.info("Added transfer_to_agent to code_execution_agent.tools")
+                        else:
+                            # Create tools list if missing
+                            try:
+                                # Keep existing built_in_code_execution tool AND add transfer_to_agent
+                                from google.adk.tools import built_in_code_execution
+                                code_execution_agent.tools = [built_in_code_execution, transfer_to_agent]
+                                logger.info("Created tools list for code_execution_agent with required tools")
+                            except Exception as e:
+                                logger.error(f"Failed to create tools list for code_execution_agent: {e}")
                 except ImportError as e:
                     logger.error(f"Failed to import transfer_to_agent tool: {e}")
                     

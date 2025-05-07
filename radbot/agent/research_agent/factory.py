@@ -25,6 +25,8 @@ def create_research_agent(
     custom_instruction: Optional[str] = None,
     tools: Optional[List[Any]] = None,
     as_subagent: bool = True,
+    enable_google_search: bool = False,
+    enable_code_execution: bool = False,
     app_name: str = "beto"
 ) -> Union[ResearchAgent, Any]:
     """
@@ -36,6 +38,8 @@ def create_research_agent(
         custom_instruction: Optional custom instruction to override the default
         tools: List of tools to provide to the agent
         as_subagent: Whether to return the ResearchAgent or the underlying ADK agent
+        enable_google_search: Whether to enable Google Search capability
+        enable_code_execution: Whether to enable Code Execution capability
         app_name: Application name for the agent, should match the parent agent name for ADK 0.4.0+ agent transfers
         
     Returns:
@@ -63,6 +67,13 @@ def create_research_agent(
     else:
         logger.warning("No tools provided to research agent")
     
+    # Log if built-in tools are enabled
+    if enable_google_search:
+        logger.info("Google Search ADK built-in tool is enabled for research agent")
+
+    if enable_code_execution:
+        logger.info("Code Execution ADK built-in tool is enabled for research agent")
+    
     # Create the research agent with explicit name logging
     logger.info(f"EXPLICIT NAME ASSIGNMENT: Creating research agent with name='{name}', app_name='{app_name}'")
     research_agent = ResearchAgent(
@@ -70,6 +81,8 @@ def create_research_agent(
         model=model,
         instruction=custom_instruction,  # Will use default if None
         tools=tools,
+        enable_google_search=enable_google_search,
+        enable_code_execution=enable_code_execution,
         app_name=app_name  # CRITICAL for ADK 0.4.0+ transfers
     )
     
