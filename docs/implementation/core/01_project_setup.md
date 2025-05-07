@@ -1,5 +1,8 @@
 # Project Setup and Environment Configuration
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document details the initial setup of the radbot project, an AI agent framework built with Google's Agent Development Kit (ADK).
 
 ## Directory Structure

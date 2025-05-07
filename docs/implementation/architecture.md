@@ -1,5 +1,8 @@
 # radbot Architecture
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document provides an overview of the radbot architecture, detailing the key components and their interactions.
 
 ## Overview

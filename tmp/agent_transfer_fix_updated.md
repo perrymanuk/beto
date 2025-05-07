@@ -216,7 +216,7 @@ except Exception as e:
 
 This implementation ensures that the transfer_to_agent function is correctly registered with the ADK and can be called with the proper JSON schema, resolving the "Malformed function call" error.
 
-## June 2025 Update: Web Session Handling Fix with ADK 0.4.0 Requirements 
+## June 2025 Update: Web Session Handling Fix with ADK 0.4.0 Requirements
 
 After implementing the initial agent tree registration fix, we discovered that ADK 0.4.0 has stricter requirements for agent transfers than previous versions. The transfer_to_agent mechanism in ADK 0.4.0 requires precise agent tree registration with exact name matching and consistent app_name parameters throughout the application. The webserver creates its own SessionRunner which needs to maintain the same agent tree structure and naming consistency.
 
@@ -358,42 +358,3 @@ This verification is called at multiple critical points in the session lifecycle
 - Before and after session resets
 
 The combined fixes in agent.py and session.py ensure that the agent tree structure remains consistent throughout the application lifecycle, allowing agent transfers to work correctly between agents in ADK 0.4.0.
-
-## July 2025 Update: ResearchAgent/Scout Factory Parameter Fix
-
-After implementing all the previous fixes, we discovered a new issue where the research agent (scout) was not found in the agent tree during transfers. The error was:
-
-```
-ValueError: Agent scout not found in the agent tree.
-```
-
-The root cause was that the `create_research_agent` function in `factory.py` was being called with an `app_name` parameter, but the function did not accept this parameter:
-
-```python
-# In agent.py - the call had an app_name parameter
-research_agent = create_research_agent(
-    name="scout",
-    model=model_name,
-    tools=research_tools,
-    as_subagent=False, 
-    app_name="beto"  # This parameter was causing the issue
-)
-
-# But the function in factory.py didn't accept app_name:
-def create_research_agent(
-    name: str = "technical_research_agent",
-    model: Optional[str] = None,
-    custom_instruction: Optional[str] = None,
-    tools: Optional[List[Any]] = None,
-    as_subagent: bool = True
-) -> Union[ResearchAgent, Any]:
-    # No app_name parameter here
-```
-
-We fixed this by adding the `app_name` parameter to:
-
-1. The `create_research_agent` function in `factory.py`
-2. The `ResearchAgent` class `__init__` method
-3. The `LlmAgent` creation inside the `ResearchAgent` class
-
-This ensures that the app_name is properly passed through all layers down to the ADK agent, allowing it to be correctly registered in the agent tree.

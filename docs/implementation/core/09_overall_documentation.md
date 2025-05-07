@@ -1,5 +1,8 @@
 # radbot Framework Documentation
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document provides an overview of the radbot Framework, a modular AI agent system built with Google's Agent Development Kit (ADK), Qdrant vector database, and Model Context Protocol (MCP).
 
 ## System Architecture

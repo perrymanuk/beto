@@ -1,18 +1,19 @@
-# Speech Subsystem Implementation
+# Voice and Speech Subsystem
 
-This document details the implementation of a speech subsystem for the radbot framework, enabling voice-based interaction through Speech-to-Text (STT) and Text-to-Speech (TTS) capabilities.
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
 
-## Component Overview
+
+This document details the implementation of voice and speech capabilities in the RadBot framework, covering both the core speech subsystem and voice integration with the ADK streaming functionality.
+
+## 1. Core Speech Subsystem
 
 The speech subsystem consists of three primary elements:
 
 1. **Speech-to-Text (STT)**: Converts spoken audio to text using Whisper
-2. **Text-to-Speech (TTS)**: Converts text to speech using Mozilla TTS
+2. **Text-to-Speech (TTS)**: Converts text to speech using TTS engines
 3. **Voice Activity Detection (VAD)**: Detects when speech is present in audio
 
-## Implementation Details
-
-### Speech Subsystem Class
+### Speech Subsystem Implementation
 
 ```python
 # radbot/speech/speech_system.py
@@ -167,12 +168,10 @@ class SpeechProcessingError(Exception):
 
 ### Integration with Agent Framework
 
-To integrate the speech subsystem with the radbot agent framework, add an input processing method:
-
 ```python
 # radbot/agent.py (extension)
 
-class radbotAgent:
+class RadbotAgent:
     # Existing code...
     
     async def process_voice_input(self, audio_path: str) -> str:
@@ -229,7 +228,7 @@ class radbotAgent:
 
 ### Web API Integration
 
-For web application integration, add FastAPI endpoints:
+For web application integration, FastAPI endpoints were implemented:
 
 ```python
 # radbot/api/speech_endpoints.py
@@ -367,188 +366,9 @@ async def process_voice(file: UploadFile = File(...)) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 ```
 
-## Client-Side Integration
+### Model Optimization
 
-To enable voice interaction in web clients, implement a JavaScript interface:
-
-```javascript
-// radbot-client.js
-
-class VoiceInterface {
-    constructor(apiUrl) {
-        this.apiUrl = apiUrl;
-        this.isRecording = false;
-        this.mediaRecorder = null;
-        this.audioChunks = [];
-        
-        // Set up audio context for visualization
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        this.analyser = this.audioContext.createAnalyser();
-    }
-    
-    // Initialize and bind UI elements
-    initialize(startButtonId, stopButtonId, statusId, resultId, visualizerId) {
-        this.startButton = document.getElementById(startButtonId);
-        this.stopButton = document.getElementById(stopButtonId);
-        this.statusElement = document.getElementById(statusId);
-        this.resultElement = document.getElementById(resultId);
-        this.visualizer = document.getElementById(visualizerId);
-        
-        this.startButton.addEventListener('click', () => this.startRecording());
-        this.stopButton.addEventListener('click', () => this.stopRecording());
-        
-        this.statusElement.textContent = 'Ready';
-        this.stopButton.disabled = true;
-    }
-    
-    // Start recording audio
-    async startRecording() {
-        try {
-            this.audioChunks = [];
-            this.isRecording = true;
-            
-            // Request microphone access
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Set up audio visualization
-            const source = this.audioContext.createMediaStreamSource(stream);
-            source.connect(this.analyser);
-            
-            // Create media recorder
-            this.mediaRecorder = new MediaRecorder(stream);
-            
-            // Handle data availability
-            this.mediaRecorder.addEventListener('dataavailable', event => {
-                if (event.data.size > 0) {
-                    this.audioChunks.push(event.data);
-                }
-            });
-            
-            // Start recording
-            this.mediaRecorder.start(100);
-            
-            // Update UI
-            this.statusElement.textContent = 'Recording...';
-            this.startButton.disabled = true;
-            this.stopButton.disabled = false;
-            
-            // Start visualization
-            this.visualizeAudio();
-        } catch (error) {
-            console.error('Recording error:', error);
-            this.statusElement.textContent = `Error: ${error.message}`;
-        }
-    }
-    
-    // Stop recording and process audio
-    async stopRecording() {
-        if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') {
-            return;
-        }
-        
-        this.mediaRecorder.stop();
-        this.isRecording = false;
-        
-        // Update UI
-        this.statusElement.textContent = 'Processing...';
-        this.startButton.disabled = true;
-        this.stopButton.disabled = true;
-        
-        // Wait for data processing
-        await new Promise(resolve => {
-            this.mediaRecorder.addEventListener('stop', async () => {
-                try {
-                    // Create audio blob
-                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
-                    
-                    // Create form data
-                    const formData = new FormData();
-                    formData.append('file', audioBlob, 'recording.wav');
-                    
-                    // Send to server
-                    const response = await fetch(`${this.apiUrl}/api/voice/process`, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
-                    }
-                    
-                    const result = await response.json();
-                    
-                    // Display result
-                    this.resultElement.textContent = result.text;
-                    
-                    // Play audio response if available
-                    if (result.audio) {
-                        const audio = new Audio(`data:audio/wav;base64,${result.audio}`);
-                        audio.play();
-                    }
-                    
-                    // Update UI
-                    this.statusElement.textContent = 'Ready';
-                    this.startButton.disabled = false;
-                } catch (error) {
-                    console.error('Processing error:', error);
-                    this.statusElement.textContent = `Error: ${error.message}`;
-                    this.startButton.disabled = false;
-                }
-                
-                resolve();
-            });
-        });
-    }
-    
-    // Visualize audio input
-    visualizeAudio() {
-        if (!this.isRecording) {
-            return;
-        }
-        
-        const canvasCtx = this.visualizer.getContext('2d');
-        const width = this.visualizer.width;
-        const height = this.visualizer.height;
-        
-        this.analyser.fftSize = 256;
-        const bufferLength = this.analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        
-        canvasCtx.clearRect(0, 0, width, height);
-        
-        const draw = () => {
-            if (!this.isRecording) {
-                return;
-            }
-            
-            requestAnimationFrame(draw);
-            
-            this.analyser.getByteFrequencyData(dataArray);
-            
-            canvasCtx.fillStyle = 'rgb(240, 240, 240)';
-            canvasCtx.fillRect(0, 0, width, height);
-            
-            const barWidth = (width / bufferLength) * 2.5;
-            let x = 0;
-            
-            for (let i = 0; i < bufferLength; i++) {
-                const barHeight = dataArray[i] / 2;
-                
-                canvasCtx.fillStyle = `rgb(0, ${barHeight + 100}, 120)`;
-                canvasCtx.fillRect(x, height - barHeight, barWidth, barHeight);
-                
-                x += barWidth + 1;
-            }
-        };
-        
-        draw();
-    }
-}
-```
-
-## Model Optimization
-
-For optimal performance on different hardware, implement model selection:
+For optimal performance on different hardware, model selection was implemented:
 
 ```python
 # radbot/speech/model_optimizer.py
@@ -645,103 +465,166 @@ def optimize_whisper_model(model: Any, device: Optional[str] = None) -> Any:
     return model
 ```
 
-## Package Structure
+## 2. ADK Streaming Voice Integration
 
-```
-radbot/
-├── speech/
-│   ├── __init__.py
-│   ├── speech_system.py       # Main speech system implementation
-│   ├── model_optimizer.py     # Model selection and optimization
-│   └── exceptions.py          # Custom exceptions
-├── api/
-│   ├── __init__.py
-│   └── speech_endpoints.py    # FastAPI endpoints
-```
+This section details the integration of native streaming capabilities from the Google Agent Development Kit (ADK) version 0.4.0 into the RadBot framework, enabling real-time voice interactions.
 
-## Integration Points
+### ADK Streaming Fundamentals
 
-The speech subsystem integrates with:
+ADK Streaming integrates the capabilities of the Gemini Live API to enable low-latency, bidirectional voice and video interactions with ADK agents. This differs from traditional request-response interactions by maintaining a persistent connection (typically WebSockets) allowing for real-time data exchange. Key benefits include a more natural, human-like conversational experience where users can interrupt the agent, and the agent can respond with synthesized voice in near real-time.
 
-1. **Agent Framework**: Through the extended `radbotAgent` methods
-2. **API Layer**: With FastAPI endpoints for web applications
-3. **Web Client**: Through the JavaScript `VoiceInterface` class
+The core technology enabling ADK streaming is the Gemini Live API, designed specifically for stateful, low-latency, bidirectional communication. When an ADK agent is configured with a model compatible with the Live API, ADK manages the underlying connection and data flow. The Gemini model itself handles not only the language understanding and generation but also the real-time speech synthesis for voice output when configured for audio modality.
 
-## Testing Strategy
+### Agent Definition Configuration
 
-To test the speech subsystem:
-
-1. **Unit Tests**: Test individual components (transcription, synthesis, VAD)
-2. **Integration Tests**: Test end-to-end voice processing flow
-3. **Performance Tests**: Measure latency and accuracy with different models
-
-Example test code:
+The primary change to enable streaming involves ensuring that the RadBot agent definition uses a Gemini model compatible with the Live API:
 
 ```python
-# tests/speech/test_speech_system.py
+# In the relevant radbot agent definition file
+from google.adk.agents import Agent
 
-import pytest
-import os
-import tempfile
-import numpy as np
-from radbot.speech.speech_system import SpeechSystem, SpeechProcessingError
-
-@pytest.fixture
-async def speech_system():
-    """Create a speech system for testing."""
-    system = SpeechSystem(whisper_model="tiny")  # Use tiny model for faster tests
-    yield system
-
-@pytest.mark.asyncio
-async def test_speech_to_text(speech_system, test_audio_file):
-    """Test speech-to-text functionality."""
-    # Transcribe test audio
-    result = await speech_system.transcribe(test_audio_file)
-    
-    # Check result
-    assert isinstance(result, str)
-    assert len(result) > 0
-
-@pytest.mark.asyncio
-async def test_text_to_speech(speech_system):
-    """Test text-to-speech functionality."""
-    # Generate speech
-    output_path = await speech_system.synthesize("Hello, this is a test.")
-    
-    # Check result
-    assert os.path.exists(output_path)
-    assert os.path.getsize(output_path) > 0
-    
-    # Clean up
-    os.unlink(output_path)
-
-def test_voice_activity_detection(speech_system):
-    """Test voice activity detection."""
-    # Create sample audio with and without speech
-    silence = np.zeros(16000)  # 1 second of silence
-    speech = np.random.normal(0, 0.1, 16000)  # 1 second of noise (simulating speech)
-    
-    # Test detection
-    assert not speech_system.detect_speech(silence)
-    assert speech_system.detect_speech(speech)
+streaming_radbot_agent = Agent(
+    name="radbot_streaming_agent",
+    # Use a Live API compatible model for your platform
+    # Example for Google AI Studio:
+    model="gemini-2.0-flash-exp",
+    # Example for Vertex AI:
+    # model="gemini-2.0-flash-live-001",
+    description="Radbot agent with native ADK streaming capabilities.",
+    instruction="You are Radbot. Respond to user queries, supporting voice interaction.",
+    tools=[]  # Add appropriate tools
+)
 ```
 
-## Performance Considerations
+### Environment Configuration
 
-To optimize performance in different environments:
+Sensitive configurations like API keys and cloud project details should be managed using a `.env` file:
 
-1. **Model Selection**: Use `select_whisper_model()` to choose an appropriate model size
-2. **Quantization**: Apply quantization for CPU environments
-3. **Mixed Precision**: Use half-precision for GPU acceleration
-4. **Batch Processing**: For non-interactive applications, process audio in batches
-5. **Caching**: Cache common TTS responses for frequently used phrases
+**Option 1: Using Google AI Studio**
 
-## Next Steps
+```
+# Use Google AI Studio backend
+GOOGLE_GENAI_USE_VERTEXAI=FALSE
+# Your Google AI Studio API Key
+GOOGLE_API_KEY=YOUR_API_KEY_HERE
+```
 
-Future enhancements for the speech subsystem:
+**Option 2: Using Google Cloud Vertex AI**
+
+```
+# Use Google Cloud Vertex AI backend
+GOOGLE_GENAI_USE_VERTEXAI=TRUE
+# Your Google Cloud Project ID
+GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
+# Your Google Cloud Location (Region)
+GOOGLE_CLOUD_LOCATION=your-gcp-region
+```
+
+### Voice Output Handling
+
+The synthesized voice output heard during ADK streaming is generated directly by the configured Gemini Live API model, not by a separate Text-to-Speech (TTS) service explicitly configured within the ADK Agent definition. The Gemini model itself possesses multimodal output capabilities, including speech synthesis.
+
+### Testing with ADK Web
+
+Use the ADK web tool for local development and testing:
+
+1. Set the SSL_CERT_FILE environment variable:
+   ```bash
+   export SSL_CERT_FILE=$(python -m certifi)
+   ```
+
+2. Launch ADK web:
+   ```bash
+   adk web
+   ```
+
+3. Access the UI at the provided URL (e.g., http://localhost:8000)
+
+4. Select the configured RadBot streaming agent from the dropdown menu
+
+5. Test both text and voice interactions
+
+## 3. TTS Migration to Google Cloud
+
+In a separate enhancement, the project migrated from ElevenLabs Text-to-Speech to Google Cloud Text-to-Speech for the following reasons:
+
+1. Better integration with ADK's streaming capabilities
+2. More consistent streaming experience
+3. Reduced latency with bidirectional streaming
+4. More voice customization options
+5. Better compatibility with Google's ecosystem
+
+### Implementation Changes
+
+1. **Dependencies**:
+   - Added `google-cloud-texttospeech>=2.26.0` to `pyproject.toml`
+   - Removed dedicated ElevenLabs dependency
+
+2. **Implementation**:
+   - Created a new `GoogleCloudTTSAdapter` class
+   - Updated voice handlers to use the new adapter
+   - Updated documentation
+
+3. **Configuration**:
+   - Updated environment variable checks to look for `GOOGLE_APPLICATION_CREDENTIALS`
+   - Added new environment variables for voice customization
+
+### Streaming Implementation
+
+The key improvement in the Google Cloud TTS implementation is the use of bidirectional streaming:
+
+```python
+async def stream_speech(self, text: str) -> AsyncGenerator[bytes, None]:
+    # Create a streaming config request
+    streaming_config = texttospeech.StreamingSynthesizeRequest(
+        streaming_config=texttospeech.StreamingSynthesisConfig(
+            voice=voice_params,
+            audio_config=audio_config
+        )
+    )
+    
+    # Create text chunks for streaming
+    text_chunks = split_text_into_chunks(text)
+    
+    # Create request generator for bidirectional streaming
+    def request_generator():
+        yield streaming_config
+        for chunk in text_chunks:
+            if chunk.strip():
+                yield texttospeech.StreamingSynthesizeRequest(
+                    input=texttospeech.StreamingSynthesisInput(text=chunk)
+                )
+    
+    # Stream responses - this is bidirectional
+    streaming_responses = self.client.streaming_synthesize(request_generator())
+    
+    # Process streaming responses
+    for response in streaming_responses:
+        if response.audio_content:
+            yield response.audio_content
+```
+
+### Voice Customization
+
+The Google Cloud TTS implementation offers various customization options:
+
+- Language code (e.g., `en-US`, `fr-FR`)
+- Voice name (e.g., `en-US-Journey-F`)
+- Audio encoding (e.g., `LINEAR16`, `MP3`, `OGG_OPUS`)
+- Speaking rate (0.25 to 4.0)
+- Pitch (-20.0 to 20.0)
+- Volume gain (-96.0 to 16.0)
+
+## 4. Future Enhancements
+
+Planned improvements for the voice and speech subsystems:
 
 1. Implement more voice options for TTS
 2. Add wake word detection for always-on applications
-3. Improve noise resistance in VAD
-4. Implement streaming transcription for real-time responses
+3. Improve noise resistance in Voice Activity Detection
+4. Implement true streaming transcription for real-time responses
 5. Add support for multiple languages
+6. Add client-side caching for common responses
+7. Implement offline fallback TTS options
+8. Add more voice customization options in the UI
+9. Support for advanced SSML features

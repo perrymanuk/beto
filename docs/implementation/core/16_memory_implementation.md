@@ -1,4 +1,4 @@
-# Memory System
+# Memory System Implementation
 
 <!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
 
@@ -522,6 +522,18 @@ agent = create_enhanced_memory_agent(
 2. `search_past_conversations` tool is called to find relevant past context
 3. Retrieved context is added to the agent's prompt
 4. Agent responds with awareness of past interactions
+
+## Integration with Agent System
+
+The memory system integrates with the primary agent system in several ways:
+
+1. **BaseMemoryService Implementation** - The QdrantMemoryService implements ADK's BaseMemoryService interface, allowing it to be used with any ADK-based agent.
+
+2. **Tool Context Access** - Memory tools extract the memory service and user ID from ADK's ToolContext.
+
+3. **Factory Functions** - Special factory functions create memory-enabled agents with proper configuration.
+
+4. **Agent Callbacks** - The ADK callback system is used to process session histories.
 
 ## Testing
 

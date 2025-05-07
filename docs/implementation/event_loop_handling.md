@@ -1,5 +1,8 @@
 # Event Loop Handling in RadBot
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 ## Overview
 
 The RadBot application uses asyncio event loops for asynchronous operations, particularly with the Google ADK and MCP (Model Context Protocol) server integrations. This document explains how event loops are managed and how to avoid common issues.

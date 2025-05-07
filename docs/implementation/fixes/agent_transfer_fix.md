@@ -1,5 +1,8 @@
 # Agent Transfer Fix Implementation
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document details the implementation and fixes for agent transfer functionality in radbot, which allows transferring control between the main agent and specialized sub-agents.
 
 ## Overview
@@ -169,7 +172,71 @@ def create_research_agent(
     # No app_name parameter here
 ```
 
-We fixed this by adding the `app_name` parameter throughout the research agent creation chain.
+We fixed this by adding the `app_name` parameter throughout the research agent creation chain:
+
+1. Added the parameter to the `create_research_agent` function in `factory.py`
+2. Added the parameter to the `ResearchAgent` class `__init__` method
+3. Modified the agent factory to preserve the name when unwrapping the agent
+
+A key insight was that the ADK LlmAgent class doesn't accept an app_name parameter (only the Runner does), so we had to modify our approach:
+
+```python
+# Store app_name in our wrapper but don't pass it to LlmAgent
+self.agent = LlmAgent(
+    name=name,  # CRITICAL: Must match exactly what's expected in transfers
+    model=model,
+    instruction=instruction,
+    description=description,
+    tools=tools,
+    output_key=output_key
+    # No app_name parameter here - ADK LlmAgent doesn't accept it
+)
+# Store it separately
+self.app_name = app_name
+```
+
+Most critically, we had to fix the code that returns the ADK agent directly:
+
+```python
+# Get the ADK agent but ensure name is preserved correctly
+adk_agent = research_agent.get_adk_agent()
+
+# CRITICAL: Make 100% sure the agent name is set correctly for transfers
+if hasattr(adk_agent, 'name') and adk_agent.name != name:
+    logger.warning(f"ADK Agent name mismatch: '{adk_agent.name}' not '{name}' - fixing")
+    adk_agent.name = name
+    
+return adk_agent
+```
+
+This ensures the agent has the correct name to be found in the agent tree, which is critical for agent transfers in ADK 0.4.0.
+
+## August 2025 Update: Complete Agent Tree Rebuild
+
+After our initial fixes, we still faced continued agent transfer issues, sometimes to scout, sometimes back to beto. This showed us that the ADK agent tree is much more complex and sensitive than we initially thought.
+
+Our most comprehensive fix was to completely rebuild the agent tree from scratch in the session.py file. Key elements of this fix include:
+
+1. Implemented a comprehensive _verify_agent_structure() method that:
+   - Rebuilds the agent tree completely
+   - Forces the root agent name to be consistently 'beto'
+   - Ensures a scout agent exists with name 'scout' (creating one if needed)
+   - Establishes proper bidirectional relationships
+   - Adds transfer tool to both agents and registers proper handlers
+
+2. Forced consistent app_name="beto" for all session operations:
+   - In the Runner constructor
+   - For get_session calls
+   - For create_session calls
+   - For delete_session calls
+
+3. Added triple verification at multiple critical points:
+   - Before session creation
+   - After session creation
+   - Before message processing
+   - Before and after session resets
+
+This fixed both the "Agent scout not found" and "Agent beto not found" errors by ensuring that in every case, the agent tree is properly structured and both agents have the correct naming.
 
 ## Testing and Validation
 

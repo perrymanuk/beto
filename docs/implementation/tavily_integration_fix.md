@@ -1,5 +1,8 @@
 # Tavily Search Integration Fix
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document describes the issue with the Tavily search tool integration and the solution implemented to fix it.
 
 ## Issue Description

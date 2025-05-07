@@ -1,5 +1,8 @@
 # Main Agent Persona: "Beto"
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document defines the persona and instruction set for the main agent in the radbot framework. This agent acts as the primary interface for user interaction and coordinates with sub-agents and tools.
 
 ## Persona Overview

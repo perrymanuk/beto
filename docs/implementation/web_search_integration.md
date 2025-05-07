@@ -1,5 +1,8 @@
 # Web Search Integration
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document provides details about the web search capabilities added to radbot using the Tavily API.
 
 ## Overview

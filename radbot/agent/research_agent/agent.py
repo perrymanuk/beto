@@ -44,7 +44,8 @@ class ResearchAgent:
         description: Optional[str] = None,
         tools: Optional[List[FunctionTool]] = None,
         output_key: Optional[str] = "research_summary",
-        enable_sequential_thinking: bool = True
+        enable_sequential_thinking: bool = True,
+        app_name: str = "beto"
     ):
         """
         Initialize the ResearchAgent.
@@ -57,6 +58,7 @@ class ResearchAgent:
             tools: List of tools to provide to the agent (defaults to standard research tools)
             output_key: Session state key to store the agent's output (default: "research_summary")
             enable_sequential_thinking: Whether to enable sequential thinking trigger (default: True)
+            app_name: Application name for agent transfers, must match parent agent name in ADK 0.4.0+ (default: "beto")
         """
         logger.info(f"Initializing ResearchAgent with name: {name}")
         
@@ -86,13 +88,16 @@ class ResearchAgent:
         
         # Create the LlmAgent instance
         self.agent = LlmAgent(
-            name=name,
+            name=name,  # CRITICAL: Must match exactly what's expected in transfer_to_agent calls
             model=model,
             instruction=instruction,
             description=description,
             tools=tools,
             output_key=output_key
         )
+        
+        # Store app_name for reference (not used by LlmAgent but needed for Runner)
+        self.app_name = app_name
         
         # Save reference to the model name for sequential thinking
         self.model_name = model

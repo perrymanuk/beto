@@ -1,22 +1,32 @@
 """
-Main agent implementation for Radbot.
+Core agent implementation for RadBot.
 
-This module defines the core RadBotAgent class and factory functions using Google's ADK.
+This module defines the essential RadBotAgent class and factory functions for the RadBot framework.
+It serves as the single source of truth for all agent functionality.
 """
 import os
+import logging
 from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-SessionService = InMemorySessionService  # Type alias for backward compatibility
+from google.genai.types import Content, Part
+from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+from google.protobuf.json_format import MessageToDict
 
-from radbot.config import config_manager
-from radbot.config.settings import ConfigManager
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Type alias for backward compatibility
+SessionService = InMemorySessionService  
 
 # Load environment variables
 load_dotenv()
+
+from radbot.config import config_manager
+from radbot.config.settings import ConfigManager
 
 # Fallback instruction if configuration loading fails
 FALLBACK_INSTRUCTION = """
@@ -39,11 +49,12 @@ class RadBotAgent:
         session_service: Optional[SessionService] = None,
         tools: Optional[List[Any]] = None,
         model: Optional[str] = None,
-        name: str = "main_coordinator",
+        name: str = "beto",
         instruction: Optional[str] = None,
         instruction_name: Optional[str] = "main_agent",
         config: Optional[ConfigManager] = None,
-        memory_service: Optional[Any] = None
+        memory_service: Optional[Any] = None,
+        app_name: str = "beto"
     ):
         """
         Initialize the RadBot agent.
@@ -52,11 +63,12 @@ class RadBotAgent:
             session_service: Optional custom session service for conversation state
             tools: Optional list of tools to provide to the agent
             model: Optional model name (defaults to config's main_model if not provided)
-            name: Name for the agent (default: main_coordinator)
+            name: Name for the agent (default: beto)
             instruction: Optional explicit instruction string (overrides instruction_name)
             instruction_name: Optional name of instruction to load from config
             config: Optional ConfigManager instance (uses global if not provided)
             memory_service: Optional custom memory service (tries to create one if None)
+            app_name: Application name for session management (default: beto)
         """
         # Use provided config or default
         self.config = config or config_manager
@@ -65,7 +77,7 @@ class RadBotAgent:
         self.session_service = session_service or InMemorySessionService()
         
         # Store app_name for use with session service
-        self.app_name = "beto"  # Changed from "radbot" to match agent name
+        self.app_name = app_name
         
         # Determine the model to use
         self.model = model or self.config.get_main_model()
@@ -81,8 +93,7 @@ class RadBotAgent:
                 agent_instruction = self.config.get_instruction(instruction_name)
             except FileNotFoundError:
                 # Log a warning and use fallback instruction
-                import logging
-                logging.warning(f"Instruction '{instruction_name}' not found, using fallback")
+                logger.warning(f"Instruction '{instruction_name}' not found, using fallback")
                 agent_instruction = FALLBACK_INSTRUCTION
         else:
             # No instruction or name provided, use fallback
@@ -103,8 +114,6 @@ class RadBotAgent:
                                                for tool in (tools or []) if hasattr(tool, '__name__')):
             # Try to create memory service if memory tools are included but no service provided
             try:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.info("Memory tools detected, trying to create memory service")
                 
                 from radbot.memory.qdrant_memory import QdrantMemoryService
@@ -121,12 +130,11 @@ class RadBotAgent:
                 session_service=self.session_service,
                 memory_service=self._memory_service
             )
-            import logging
-            logging.getLogger(__name__).info("Runner initialized with memory service")
+            logger.info("Runner initialized with memory service")
         else:
             self.runner = Runner(
                 agent=self.root_agent,
-                app_name=self.app_name,  # Use self.app_name for consistency
+                app_name=self.app_name,
                 session_service=self.session_service
             )
     
@@ -165,12 +173,6 @@ class RadBotAgent:
         Returns:
             The agent's response as a string
         """
-        # Import logging and other necessary modules
-        import logging
-        from google.genai.types import Content, Part
-        
-        logger = logging.getLogger(__name__)
-        
         # Log available tools to help debug
         if self.root_agent and self.root_agent.tools:
             tool_names = []
@@ -181,9 +183,9 @@ class RadBotAgent:
             logger.info(f"Processing message with {len(tool_names)} available tools: {', '.join(tool_names[:10])}...")
             
             # Specifically check for Home Assistant tools
-            has_tools = [t for t in tool_names if t.startswith('Hass')]
-            if has_tools:
-                logger.info(f"Home Assistant tools available: {', '.join(has_tools)}")
+            ha_tools = [t for t in tool_names if t.startswith('Hass') or "ha_" in t.lower()]
+            if ha_tools:
+                logger.info(f"Home Assistant tools available: {', '.join(ha_tools)}")
             else:
                 logger.warning("No Home Assistant tools found in the agent!")
         else:
@@ -290,6 +292,14 @@ class RadBotAgent:
         
         # Update the agent's sub-agents list
         self.root_agent.sub_agents = current_sub_agents
+        
+        # Set bidirectional relationships for agent transfers
+        if hasattr(sub_agent, 'parent'):
+            sub_agent.parent = self.root_agent
+        elif hasattr(sub_agent, '_parent'):
+            sub_agent._parent = self.root_agent
+            
+        logger.info(f"Added sub-agent '{sub_agent.name if hasattr(sub_agent, 'name') else 'unnamed'}' to agent '{self.root_agent.name}'")
     
     def get_configuration(self) -> Dict[str, Any]:
         """
@@ -357,11 +367,90 @@ class RadBotAgent:
                 user_id=user_id,
                 session_id=session_id
             )
-            import logging
-            logging.getLogger(__name__).info(f"Reset session for user {user_id} with ID {session_id}")
+            logger.info(f"Reset session for user {user_id} with ID {session_id}")
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Error resetting session: {str(e)}")
+            logger.warning(f"Error resetting session: {str(e)}")
+    
+    def register_tool_handlers(self):
+        """Register common tool handlers for the agent."""
+        # Only proceed if the agent has register_tool_handler method
+        if not hasattr(self.root_agent, 'register_tool_handler'):
+            logger.warning("Agent does not support tool handler registration")
+            return
+            
+        try:
+            # Import needed components
+            from radbot.tools.mcp.mcp_fileserver_client import handle_fileserver_tool_call
+            from radbot.tools.crawl4ai.mcp_crawl4ai_client import handle_crawl4ai_tool_call
+            from radbot.tools.memory.memory_tools import search_past_conversations, store_important_information
+            
+            # Register filesystem tool handlers
+            self.root_agent.register_tool_handler(
+                "list_files", lambda params: handle_fileserver_tool_call("list_files", params)
+            )
+            self.root_agent.register_tool_handler(
+                "read_file", lambda params: handle_fileserver_tool_call("read_file", params)
+            )
+            self.root_agent.register_tool_handler(
+                "write_file", lambda params: handle_fileserver_tool_call("write_file", params)
+            )
+            self.root_agent.register_tool_handler(
+                "delete_file", lambda params: handle_fileserver_tool_call("delete_file", params)
+            )
+            self.root_agent.register_tool_handler(
+                "get_file_info",
+                lambda params: handle_fileserver_tool_call("get_file_info", params),
+            )
+            self.root_agent.register_tool_handler(
+                "search_files", lambda params: handle_fileserver_tool_call("search_files", params)
+            )
+            self.root_agent.register_tool_handler(
+                "create_directory",
+                lambda params: handle_fileserver_tool_call("create_directory", params),
+            )
+            
+            # Register Crawl4AI tool handlers
+            self.root_agent.register_tool_handler(
+                "crawl4ai_scrape",
+                lambda params: handle_crawl4ai_tool_call("crawl4ai_scrape", params),
+            )
+            self.root_agent.register_tool_handler(
+                "crawl4ai_search",
+                lambda params: handle_crawl4ai_tool_call("crawl4ai_search", params),
+            )
+            self.root_agent.register_tool_handler(
+                "crawl4ai_extract",
+                lambda params: handle_crawl4ai_tool_call("crawl4ai_extract", params),
+            )
+            self.root_agent.register_tool_handler(
+                "crawl4ai_crawl",
+                lambda params: handle_crawl4ai_tool_call("crawl4ai_crawl", params),
+            )
+            
+            # Register memory tools
+            self.root_agent.register_tool_handler(
+                "search_past_conversations",
+                lambda params: MessageToDict(search_past_conversations(params)),
+            )
+            self.root_agent.register_tool_handler(
+                "store_important_information",
+                lambda params: MessageToDict(store_important_information(params)),
+            )
+            
+            # Register agent transfer tool
+            self.root_agent.register_tool_handler(
+                "transfer_to_agent",
+                lambda params: MessageToDict(QueryResponse(
+                    transfer_to_agent_response={
+                        "target_app_name": params["agent_name"],
+                        "message": params.get("message", ""),
+                    }
+                )),
+            )
+            
+            logger.info("Registered common tool handlers for agent")
+        except Exception as e:
+            logger.warning(f"Error registering tool handlers: {str(e)}")
 
 
 class AgentFactory:
@@ -369,7 +458,7 @@ class AgentFactory:
 
     @staticmethod
     def create_root_agent(
-        name: str = "main_coordinator",
+        name: str = "beto",
         model: Optional[str] = None,
         tools: Optional[List] = None,
         instruction_name: str = "main_agent",
@@ -444,8 +533,7 @@ class AgentFactory:
             instruction = cfg.get_instruction(instruction_name)
         except FileNotFoundError:
             # Use a minimal instruction if the named one isn't found
-            import logging
-            logging.warning(f"Instruction '{instruction_name}' not found for sub-agent, using minimal instruction")
+            logger.warning(f"Instruction '{instruction_name}' not found for sub-agent, using minimal instruction")
             instruction = f"You are a specialized {name} agent. {description}"
         
         # Create the sub-agent
@@ -459,10 +547,148 @@ class AgentFactory:
 
         return sub_agent
 
+    @staticmethod
+    def create_web_agent(
+        name: str = "beto",
+        model: Optional[str] = None,
+        tools: Optional[List] = None,
+        instruction_name: str = "main_agent",
+        config: Optional[ConfigManager] = None,
+        register_tools: bool = True
+    ) -> Agent:
+        """Create an agent specifically for the ADK web interface.
+        
+        Args:
+            name: Name of the agent
+            model: Model to use (if None, uses config's main_model)
+            tools: List of tools to add to the agent
+            instruction_name: Name of the instruction to load from config
+            config: Optional ConfigManager instance (uses global if not provided)
+            register_tools: Whether to register common tool handlers
+            
+        Returns:
+            Configured ADK Agent for web interface
+        """
+        # Create the base agent
+        agent = AgentFactory.create_root_agent(
+            name=name,
+            model=model,
+            tools=tools,
+            instruction_name=instruction_name,
+            config=config
+        )
+        
+        # Initialize memory service for the web UI and store API keys
+        try:
+            from radbot.memory.qdrant_memory import QdrantMemoryService
+            memory_service = QdrantMemoryService()
+            logger.info("Successfully initialized QdrantMemoryService for web agent")
+            
+            # Store memory service in ADK's global tool context
+            from google.adk.tools.tool_context import ToolContext
+            
+            # Directly use setattr to add memory service to tool context
+            # This makes it accessible in tool implementations
+            setattr(ToolContext, "memory_service", memory_service)
+            logger.info("Added memory service to tool context")
+            
+            # Store API keys in ToolContext for tools to access
+            tavily_api_key = os.environ.get("TAVILY_API_KEY")
+            if tavily_api_key:
+                setattr(ToolContext, "tavily_api_key", tavily_api_key)
+                logger.info("Stored Tavily API key in global ToolContext")
+                
+            # Store Crawl4AI API key if available
+            crawl4ai_api_token = os.environ.get("CRAWL4AI_API_TOKEN")
+            if crawl4ai_api_token:
+                setattr(ToolContext, "crawl4ai_api_token", crawl4ai_api_token)
+                logger.info("Stored Crawl4AI API token in global ToolContext")
+        except Exception as e:
+            logger.warning(f"Failed to initialize memory service: {str(e)}")
+        
+        # Register common tool handlers if requested
+        if register_tools:
+            try:
+                # Use the equivalent of RadBotAgent.register_tool_handlers but for a plain Agent
+                from radbot.tools.mcp.mcp_fileserver_client import handle_fileserver_tool_call
+                from radbot.tools.crawl4ai.mcp_crawl4ai_client import handle_crawl4ai_tool_call
+                from radbot.tools.memory.memory_tools import search_past_conversations, store_important_information
+                from google.adk.agents import QueryResponse
+                
+                # Register filesystem tool handlers
+                agent.register_tool_handler(
+                    "list_files", lambda params: handle_fileserver_tool_call("list_files", params)
+                )
+                agent.register_tool_handler(
+                    "read_file", lambda params: handle_fileserver_tool_call("read_file", params)
+                )
+                agent.register_tool_handler(
+                    "write_file", lambda params: handle_fileserver_tool_call("write_file", params)
+                )
+                agent.register_tool_handler(
+                    "delete_file", lambda params: handle_fileserver_tool_call("delete_file", params)
+                )
+                agent.register_tool_handler(
+                    "get_file_info",
+                    lambda params: handle_fileserver_tool_call("get_file_info", params),
+                )
+                agent.register_tool_handler(
+                    "search_files", lambda params: handle_fileserver_tool_call("search_files", params)
+                )
+                agent.register_tool_handler(
+                    "create_directory",
+                    lambda params: handle_fileserver_tool_call("create_directory", params),
+                )
+                
+                # Register Crawl4AI tool handlers
+                agent.register_tool_handler(
+                    "crawl4ai_scrape",
+                    lambda params: handle_crawl4ai_tool_call("crawl4ai_scrape", params),
+                )
+                agent.register_tool_handler(
+                    "crawl4ai_search",
+                    lambda params: handle_crawl4ai_tool_call("crawl4ai_search", params),
+                )
+                agent.register_tool_handler(
+                    "crawl4ai_extract",
+                    lambda params: handle_crawl4ai_tool_call("crawl4ai_extract", params),
+                )
+                agent.register_tool_handler(
+                    "crawl4ai_crawl",
+                    lambda params: handle_crawl4ai_tool_call("crawl4ai_crawl", params),
+                )
+                
+                # Register memory tools
+                agent.register_tool_handler(
+                    "search_past_conversations",
+                    lambda params: MessageToDict(search_past_conversations(params)),
+                )
+                agent.register_tool_handler(
+                    "store_important_information",
+                    lambda params: MessageToDict(store_important_information(params)),
+                )
+                
+                # Register agent transfer tool
+                agent.register_tool_handler(
+                    "transfer_to_agent",
+                    lambda params: MessageToDict(QueryResponse(
+                        transfer_to_agent_response={
+                            "target_app_name": params["agent_name"],
+                            "message": params.get("message", ""),
+                        }
+                    )),
+                )
+                
+                logger.info("Registered common tool handlers for web agent")
+            except Exception as e:
+                logger.warning(f"Error registering tool handlers for web agent: {str(e)}")
+                
+        return agent
+
 
 def create_runner(
     agent: Agent, 
-    app_name: str = "beto",  # Changed from "radbot" to match agent name
+    app_name: str = "beto",
     session_service: Optional[SessionService] = None
 ) -> Runner:
     """Create an ADK Runner with the specified agent.
@@ -478,10 +704,6 @@ def create_runner(
     # Use provided session service or create an in-memory one
     sess_service = session_service or InMemorySessionService()
     
-    # Make sure the session service knows about the app_name
-    # This is for internal reference, as methods like get_session and create_session
-    # require app_name as a parameter
-    
     # Create and return the runner
     return Runner(
         agent=agent,
@@ -495,10 +717,13 @@ def create_agent(
     tools: Optional[List[Any]] = None,
     model: Optional[str] = None,
     instruction_name: str = "main_agent",
-    name: str = "main_coordinator",
+    name: str = "beto",
     config: Optional[ConfigManager] = None,
-    include_memory_tools: bool = True
-) -> RadBotAgent:
+    include_memory_tools: bool = True,
+    for_web: bool = False,
+    register_tools: bool = True,
+    app_name: str = "beto"
+) -> Union[RadBotAgent, Agent]:
     """
     Create a configured RadBot agent.
     
@@ -510,12 +735,14 @@ def create_agent(
         name: Name for the agent
         config: Optional ConfigManager instance (uses global if not provided)
         include_memory_tools: If True, includes memory tools automatically
+        for_web: If True, returns an ADK Agent for web interface
+        register_tools: Whether to register common tool handlers
+        app_name: Application name for session management
         
     Returns:
-        A configured RadBotAgent instance
+        A configured RadBotAgent instance or ADK Agent for web interface
     """
-    import logging
-    logger = logging.getLogger(__name__)
+    logger.info(f"Creating agent (for_web={for_web}, name={name})")
     
     # Start with the given tools or empty list
     all_tools = list(tools or [])
@@ -543,15 +770,33 @@ def create_agent(
         except Exception as e:
             logger.warning(f"Failed to add memory tools: {str(e)}")
     
-    # Create the agent with all the specified parameters
+    # For web interface, use AgentFactory to create an ADK Agent directly
+    if for_web:
+        agent = AgentFactory.create_web_agent(
+            name=name,
+            model=model,
+            tools=all_tools,
+            instruction_name=instruction_name,
+            config=config,
+            register_tools=register_tools
+        )
+        logger.info(f"Created web agent with {len(all_tools)} tools")
+        return agent
+    
+    # Otherwise, create a RadBotAgent instance
     agent = RadBotAgent(
         session_service=session_service,
         tools=all_tools,
         model=model,
         name=name,
         instruction_name=instruction_name,
-        config=config
+        config=config,
+        app_name=app_name
     )
+    
+    # Register tool handlers if requested
+    if register_tools:
+        agent.register_tool_handlers()
     
     # Log the tools included in the agent
     if agent.root_agent and agent.root_agent.tools:
@@ -563,6 +808,28 @@ def create_agent(
                 tool_names.append(tool.name)
             else:
                 tool_names.append(str(type(tool)))
-        logger.info(f"Agent created with tools: {', '.join(tool_names)}")
+        logger.info(f"Created RadBotAgent with tools: {', '.join(tool_names)}")
     
     return agent
+
+
+def create_core_agent_for_web(tools: Optional[List[Any]] = None, name: str = "beto", app_name: str = "beto") -> Agent:
+    """
+    Create an ADK Agent for web interface with all necessary configurations.
+    This is the function used by the root agent.py.
+    
+    Args:
+        tools: Optional list of tools to include
+        name: Name for the agent
+        app_name: Application name for the agent, should match agent name for transfers
+        
+    Returns:
+        Configured ADK Agent for web interface
+    """
+    return create_agent(
+        tools=tools, 
+        name=name, 
+        for_web=True, 
+        register_tools=True,
+        app_name=app_name
+    )

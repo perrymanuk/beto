@@ -1,5 +1,8 @@
 # Agent Implementation Consolidation Plan
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 ## Current Structure
 
 Currently, RadBot has three separate agent.py files that serve different purposes:

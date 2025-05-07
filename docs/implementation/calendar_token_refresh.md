@@ -1,5 +1,8 @@
 # Google Calendar Token Refresh Implementation
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document describes the implementation of the improved Google Calendar token refresh mechanism in RadBot.
 
 ## Problem Statement

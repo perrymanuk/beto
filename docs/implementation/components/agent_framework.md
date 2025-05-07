@@ -1,5 +1,8 @@
 # Agent Framework Architecture
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document provides a comprehensive overview of the agent framework architecture in the RadBot system, including the consolidation process, component design, and key implementation details.
 
 ## Overview

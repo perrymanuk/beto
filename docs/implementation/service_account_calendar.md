@@ -1,5 +1,8 @@
 # Service Account Google Calendar Integration
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document explains how to set up RadBot's Google Calendar integration using a service account.
 
 ## Overview

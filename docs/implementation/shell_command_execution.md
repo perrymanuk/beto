@@ -1,5 +1,8 @@
 # Shell Command Execution
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 ## Feature Overview
 
 This feature enables the agent to execute shell commands on the host system with robust security controls. It provides two modes of operation:

@@ -5,10 +5,8 @@ This file is used by the ADK web interface to create the agent with all needed t
 The ADK web interface uses this file directly based on the adk.config.json setting.
 """
 
-import asyncio
 import logging
 import os
-import sys
 from typing import Optional, Any, List, Dict, Union
 
 # Set up logging
@@ -25,8 +23,13 @@ load_dotenv()
 # Import ADK components
 from google.adk.agents import Agent
 from radbot.config import config_manager
+
+# Import the core agent implementation
+from radbot.agent.agent import create_core_agent_for_web
+
 # Import the ADK's built-in transfer_to_agent tool
 from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+
 # Import calendar tools
 from radbot.tools.calendar.calendar_tools import (
     list_calendar_events_tool,
@@ -78,7 +81,7 @@ print(f"SPECIAL DEBUG: agent.py loaded with MCP_FS_ROOT_DIR={os.environ.get('MCP
 # We're using REST API approach for Home Assistant
 
 
-def create_agent(tools: Optional[List[Any]] = None):
+def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
     """
     Create the agent with all necessary tools.
     
@@ -86,6 +89,7 @@ def create_agent(tools: Optional[List[Any]] = None):
     
     Args:
         tools: Optional list of additional tools to include
+        app_name: Application name to use, defaults to "beto"
         
     Returns:
         An ADK BaseAgent instance
@@ -294,29 +298,6 @@ def create_agent(tools: Optional[List[Any]] = None):
             logger.info("Added shell command execution tool in STRICT mode")
         else:
             logger.info("Shell command execution is disabled")
-            
-        # Add instruction about shell command execution if enabled
-        if enable_shell in ["true", "1", "yes", "enable", "all", "allow", "strict", "restricted", "secure"]:
-            shell_instruction = """
-            You can execute shell commands using the execute_shell_command tool.
-            
-            Usage:
-            - execute_shell_command(command="command_name", arguments=["arg1", "arg2"], timeout=30)
-            
-            Examples:
-            - execute_shell_command(command="ls", arguments=["-la"])
-            - execute_shell_command(command="cat", arguments=["/etc/hostname"])
-            
-            Always tell the user what command you're executing and what the results are.
-            Never execute potentially destructive commands like rm, dd, or anything that could
-            modify or delete important files.
-            """
-            
-            if enable_shell in ["strict", "restricted", "secure"]:
-                from radbot.tools.shell import ALLOWED_COMMANDS
-                allowed_cmds = ", ".join(sorted(list(ALLOWED_COMMANDS)))
-                shell_instruction += f"\n\nNOTE: You can only execute these allowed commands: {allowed_cmds}"
-                
     except Exception as e:
         logger.warning(f"Failed to create shell command execution tool: {str(e)}")
         logger.debug(f"Shell command tool creation error details:", exc_info=True)
@@ -338,10 +319,14 @@ def create_agent(tools: Optional[List[Any]] = None):
         logger.info("Added transfer_to_agent function directly to tools list")
         
         # Check if the function tool is available in the ADK
-        from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
-        if TRANSFER_TO_AGENT_TOOL:
-            basic_tools.append(TRANSFER_TO_AGENT_TOOL)
-            logger.info("Added TRANSFER_TO_AGENT_TOOL from ADK")
+        try:
+            from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
+            if TRANSFER_TO_AGENT_TOOL:
+                basic_tools.append(TRANSFER_TO_AGENT_TOOL)
+                logger.info("Added TRANSFER_TO_AGENT_TOOL from ADK")
+        except ImportError:
+            # Not available in this ADK version, ignore
+            pass
     except Exception as e:
         logger.warning(f"Failed to add transfer_to_agent tool: {str(e)}")
         logger.debug(f"Transfer tool addition error details:", exc_info=True)
@@ -380,7 +365,7 @@ def create_agent(tools: Optional[List[Any]] = None):
             tool_str = str(tool).lower()
             if "file" in tool_str:
                 file_tool_exists = True
-            if "home_assistant" in tool_str:
+            if "home_assistant" in tool_str or "ha_" in tool_str:
                 ha_tool_exists = True
             if "shell" in tool_str or "command" in tool_str or "execute" in tool_str:
                 shell_tool_exists = True
@@ -522,54 +507,15 @@ def create_agent(tools: Optional[List[Any]] = None):
         logger.warning(f"Failed to load main_agent instruction: {str(e)}")
         instruction = """You are a helpful assistant. Your goal is to understand the user's request and fulfill it by using available tools."""
     
-    # Create an ADK Agent directly - this is what the web UI expects
-    # Get model from config manager which handles environment variable precedence
-    model_name = config_manager.get_main_model()
-    
     # Log the model we're using
+    model_name = config_manager.get_main_model()
     logger.info(f"Creating agent with model: {model_name}")
     
-    # Create the agent with tools
-    agent = None
+    # Use the core implementation to create the web agent with explicit app_name
+    agent = create_core_agent_for_web(tools=all_tools, name="beto", app_name="beto")
     
-    # For now, create regular agent without GenAI function calling
-    # This approach is more compatible across ADK versions
-    agent = Agent(
-        name="beto",
-        model=model_name,
-        instruction=instruction,
-        description="The main agent that handles user requests with memory capabilities.",
-        tools=all_tools
-    )
-    logger.info("Created agent with standard tools")
-    
-    # Initialize memory service for the web UI and store API keys
-    try:
-        from radbot.memory.qdrant_memory import QdrantMemoryService
-        memory_service = QdrantMemoryService()
-        logger.info("Successfully initialized QdrantMemoryService for web agent")
-        
-        # Store memory service in ADK's global tool context
-        from google.adk.tools.tool_context import ToolContext
-        
-        # Directly use setattr to add memory service to tool context
-        # This makes it accessible in tool implementations
-        setattr(ToolContext, "memory_service", memory_service)
-        logger.info("Added memory service to tool context")
-        
-        # Store API keys in ToolContext for tools to access
-        tavily_api_key = os.environ.get("TAVILY_API_KEY")
-        if tavily_api_key:
-            setattr(ToolContext, "tavily_api_key", tavily_api_key)
-            logger.info("Stored Tavily API key in global ToolContext")
-            
-        # Store Crawl4AI API key if available
-        crawl4ai_api_token = os.environ.get("CRAWL4AI_API_TOKEN")
-        if crawl4ai_api_token:
-            setattr(ToolContext, "crawl4ai_api_token", crawl4ai_api_token)
-            logger.info("Stored Crawl4AI API token in global ToolContext")
-    except Exception as e:
-        logger.warning(f"Failed to initialize memory service: {str(e)}")
+    # Manually set the instruction with the extended one we created
+    agent.instruction = instruction
     
     # Add research agent as a subagent if available
     try:
@@ -578,7 +524,7 @@ def create_agent(tools: Optional[List[Any]] = None):
         # Collect tools for the research agent
         research_tools = []
         
-        # NEW APPROACH: Include ALL tools EXCEPT Home Assistant tools
+        # Include ALL tools EXCEPT Home Assistant tools
         logger.info("USING NEW DIRECT APPROACH: Include all tools except HA tools")
         
         # Copy all tools except Home Assistant tools
@@ -602,13 +548,33 @@ def create_agent(tools: Optional[List[Any]] = None):
             research_tools.append(tool)
             logger.info(f"Added tool to research agent: {tool_name}")
         
-        # Create the research agent with all collected tools
+        # Create the research agent with all collected tools and explicit app_name
+        # CRITICAL FIX (July 2025): Added app_name parameter to create_research_agent function
+        # to ensure proper agent tree registration for transfers in ADK 0.4.0
         research_agent = create_research_agent(
-            name="scout",
+            name="scout",  # CRITICAL: Must match exactly what's expected in transfer_to_agent calls
             model=model_name,
             tools=research_tools,
-            as_subagent=False  # Get the ADK agent directly
+            as_subagent=False,  # Get the ADK agent directly
+            app_name="beto"  # CRITICAL: Must match the parent agent app_name
         )
+        
+        # TRIPLE CHECK the agent's name - this is critical for transfers in ADK 0.4.0
+        if hasattr(research_agent, 'name'):
+            if research_agent.name != 'scout':
+                logger.error(f"CRITICAL NAME MISMATCH: research_agent.name='{research_agent.name}' not 'scout' - fixing")
+                research_agent.name = 'scout'
+                logger.info(f"Fixed research_agent.name to '{research_agent.name}'")
+            else:
+                logger.info(f"Verified research_agent.name is correctly set to '{research_agent.name}'")
+        else:
+            logger.error("CRITICAL ERROR: research_agent has no 'name' attribute!")
+            # Try to add name attribute directly
+            try:
+                setattr(research_agent, 'name', 'scout')
+                logger.info(f"Added missing name attribute to research_agent: '{getattr(research_agent, 'name', 'unknown')}'")
+            except Exception as e:
+                logger.error(f"Failed to add name attribute to research_agent: {e}")
         
         # Log the final list of tools assigned to the research agent
         logger.info("========== RESEARCH AGENT TOOLS ===========")
@@ -626,24 +592,67 @@ def create_agent(tools: Optional[List[Any]] = None):
             logger.info(f"Research Tool {i+1}: {tool_name}")
         logger.info("===========================================")
         
+        # CRITICAL FIX: Properly register scout agent in agent tree
+        # Explicitly verify both agent names first
+        if hasattr(agent, 'name') and agent.name != 'beto':
+            logger.warning(f"Root agent name incorrect '{agent.name}'. Setting to 'beto'")
+            agent.name = 'beto'
+            
+        if hasattr(research_agent, 'name') and research_agent.name != 'scout':
+            logger.warning(f"Scout agent name incorrect '{research_agent.name}'. Setting to 'scout'")
+            research_agent.name = 'scout'
+           
         # Add the scout agent as a subagent directly to the main agent
-        # This is critical for agent transfers to work correctly - the scout must be listed in the agent.sub_agents
+        # Per ADK 0.4.0 docs, agent tree must be explicitly created with complete bidirectional references
         if hasattr(agent, 'sub_agents'):
-            # Force reinitialization - this is crucial for ADK to register the agent in the tree
+            # Force reinitialization for ADK to register the agent in the tree
             agent.sub_agents = []  # Clear existing sub-agents
             agent.sub_agents.append(research_agent)
+            logger.info(f"Registered agent '{research_agent.name}' as sub-agent of '{agent.name}'")
             
             # Bidirectional linking - research_agent should know its parent
+            # Use both _parent and parent attributes for maximum compatibility
+            if hasattr(research_agent, '_parent'):
+                research_agent._parent = agent
+                logger.info(f"Set _parent reference on '{research_agent.name}' to '{agent.name}'")
+                
             if hasattr(research_agent, 'parent'):
                 research_agent.parent = agent
-                
+                logger.info(f"Set parent reference on '{research_agent.name}' to '{agent.name}'")
+            
             # Verify registration
             sub_agent_names = [sa.name for sa in agent.sub_agents if hasattr(sa, 'name')]
-            logger.info(f"Verified agent tree structure - Root agent: '{agent.name}', Sub-agents: {sub_agent_names}")
+            parent_name = getattr(research_agent.parent, 'name', None) if hasattr(research_agent, 'parent') else None
+            logger.info(f"Verified agent tree - Root: '{agent.name}', Sub-agents: {sub_agent_names}")
+            logger.info(f"Scout parent reference = '{parent_name}'")
         else:
+            # Initialize sub_agents list and register scout agent
             agent.sub_agents = []
             agent.sub_agents.append(research_agent)
             logger.info(f"Created new sub_agents list with scout agent")
+            
+            # Still need to set bidirectional relationships
+            if hasattr(research_agent, '_parent'):
+                research_agent._parent = agent
+                logger.info(f"Set _parent reference on scout agent to '{agent.name}'")
+                
+            if hasattr(research_agent, 'parent'):
+                research_agent.parent = agent
+                logger.info(f"Set parent reference on scout agent to '{agent.name}'")
+                
+        # Validate agent tree structure
+        logger.info("====== VALIDATING AGENT TREE STRUCTURE ======")
+        if hasattr(agent, 'sub_agents'):
+            logger.info(f"Root agent '{agent.name}' has {len(agent.sub_agents)} sub-agents")
+            for i, sa in enumerate(agent.sub_agents):
+                sa_name = sa.name if hasattr(sa, 'name') else f"unnamed-{i}"
+                logger.info(f"  Sub-agent {i}: name='{sa_name}'")
+                # Check bidirectional reference
+                has_parent = hasattr(sa, 'parent') and sa.parent is agent
+                logger.info(f"  ↳ Has parent reference: {has_parent}")
+        else:
+            logger.warning("Root agent has no sub_agents attribute!")
+        logger.info("===============================================")
             
         # Ensure bidirectional relationship
         if hasattr(research_agent, '_parent'):
@@ -653,69 +662,134 @@ def create_agent(tools: Optional[List[Any]] = None):
             research_agent.parent = agent
             logger.info(f"Set parent reference on scout agent to '{agent.name}'")
             
-        # Force agent name consistency one more time
+        # Force agent name consistency
         if hasattr(research_agent, 'name') and research_agent.name != 'scout':
             logger.warning(f"Scout agent name mismatch: '{research_agent.name}' not 'scout', fixing...")
             research_agent.name = 'scout'
-        
-        logger.info("Successfully added scout agent as a subagent")
-        
-        # Debug the agent tree structure extensively
-        if agent.sub_agents:
-            sub_agent_names = [sub_agent.name for sub_agent in agent.sub_agents if hasattr(sub_agent, 'name')]
-            logger.info(f"Agent tree structure - Root agent: '{agent.name}', Sub-agents: {sub_agent_names}")
             
-            # Print details of each sub-agent
-            for i, sub_agent in enumerate(agent.sub_agents):
-                sa_name = sub_agent.name if hasattr(sub_agent, 'name') else f"unnamed-{i}"
-                
-                # Check parent references
-                parent_ref = None
-                if hasattr(sub_agent, 'parent'):
-                    parent_name = sub_agent.parent.name if hasattr(sub_agent.parent, 'name') else "unnamed-parent"
-                    parent_ref = f"parent.name='{parent_name}'"
-                elif hasattr(sub_agent, '_parent'):
-                    parent_name = sub_agent._parent.name if hasattr(sub_agent._parent, 'name') else "unnamed-parent"
-                    parent_ref = f"_parent.name='{parent_name}'"
-                
-                # Log details
-                logger.info(f"Sub-agent {i}: name='{sa_name}', parent_ref={parent_ref}")
-                
-                # Check bidirectional relationship
-                if parent_ref:
-                    # Verify parent's sub_agents contains this agent
-                    if hasattr(sub_agent, 'parent') and hasattr(sub_agent.parent, 'sub_agents'):
-                        found_self = any(sa is sub_agent for sa in sub_agent.parent.sub_agents)
-                        logger.info(f"  - Bidirectional check: parent.sub_agents contains this agent: {found_self}")
-        else:
-            logger.info(f"Agent tree structure - Root agent: '{agent.name}', No sub-agents found")
-            
-        # Debug transfer_to_agent function access
-        from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
-        logger.info(f"transfer_to_agent function available: {bool(transfer_to_agent)}")
-        # Check if transfer tool is in agent's tools
-        has_transfer_tool = False
-        if hasattr(agent, 'tools'):
-            for tool in agent.tools:
-                if hasattr(tool, 'name') and tool.name == 'transfer_to_agent':
-                    has_transfer_tool = True
-                    break
-                elif hasattr(tool, '__name__') and tool.__name__ == 'transfer_to_agent':
-                    has_transfer_tool = True
-                    break
-        logger.info(f"Main agent has transfer_to_agent tool: {has_transfer_tool}")
+        # We've already verified the agent names and relationships above
+        # But let's check one more time and focus on the transfer tools
         
-        # Check research agent's tools
-        if research_agent and hasattr(research_agent, 'tools'):
-            has_research_transfer_tool = False
-            for tool in research_agent.tools:
-                if hasattr(tool, 'name') and tool.name == 'transfer_to_agent':
-                    has_research_transfer_tool = True
-                    break
-                elif hasattr(tool, '__name__') and tool.__name__ == 'transfer_to_agent':
-                    has_research_transfer_tool = True
-                    break
-            logger.info(f"Research agent has transfer_to_agent tool: {has_research_transfer_tool}")
+        # CRITICAL FIX: Verify transfer_to_agent tool is available to both agents
+        root_has_transfer_tool = False
+        scout_has_transfer_tool = False
+        
+        # Check root agent transfer tool
+        for tool in agent.tools:
+            tool_name = None
+            if hasattr(tool, 'name'):
+                tool_name = tool.name
+            elif hasattr(tool, '__name__'):
+                tool_name = tool.__name__
+            
+            if tool_name == 'transfer_to_agent':
+                root_has_transfer_tool = True
+                break
+        
+        # Check scout agent transfer tool
+        for tool in research_agent.tools:
+            tool_name = None
+            if hasattr(tool, 'name'):
+                tool_name = tool.name
+            elif hasattr(tool, '__name__'):
+                tool_name = tool.__name__
+                
+            if tool_name == 'transfer_to_agent':
+                scout_has_transfer_tool = True
+                break
+                
+        logger.info(f"Transfer tool availability - Root: {root_has_transfer_tool}, Scout: {scout_has_transfer_tool}")
+        
+        # Add transfer tools if missing - CRITICAL for transfers to work
+        if not root_has_transfer_tool:
+            logger.warning("Root agent missing transfer_to_agent tool - adding")
+            try:
+                # Add both function and tool
+                agent.tools.append(transfer_to_agent)
+                logger.info("Added transfer_to_agent function to root agent tools")
+                
+                # Try to add the TRANSFER_TO_AGENT_TOOL constant as well
+                try:
+                    from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
+                    if TRANSFER_TO_AGENT_TOOL:
+                        agent.tools.append(TRANSFER_TO_AGENT_TOOL)
+                        logger.info("Added TRANSFER_TO_AGENT_TOOL constant from ADK to root agent")
+                except (ImportError, Exception) as e:
+                    logger.warning(f"Could not add TRANSFER_TO_AGENT_TOOL constant: {e}")
+            except Exception as e:
+                logger.error(f"Failed to add transfer_to_agent to root agent: {e}")
+                
+        if not scout_has_transfer_tool:
+            logger.warning("Scout agent missing transfer_to_agent tool - adding")
+            try:
+                # Add both function and tool
+                research_agent.tools.append(transfer_to_agent)
+                logger.info("Added transfer_to_agent function to scout agent tools")
+                
+                # Try to add the TRANSFER_TO_AGENT_TOOL constant as well
+                try:
+                    from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
+                    if TRANSFER_TO_AGENT_TOOL:
+                        research_agent.tools.append(TRANSFER_TO_AGENT_TOOL)
+                        logger.info("Added TRANSFER_TO_AGENT_TOOL constant from ADK to scout agent")
+                except (ImportError, Exception) as e:
+                    logger.warning(f"Could not add TRANSFER_TO_AGENT_TOOL constant: {e}")
+            except Exception as e:
+                logger.error(f"Failed to add transfer_to_agent to scout agent: {e}")
+        
+        # Register the transfer_to_agent handler with both agents
+        try:
+            # Register with root agent
+            from google.adk.events import QueryResponse
+            from google.protobuf.json_format import MessageToDict
+            
+            if hasattr(agent, 'register_tool_handler'):
+                agent.register_tool_handler(
+                    "transfer_to_agent",
+                    lambda params: MessageToDict(QueryResponse(
+                        transfer_to_agent_response={
+                            "target_app_name": params["agent_name"],
+                            "message": params.get("message", ""),
+                        }
+                    )),
+                )
+                logger.info("Registered transfer_to_agent handler with root agent")
+                
+            # Register with scout agent
+            if hasattr(research_agent, 'register_tool_handler'):
+                research_agent.register_tool_handler(
+                    "transfer_to_agent",
+                    lambda params: MessageToDict(QueryResponse(
+                        transfer_to_agent_response={
+                            "target_app_name": params["agent_name"],
+                            "message": params.get("message", ""),
+                        }
+                    )),
+                )
+                logger.info("Registered transfer_to_agent handler with scout agent")
+        except Exception as e:
+            logger.error(f"Failed to register transfer_to_agent handlers: {e}")
+        
+        # Final detailed report on agent tree structure
+        logger.info("============ FINAL AGENT TREE REPORT ============")
+        logger.info(f"ROOT AGENT: name='{agent.name}'")
+        logger.info(f"SUB-AGENT: name='{research_agent.name}'")
+        
+        # Check bidirectional relationship
+        parent_ok = research_agent.parent is agent if hasattr(research_agent, 'parent') else False
+        child_ok = research_agent in agent.sub_agents if hasattr(agent, 'sub_agents') else False
+        
+        logger.info(f"BIDIRECTIONAL RELATIONSHIP: parent_ref={parent_ok}, child_list={child_ok}")
+        logger.info(f"TRANSFER TOOLS: root={root_has_transfer_tool}, scout={scout_has_transfer_tool}")
+        
+        # Register tools with agent
+        tool_handlers_root = getattr(agent, 'tool_handlers', {})
+        tool_handlers_scout = getattr(research_agent, 'tool_handlers', {})
+        
+        logger.info(f"TOOL HANDLERS: root={len(tool_handlers_root)}, scout={len(tool_handlers_scout)}")
+        logger.info("=================================================")
+        
+        logger.info("Successfully added scout agent as a subagent with enhanced transfer capability")
         
         # Add instruction for scout agent delegation
         research_agent_instruction = """
@@ -733,8 +807,7 @@ def create_agent(tools: Optional[List[Any]] = None):
         The scout agent can transfer control back to you using the same function:
         transfer_to_agent(agent_name='beto')
         """
-        instruction += "\n\n" + research_agent_instruction
-        agent.instruction = instruction
+        agent.instruction += "\n\n" + research_agent_instruction
         logger.info("Added scout agent delegation instructions to main agent")
     except Exception as e:
         logger.warning(f"Failed to add scout agent as a subagent: {str(e)}")
@@ -743,8 +816,46 @@ def create_agent(tools: Optional[List[Any]] = None):
     logger.info(f"Created ADK BaseAgent for web UI with {len(all_tools)} tools")
     return agent
 
-# Create a root_agent instance for ADK web to use directly
-root_agent = create_agent()
+# Create a root_agent instance for ADK web to use directly with explicit app_name
+root_agent = create_agent(app_name="beto")
 logger.info(f"Created root_agent instance for ADK web with name '{root_agent.name}' and {len(root_agent.sub_agents) if hasattr(root_agent, 'sub_agents') else 0} sub-agents")
 
-# Using REST API approach for Home Assistant
+# CRITICAL: Ensure root_agent name is explicitly set to match the expected transfer target
+if hasattr(root_agent, 'name'):
+    if root_agent.name != 'beto':
+        logger.warning(f"ROOT AGENT NAME MISMATCH: '{root_agent.name}' != 'beto', fixing...")
+        root_agent.name = 'beto'
+        logger.info(f"Fixed root_agent.name = '{root_agent.name}'")
+    else:
+        logger.info(f"Verified root_agent.name = '{root_agent.name}'")
+else:
+    logger.warning("root_agent has no 'name' attribute - this is a critical issue")
+    
+# CRITICAL: Verify transfer_to_agent tool is available in root_agent tools
+has_transfer_tool = False
+if hasattr(root_agent, 'tools') and root_agent.tools:
+    for tool in root_agent.tools:
+        tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+        if tool_name == 'transfer_to_agent':
+            has_transfer_tool = True
+            break
+    
+    if not has_transfer_tool:
+        logger.warning("ROOT AGENT MISSING TRANSFER TOOL - adding at the root level...")
+        try:
+            # Add the function directly
+            root_agent.tools.append(transfer_to_agent)
+            logger.info("Added transfer_to_agent function to root_agent tools")
+            
+            # Try to add the TRANSFER_TO_AGENT_TOOL constant as well for redundancy
+            try:
+                from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
+                if TRANSFER_TO_AGENT_TOOL:
+                    root_agent.tools.append(TRANSFER_TO_AGENT_TOOL)
+                    logger.info("Added TRANSFER_TO_AGENT_TOOL constant to root_agent tools")
+            except (ImportError, Exception) as e:
+                logger.warning(f"Could not add TRANSFER_TO_AGENT_TOOL constant: {e}")
+        except Exception as e:
+            logger.error(f"Failed to add transfer_to_agent tool to root_agent: {e}")
+    else:
+        logger.info("ROOT AGENT HAS TRANSFER TOOL - verified")

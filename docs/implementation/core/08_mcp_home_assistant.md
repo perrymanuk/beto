@@ -1,6 +1,9 @@
-# MCP Integration for Home Assistant
+# Home Assistant Integration (MCP)
 
-This document details the implementation of Model Context Protocol (MCP) integration with Home Assistant for the radbot agent framework.
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
+This document details the implementation of Model Context Protocol (MCP) integration with Home Assistant for the RadBot agent framework.
 
 ## MCP Integration Architecture
 
@@ -52,7 +55,7 @@ def create_home_assistant_toolset() -> Optional[MCPToolset]:
         
         if not ha_mcp_url or not ha_auth_token:
             logger.error("Home Assistant MCP configuration missing. "
-                          "Please set HA_MCP_SSE_URL and HA_AUTH_TOKEN environment variables.")
+                      "Please set HA_MCP_SSE_URL and HA_AUTH_TOKEN environment variables.")
             return None
         
         # Configure the SSE parameters for Home Assistant MCP server
@@ -96,6 +99,37 @@ if ha_toolset:
 
 # Create the agent with tools
 root_agent = AgentFactory.create_root_agent(tools=tools)
+```
+
+## Home Assistant Agent Factory
+
+```python
+def create_home_assistant_agent_factory(
+    agent_factory: Callable,
+    base_tools: Optional[List[Any]] = None
+) -> RadBotAgent:
+    """
+    Creates an agent with Home Assistant capabilities using the MCP protocol.
+    
+    Args:
+        agent_factory: The agent factory function to use (e.g., AgentFactory.create_root_agent)
+        base_tools: List of additional tools to add to the agent
+        
+    Returns:
+        A RadBotAgent instance with Home Assistant capabilities
+    """
+    tools = base_tools or []
+    
+    # Create Home Assistant MCP toolset
+    ha_toolset = create_home_assistant_toolset()
+    if ha_toolset:
+        tools.append(ha_toolset)
+        logger.info("Added Home Assistant MCP toolset to agent tools")
+    
+    # Create the agent using the provided factory function
+    agent = agent_factory(tools=tools)
+    
+    return agent
 ```
 
 ## MCP Testing and Utility Functions
@@ -184,9 +218,9 @@ from typing import Optional
 from dotenv import load_dotenv
 
 from radbot.agent.agent import AgentFactory, create_runner
-from radbot.tools.basic_tools import get_current_time, get_weather
-from radbot.tools.mcp_tools import create_home_assistant_toolset
-from radbot.tools.mcp_utils import test_home_assistant_connection
+from radbot.tools.basic.basic_tools import get_current_time, get_weather
+from radbot.tools.mcp.mcp_tools import create_home_assistant_toolset
+from radbot.tools.mcp.mcp_utils import test_home_assistant_connection
 
 # Set up logging
 logging.basicConfig(
@@ -226,7 +260,7 @@ def setup_agent():
 
 def main():
     """Main CLI entry point."""
-    print("radbot CLI")
+    print("RadBot CLI")
     
     # Check Home Assistant MCP status
     ha_status = "Not configured"
@@ -242,7 +276,7 @@ def main():
     print(f"Home Assistant MCP: {ha_status}")
     print("Type 'exit' to quit")
     
-    # Set up agent (stub for now)
+    # Set up agent
     runner = setup_agent()
     
     if not runner:
@@ -259,15 +293,10 @@ def main():
         
         print("\nAgent: Processing your request...")
         
-        # In the actual implementation, we'd run the agent with the runner:
-        """
-        for event in runner.run(message=user_input, session_id=session_id):
-            if event.message and event.message.content:
+        # Run the agent with the runner
+        for event in runner.run(user_id="cli_user", session_id=session_id, new_message=user_input):
+            if hasattr(event, "message") and hasattr(event.message, "content"):
                 print(f"\nAgent: {event.message.content}")
-        """
-        
-        # For now, just show a stub response
-        print("\nAgent: This is a stub response. The actual agent would process your query here.")
 ```
 
 ## Home Assistant MCP Server Configuration
@@ -286,7 +315,7 @@ Detailed instructions for setting up the Home Assistant MCP Server:
 2. **Generate Long-Lived Access Token**:
    - Navigate to your profile page (click your username in the bottom left)
    - Scroll down to "Long-Lived Access Tokens"
-   - Create a new token with a descriptive name (e.g., "radbot Agent")
+   - Create a new token with a descriptive name (e.g., "RadBot Agent")
    - Copy the token immediately (it's only shown once)
 
 3. **Configure Environment Variables**:

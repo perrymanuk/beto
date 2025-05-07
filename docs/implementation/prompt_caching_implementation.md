@@ -1,5 +1,8 @@
 # Prompt Caching System
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document outlines the implementation of a prompt caching system for the Radbot agent framework to optimize performance, reduce costs, and improve scalability.
 
 ## Current Issues

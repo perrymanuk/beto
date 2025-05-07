@@ -1,5 +1,8 @@
 # Agent Configuration System
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document details the configuration system for the radbot agent framework, focusing on prompt management, model selection, and configuration loading.
 
 ## Configuration System Design

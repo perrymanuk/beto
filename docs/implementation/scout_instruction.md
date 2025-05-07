@@ -1,5 +1,8 @@
 # Scout Agent Instruction Implementation
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document details the implementation of using the custom `scout.md` prompt for the "scout" subagent in RadBot.
 
 ## Overview

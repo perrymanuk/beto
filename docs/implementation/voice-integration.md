@@ -1,4 +1,7 @@
 Design Document: Integrating Native ADK Streaming into Radbot1. Introduction1.1. PurposeThis document outlines the design and implementation steps required to integrate native streaming capabilities, provided by the Google Agent Development Kit (ADK) version 0.4.0, into the existing radbot agent (http://github.com/perrymanuk/radbot). The goal is to enable real-time, bidirectional voice and potentially video interactions with radbot.1.2. ScopeThe scope of this document includes:
+
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
 Identifying necessary code modifications within the radbot agent structure.
 Configuring the environment for ADK streaming using Google AI Studio or Google Cloud Vertex AI.
 Leveraging ADK's built-in tools (adk web) for testing streaming functionality.

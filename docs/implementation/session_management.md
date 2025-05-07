@@ -1,5 +1,8 @@
 # Session Management
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document explains how session management is implemented in RadBot using the Google Agent Development Kit (ADK).
 
 ## Overview

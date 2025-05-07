@@ -42,6 +42,7 @@ All main modules are implemented and integrated. The agent consolidation has bee
 - [x] Consolidated agent implementation
 - [x] Fixed agent transfer between scout and main agent
 - [x] Fixed MCP fileserver issues
+- [x] Documented agent consolidation in core implementation
 
 ## 📋 Pending Tasks
 
@@ -58,7 +59,7 @@ All main modules are implemented and integrated. The agent consolidation has bee
 - [ ] Create unit tests for sequential thinking
 - [ ] Create unit tests for calendar components
 - [ ] Create integration tests for Home Assistant MCP integration
-- [ ] Complete documentation cleanup plan
+- [x] Complete documentation cleanup plan
 
 ### Tool Enhancements
 - [ ] Add additional MCP servers as needed

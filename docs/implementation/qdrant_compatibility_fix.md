@@ -1,5 +1,8 @@
 # Qdrant Compatibility Fix
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 ## Issue
 
 When using `crawl4ai_query` with our vector database implementation, we encountered the following error:

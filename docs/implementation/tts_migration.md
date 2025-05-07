@@ -1,5 +1,8 @@
 # ElevenLabs to Google Cloud TTS Migration
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document describes the migration from ElevenLabs Text-to-Speech to Google Cloud Text-to-Speech in the radbot project.
 
 ## Overview

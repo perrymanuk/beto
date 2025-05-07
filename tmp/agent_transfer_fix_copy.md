@@ -216,7 +216,78 @@ except Exception as e:
 
 This implementation ensures that the transfer_to_agent function is correctly registered with the ADK and can be called with the proper JSON schema, resolving the "Malformed function call" error.
 
-## June 2025 Update: Web Session Handling Fix with ADK 0.4.0 Requirements 
+## June 2025 Update: Agent Tree Registration Fix
+
+After the agent.py consolidation, a new issue was discovered where transfers from the scout agent back to the main agent failed with "ValueError: Agent beto not found in the agent tree". The fix addresses multiple issues in the agent tree registration:
+
+1. Enhanced bidirectional relationship handling:
+   - Added explicit code to set both the parent reference on the scout agent AND add the scout agent to the parent's sub_agents list
+   - Added validation of the bidirectional relationship
+
+2. Enforced consistent agent naming:
+   - Ensured the root agent is always named 'beto' to match the name used in scout agent's transfer call
+   - Added debugging output to verify the agent names in the tree
+
+3. Verified transfer tool availability:
+   - Added checks to ensure both agents have access to the transfer_to_agent tool
+   - Added explicit tool addition for both agents if the tool is missing
+
+```python
+# CRITICAL FIX: Ensure root agent name is correct for transfers
+if hasattr(agent, 'name') and agent.name != 'beto':
+    logger.warning(f"CRITICAL FIX: Root agent name mismatch: '{agent.name}' should be 'beto' - fixing")
+    agent.name = 'beto'
+    logger.info(f"Set root agent name to 'beto' to match transfer target in scout agent")
+
+# CRITICAL FIX: Verify transfer tools are available
+root_has_transfer_tool = False
+scout_has_transfer_tool = False
+
+# Check root agent transfer tool
+for tool in agent.tools:
+    tool_name = None
+    if hasattr(tool, 'name'):
+        tool_name = tool.name
+    elif hasattr(tool, '__name__'):
+        tool_name = tool.__name__
+    
+    if tool_name == 'transfer_to_agent':
+        root_has_transfer_tool = True
+        break
+
+# Check scout agent transfer tool
+for tool in research_agent.tools:
+    tool_name = None
+    if hasattr(tool, 'name'):
+        tool_name = tool.name
+    elif hasattr(tool, '__name__'):
+        tool_name = tool.__name__
+        
+    if tool_name == 'transfer_to_agent':
+        scout_has_transfer_tool = True
+        break
+        
+logger.info(f"Transfer tool availability - Root: {root_has_transfer_tool}, Scout: {scout_has_transfer_tool}")
+
+# Add transfer tools if missing
+if not root_has_transfer_tool:
+    try:
+        agent.tools.append(transfer_to_agent)
+        logger.info("Added transfer_to_agent tool to root agent tools")
+    except Exception as e:
+        logger.error(f"Failed to add transfer_to_agent to root agent: {e}")
+        
+if not scout_has_transfer_tool:
+    try:
+        research_agent.tools.append(transfer_to_agent)
+        logger.info("Added transfer_to_agent tool to scout agent tools")
+    except Exception as e:
+        logger.error(f"Failed to add transfer_to_agent to scout agent: {e}")
+```
+
+These enhancements ensure that agent transfers work correctly after the agent.py consolidation by maintaining a proper agent tree structure with consistent agent naming and complete bidirectional relationships.
+
+## June 2025 Update: Web Session Handling Fix with ADK 0.4.0 Requirements
 
 After implementing the initial agent tree registration fix, we discovered that ADK 0.4.0 has stricter requirements for agent transfers than previous versions. The transfer_to_agent mechanism in ADK 0.4.0 requires precise agent tree registration with exact name matching and consistent app_name parameters throughout the application. The webserver creates its own SessionRunner which needs to maintain the same agent tree structure and naming consistency.
 
@@ -247,78 +318,43 @@ We implemented comprehensive fixes in both agent.py and session.py:
      4. Transfer tool availability on all agents
      5. Proper tool handler registration
 
-Key code additions for ADK 0.4.0 compatibility:
-
-```python
-# ADK 0.4.0+ - CRITICAL: Runner's app_name must match agent name for transfers
-if hasattr(root_agent, 'name'):
-    app_name_for_runner = root_agent.name  # Use the agent's actual name
-    logger.info(f"Creating runner with app_name='{app_name_for_runner}' (from agent.name)")
-else:
-    app_name_for_runner = "beto"  # Fallback
-    logger.warning(f"Agent has no name attribute, using default app_name='{app_name_for_runner}'")
-    
-# Create the ADK Runner with explicit app_name matching agent's name
-self.runner = Runner(
-    agent=root_agent,
-    app_name=app_name_for_runner,  # CRITICAL: Must match agent.name for transfers
-    session_service=self.session_service
-)
-```
-
-For consistent session management with matching app_name:
-
-```python
-# Use the same app_name as the runner for consistency
-session_app_name = self.runner.app_name if hasattr(self.runner, 'app_name') else "beto"
-
-# Get or create session with consistent app_name
-logger.info(f"Getting/creating session with app_name='{session_app_name}'")
-session = self.session_service.get_session(
-    app_name=session_app_name,
-    user_id=self.user_id,
-    session_id=self.session_id
-)
-```
-
-Enhanced verification method for ADK 0.4.0:
+Key code additions:
 
 ```python
 def _verify_agent_structure(self):
-    """Verify and fix agent tree structure issues for ADK 0.4.0+ compatibility."""
-    logger.info("STARTING COMPREHENSIVE AGENT TREE VERIFICATION")
-    
-    # CRITICAL: Re-verify root agent name - MUST be 'beto'
+    """Verify and fix agent tree structure issues."""
+    # Re-verify root agent name
     if hasattr(root_agent, 'name') and root_agent.name != 'beto':
-        logger.warning(f"ROOT AGENT NAME MISMATCH: '{root_agent.name}' should be 'beto' - fixing")
+        logger.warning(f"Root agent name mismatch in verification: '{root_agent.name}' should be 'beto' - fixing")
         root_agent.name = 'beto'
-        logger.info(f"Set root_agent.name = '{root_agent.name}'")
     
-    # Verify sub-agent registration and maintain bidirectional relationships
+    # Verify sub-agent registration
     if hasattr(root_agent, 'sub_agents') and root_agent.sub_agents:
+        sub_agent_count = len(root_agent.sub_agents)
+        logger.info(f"Verification found {sub_agent_count} sub-agents")
+        
         for i, sa in enumerate(root_agent.sub_agents):
-            # 1. Verify sub-agent name - MUST be 'scout'
+            # Verify sub-agent name
             if hasattr(sa, 'name') and sa.name != 'scout':
-                logger.warning(f"SUB-AGENT NAME MISMATCH: '{sa.name}' should be 'scout' - fixing")
+                logger.warning(f"Sub-agent name mismatch in verification: '{sa.name}' should be 'scout' - fixing")
                 sa.name = 'scout'
-                
-            # 2. Verify bidirectional relationship
-            if hasattr(sa, 'parent'):
-                if sa.parent is not root_agent:
-                    logger.warning(f"SUB-AGENT PARENT MISMATCH: sub-agent[{i}].parent is wrong - fixing")
-                    sa.parent = root_agent
-            else:
-                logger.warning(f"SUB-AGENT MISSING PARENT: sub-agent[{i}] has no parent attribute - adding")
+            
+            # Verify bidirectional relationship
+            if hasattr(sa, 'parent') and sa.parent is not root_agent:
+                logger.warning("Sub-agent parent reference incorrect in verification - fixing")
+                sa.parent = root_agent
+            elif not hasattr(sa, 'parent'):
+                logger.warning("Sub-agent missing parent reference in verification - adding")
                 try:
                     sa.parent = root_agent
                 except Exception as e:
                     logger.error(f"Failed to add parent reference: {e}")
     
-    # Add transfer tools if missing
-    try:
-        from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
-        
-        # Check both agents for transfer tool
+    # Verify tools on both agents
+    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+    
+    # Check root agent tools
+    if hasattr(root_agent, 'tools') and root_agent.tools:
         has_root_transfer = False
         for tool in root_agent.tools:
             tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
@@ -327,73 +363,16 @@ def _verify_agent_structure(self):
                 break
         
         if not has_root_transfer:
-            root_agent.tools.append(transfer_to_agent)
-            logger.info("Added transfer_to_agent tool to root_agent")
-    except Exception as e:
-        logger.error(f"Failed to add transfer tool: {e}")
-    
-    # Register transfer handlers
-    try:
-        from google.adk.events import QueryResponse
-        from google.protobuf.json_format import MessageToDict
-        
-        if hasattr(root_agent, 'register_tool_handler'):
-            root_agent.register_tool_handler(
-                "transfer_to_agent",
-                lambda params: MessageToDict(QueryResponse(
-                    transfer_to_agent_response={
-                        "target_app_name": params["agent_name"],
-                        "message": params.get("message", ""),
-                    }
-                )),
-            )
-            logger.info("Registered transfer_to_agent handler with root_agent")
-    except Exception as e:
-        logger.error(f"Failed to register transfer tool handlers: {e}")
+            logger.warning("Root agent missing transfer_to_agent tool in verification - adding")
+            try:
+                root_agent.tools.append(transfer_to_agent)
+            except Exception as e:
+                logger.error(f"Failed to add transfer tool: {e}")
 ```
 
-This verification is called at multiple critical points in the session lifecycle:
+This verification is called at critical points in the session lifecycle:
 - During SessionRunner initialization
 - Before processing each message
 - Before and after session resets
 
-The combined fixes in agent.py and session.py ensure that the agent tree structure remains consistent throughout the application lifecycle, allowing agent transfers to work correctly between agents in ADK 0.4.0.
-
-## July 2025 Update: ResearchAgent/Scout Factory Parameter Fix
-
-After implementing all the previous fixes, we discovered a new issue where the research agent (scout) was not found in the agent tree during transfers. The error was:
-
-```
-ValueError: Agent scout not found in the agent tree.
-```
-
-The root cause was that the `create_research_agent` function in `factory.py` was being called with an `app_name` parameter, but the function did not accept this parameter:
-
-```python
-# In agent.py - the call had an app_name parameter
-research_agent = create_research_agent(
-    name="scout",
-    model=model_name,
-    tools=research_tools,
-    as_subagent=False, 
-    app_name="beto"  # This parameter was causing the issue
-)
-
-# But the function in factory.py didn't accept app_name:
-def create_research_agent(
-    name: str = "technical_research_agent",
-    model: Optional[str] = None,
-    custom_instruction: Optional[str] = None,
-    tools: Optional[List[Any]] = None,
-    as_subagent: bool = True
-) -> Union[ResearchAgent, Any]:
-    # No app_name parameter here
-```
-
-We fixed this by adding the `app_name` parameter to:
-
-1. The `create_research_agent` function in `factory.py`
-2. The `ResearchAgent` class `__init__` method
-3. The `LlmAgent` creation inside the `ResearchAgent` class
-
-This ensures that the app_name is properly passed through all layers down to the ADK agent, allowing it to be correctly registered in the agent tree.
+The combined fixes in agent.py and session.py ensure that the agent tree structure remains consistent throughout the application lifecycle, allowing agent transfers to work correctly between the main agent and scout agent.

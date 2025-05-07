@@ -1,5 +1,8 @@
 # Core Dependencies Installation and Configuration
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document covers the installation and configuration of the core dependencies required for the radbot agent framework.
 
 ## ADK Installation and Setup

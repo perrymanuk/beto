@@ -1,5 +1,8 @@
 # Basic Tools Implementation
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document details the implementation of basic tools for the radbot agent framework, specifically the time and weather tools.
 
 ## Tool Design Principles

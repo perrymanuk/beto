@@ -1,31 +1,36 @@
 # Agent Configuration Integration
 
-This document details the integration between the radbot agent implementation and the configuration system, focusing on dynamic instruction loading, model selection, and flexible agent creation.
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
+This document details the integration between the RadBot agent implementation and the configuration system, focusing on dynamic instruction loading, model selection, and flexible agent creation.
 
 ## Overview
 
-The integration of the ConfigManager with the radbotAgent enables:
+The integration of the ConfigManager with the RadBotAgent enables:
 
 1. Loading agent instructions dynamically from files
 2. Selecting appropriate models based on agent type and environment settings
 3. Creating hierarchical agent structures with consistent configuration
 4. Supporting structured input/output using schemas
 5. Flexible overrides of default configurations
+6. Centralized configuration management
+7. Environment-based configuration 
 
 ## Implementation Changes
 
-### radbotAgent Class
+### RadBotAgent Class
 
-The radbotAgent class was updated to work with the ConfigManager:
+The RadBotAgent class was updated to work with the ConfigManager:
 
 ```python
-class radbotAgent:
+class RadBotAgent:
     def __init__(
         self,
         session_service: Optional[SessionService] = None,
         tools: Optional[List[Any]] = None,
         model: Optional[str] = None,
-        name: str = "main_coordinator",
+        name: str = "beto",
         instruction: Optional[str] = None,
         instruction_name: Optional[str] = "main_agent",
         config: Optional[ConfigManager] = None
@@ -58,7 +63,7 @@ The AgentFactory was enhanced to leverage the configuration system:
 class AgentFactory:
     @staticmethod
     def create_root_agent(
-        name: str = "main_coordinator",
+        name: str = "beto",
         model: Optional[str] = None,
         tools: Optional[List] = None,
         instruction_name: str = "main_agent",
@@ -119,11 +124,11 @@ def create_agent(
     tools: Optional[List[Any]] = None,
     model: Optional[str] = None,
     instruction_name: str = "main_agent",
-    name: str = "main_coordinator",
+    name: str = "beto",
     config: Optional[ConfigManager] = None
-) -> radbotAgent:
+) -> RadBotAgent:
     # Create the agent with all the specified parameters
-    return radbotAgent(
+    return RadBotAgent(
         session_service=session_service,
         tools=tools,
         model=model,
@@ -132,6 +137,14 @@ def create_agent(
         config=config
     )
 ```
+
+### Dynamic Configuration
+
+The agent now supports updating its configuration at runtime:
+
+- `update_instruction(instruction_name)` - Changes the agent's instruction using a named file
+- `update_model(new_model)` - Changes the model being used by the agent
+- `get_configuration()` - Returns a dict with the current configuration, including config details
 
 ## Configuration Pattern
 
@@ -168,7 +181,7 @@ The integration implements robust error handling for configuration loading:
 
 ```python
 from radbot.agent.agent import create_agent
-from radbot.tools.basic_tools import get_current_time, get_weather
+from radbot.tools.basic.basic_tools import get_current_time, get_weather
 
 # Create main agent with default configuration
 agent = create_agent(
@@ -184,7 +197,7 @@ response = agent.process_message(user_id="user123", message="What's the weather 
 
 ```python
 from radbot.agent.agent import AgentFactory
-from radbot.tools.memory_tools import search_past_conversations
+from radbot.tools.memory import search_past_conversations
 
 # Create memory sub-agent
 memory_agent = AgentFactory.create_sub_agent(
@@ -216,6 +229,26 @@ agent = create_agent(
 )
 ```
 
+### Updating Agent Configuration
+
+```python
+# Update agent to use a different instruction
+agent.update_instruction("customer_support_agent")
+
+# Switch to a different model
+agent.update_model("gemini-2.0-flash")
+```
+
+## Testing
+
+The integration is tested in `test_agent_config_integration.py` which validates:
+
+1. Agent initialization with ConfigManager
+2. Loading of models and instructions
+3. Fallback behavior for missing files
+4. Factory methods using the configuration
+5. Sub-agent configuration
+
 ## Benefits of the Integration
 
 The integration of the agent system with ConfigManager provides several benefits:
@@ -227,11 +260,22 @@ The integration of the agent system with ConfigManager provides several benefits
 5. **Consistency**: Sub-agents and main agents share configuration structure
 6. **Flexibility**: Multiple configuration methods that work together
 
-## Next Steps
+## Best Practices
 
-Following the ConfigManager integration, the next implementation steps are:
+1. Store agent instructions in the designated instructions directory
+2. Use environment variables for model selection in different environments
+3. Provide meaningful instruction file names
+4. Consider creating specialized ConfigManager instances for different components
+5. Access model configuration through the ConfigManager rather than hardcoding values
 
-1. Complete the memory system with Qdrant
-2. Create memory-specific tools that integrate with the configured agents
-3. Set up MCP integration for Home Assistant
-4. Implement advanced context management
+## Future Improvements
+
+1. Support for instruction versioning
+2. Dynamic reloading of instructions without restarting the agent
+3. Additional configuration parameters for agent generation
+4. Configuration validation and schema checking
+5. Extended environment variable support
+6. Complete the memory system with Qdrant
+7. Create memory-specific tools that integrate with the configured agents
+8. Set up MCP integration for Home Assistant
+9. Implement advanced context management

@@ -1,4 +1,7 @@
 Filesystem Access for Python ADK
+
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
 1. Goal
 
 To integrate essential filesystem access capabilities (read, write, edit, copy, delete, list, get info, search) directly into the Python Agent Development Kit (ADK), allowing agents to interact with the local filesystem without requiring external processes or servers.

@@ -1,5 +1,8 @@
 # Design Document: Ripgrep Tool Implementation
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 ## 1. Goal
 
 Implement a new tool for the Radbot agent that leverages the `ripgrep` command-line utility to perform fast and efficient searches of the filesystem. This tool will allow the agent to search for specific patterns within files, optionally filtering by file type, excluding directories, and controlling the amount of context surrounding matches.

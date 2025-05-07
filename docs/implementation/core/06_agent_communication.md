@@ -1,5 +1,8 @@
 # Inter-Agent Communication Strategy
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document details the implementation of communication strategies between agents within the radbot framework.
 
 ## Communication Architecture Overview

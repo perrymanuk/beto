@@ -1,5 +1,8 @@
 # Crawl4AI Integration
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 ## Overview
 
 This document covers the complete Crawl4AI integration for the RadBot framework, providing a comprehensive web crawling, content extraction, and knowledge retrieval capability using vector search.

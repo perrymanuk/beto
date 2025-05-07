@@ -1,5 +1,8 @@
 # MCP Integration Fixes
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document consolidates the various fixes implemented for Model Context Protocol (MCP) integration in the RadBot framework.
 
 ## Overview

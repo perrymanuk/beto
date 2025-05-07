@@ -1,5 +1,8 @@
 # Context Management Optimization
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document outlines the implementation of context management optimization in the radbot agent framework to address issues of excessive context nesting, redundant information, and inefficient token usage.
 
 ## Current Issues

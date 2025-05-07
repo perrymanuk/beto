@@ -1,5 +1,8 @@
 # Vector Search with Crawl4AI Integration
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document provides implementation details for the integration between Crawl4AI web crawling and Qdrant vector database for semantic search capabilities in radbot.
 
 ## Overview

@@ -1,5 +1,8 @@
 # Tavily Web Search Integration Fix Guide
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document describes the issues with the Tavily web search integration in radbot and how they were fixed.
 
 ## Issues

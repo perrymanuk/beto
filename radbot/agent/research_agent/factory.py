@@ -24,7 +24,8 @@ def create_research_agent(
     model: Optional[str] = None,
     custom_instruction: Optional[str] = None,
     tools: Optional[List[Any]] = None,
-    as_subagent: bool = True
+    as_subagent: bool = True,
+    app_name: str = "beto"
 ) -> Union[ResearchAgent, Any]:
     """
     Create a research agent with the specified configuration.
@@ -35,6 +36,7 @@ def create_research_agent(
         custom_instruction: Optional custom instruction to override the default
         tools: List of tools to provide to the agent
         as_subagent: Whether to return the ResearchAgent or the underlying ADK agent
+        app_name: Application name for the agent, should match the parent agent name for ADK 0.4.0+ agent transfers
         
     Returns:
         Union[ResearchAgent, Any]: The created agent instance
@@ -62,12 +64,13 @@ def create_research_agent(
         logger.warning("No tools provided to research agent")
     
     # Create the research agent with explicit name logging
-    logger.info(f"EXPLICIT NAME ASSIGNMENT: Creating research agent with name='{name}'")
+    logger.info(f"EXPLICIT NAME ASSIGNMENT: Creating research agent with name='{name}', app_name='{app_name}'")
     research_agent = ResearchAgent(
         name=name,
         model=model,
         instruction=custom_instruction,  # Will use default if None
-        tools=tools
+        tools=tools,
+        app_name=app_name  # CRITICAL for ADK 0.4.0+ transfers
     )
     
     logger.info(f"Successfully created research agent: {name}")
@@ -76,4 +79,16 @@ def create_research_agent(
     if as_subagent:
         return research_agent
     else:
-        return research_agent.get_adk_agent()
+        # Get the ADK agent but ensure name is preserved correctly for agent tree registry
+        adk_agent = research_agent.get_adk_agent()
+        
+        # CRITICAL: Make 100% sure the agent name is set correctly for agent transfers in ADK 0.4.0
+        if hasattr(adk_agent, 'name') and adk_agent.name != name:
+            logger.warning(f"ADK Agent name mismatch: '{adk_agent.name}' not '{name}' - fixing")
+            adk_agent.name = name
+            logger.info(f"Fixed ADK agent name to '{adk_agent.name}'")
+        
+        # Log this critical value for debugging
+        logger.info(f"Returning ADK agent with name='{getattr(adk_agent, 'name', 'unknown')}'")
+        
+        return adk_agent

@@ -1,5 +1,8 @@
 # Calendar ID Configuration for Service Account
 
+<!-- Version: 0.4.0 | Last Updated: 2025-05-07 -->
+
+
 This document explains how to configure the calendar ID to be used with the service account in RadBot.
 
 ## Overview
