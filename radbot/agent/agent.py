@@ -26,8 +26,12 @@ SessionService = InMemorySessionService
 # Load environment variables
 load_dotenv()
 
+# Import our configuration modules
 from radbot.config import config_manager
 from radbot.config.settings import ConfigManager
+
+# Import our ADK configuration setup to handle Vertex AI settings
+from radbot.config.adk_config import setup_vertex_environment
 
 # Fallback instruction if configuration loading fails
 FALLBACK_INSTRUCTION = """

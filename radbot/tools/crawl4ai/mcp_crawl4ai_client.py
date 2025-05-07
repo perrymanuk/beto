@@ -16,7 +16,6 @@ import atexit
 from typing import Dict, Any, List, Optional, Tuple
 from contextlib import AsyncExitStack
 
-from dotenv import load_dotenv
 import google.adk.tools as adk_tools
 from google.adk.tools import FunctionTool
 try:
@@ -24,6 +23,8 @@ try:
     import google.adk.types as adk_types
 except ImportError:
     adk_types = None
+
+from radbot.config.config_loader import config_loader
 
 # Import our own modules
 from .utils import get_crawl4ai_config, run_async_safely
@@ -38,9 +39,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
 
 # Global variables for thread management
 _thread_local = threading.local()
@@ -429,6 +427,14 @@ def create_crawl4ai_enabled_agent(agent_factory, base_tools=None, **kwargs):
     try:
         # Start with base tools or empty list
         tools = list(base_tools or [])
+        
+        # Check if Crawl4AI is enabled in configuration
+        crawl4ai_config = config_loader.get_integrations_config().get("crawl4ai", {})
+        enabled = crawl4ai_config.get("enabled", False)
+        
+        if not enabled:
+            logger.info("Crawl4AI integration is disabled in configuration. Skipping tool creation.")
+            return agent_factory(tools=tools, **kwargs)
         
         # Create Crawl4AI tools
         crawl4ai_tools = create_crawl4ai_toolset()

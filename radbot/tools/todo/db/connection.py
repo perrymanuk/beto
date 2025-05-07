@@ -14,22 +14,29 @@ import uuid
 from contextlib import contextmanager
 from typing import Generator
 
+# Import configuration
+from radbot.config import config_loader
+
 # Setup logging
 logger = logging.getLogger(__name__)
 
 # --- Connection Pool Setup ---
 
-# Load database configuration from environment variables
-DB_NAME = os.getenv("POSTGRES_DB")
-DB_USER = os.getenv("POSTGRES_USER")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
-DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+# Get database configuration from config.yaml
+database_config = config_loader.get_config().get("database", {})
+
+# Load from config.yaml or fall back to environment variables
+DB_NAME = database_config.get("db_name") or os.getenv("POSTGRES_DB")
+DB_USER = database_config.get("user") or os.getenv("POSTGRES_USER")
+DB_PASSWORD = database_config.get("password") or os.getenv("POSTGRES_PASSWORD")
+DB_HOST = database_config.get("host") or os.getenv("POSTGRES_HOST", "localhost")
+DB_PORT = database_config.get("port") or os.getenv("POSTGRES_PORT", "5432")
 
 # Basic validation
 if not all([DB_NAME, DB_USER, DB_PASSWORD]):
-    logger.error("Database credentials (POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD) must be set.")
-    raise ValueError("Database credentials (POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD) must be set.")
+    error_msg = "Database credentials (database.db_name, database.user, database.password) must be set in config.yaml or as environment variables (POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)"
+    logger.error(error_msg)
+    raise ValueError(error_msg)
 
 # Register UUID adapter for psycopg2
 psycopg2.extensions.register_adapter(uuid.UUID, lambda u: psycopg2.extensions.adapt(str(u)))
@@ -50,6 +57,7 @@ try:
         port=DB_PORT
     )
     logger.info(f"Database connection pool initialized (Min: {MIN_CONN}, Max: {MAX_CONN})")
+    logger.info(f"Connected to PostgreSQL database '{DB_NAME}' at {DB_HOST}:{DB_PORT}")
 except psycopg2.OperationalError as e:
     logger.error(f"FATAL: Could not connect to database: {e}")
     # Handle fatal error appropriately - maybe exit or raise

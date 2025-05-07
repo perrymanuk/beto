@@ -32,6 +32,7 @@ All main modules are implemented and integrated. The agent consolidation has bee
 - [x] PostgreSQL Todo List
 - [x] Scout Agent (research sub-agent)
 - [x] Sequential Thinking
+- [x] ADK Built-in Tools Integration (Google Search, Code Execution)
 
 ## 🛠️ Technical Fixes & Updates
 
@@ -64,7 +65,9 @@ All main modules are implemented and integrated. The agent consolidation has bee
 - [x] Complete documentation cleanup plan
 
 ### Tool Enhancements
-- [ ] Add additional MCP servers as needed
+- [x] Add YAML configuration for MCP servers
+- [x] Create MCP client factory for dynamic server configuration
+- [x] Complete YAML configuration system implementation
 - [ ] Create additional command-specific argument validation rules
 - [ ] Integrate Shell command execution with agent factories
 
@@ -85,3 +88,4 @@ All main modules are implemented and integrated. The agent consolidation has bee
 - [x] Crawl4AI Documentation
 - [x] Complete Documentation Cleanup (merge related docs, organize structure)
 - [x] ADK 0.4.0 Agent Transfer Guide
+- [x] ADK Built-in Tools Integration Documentation

@@ -1,0 +1,236 @@
+# Radbot Configuration Example
+# -------------------------
+#
+# This is an example configuration file for radbot.
+# Copy this file to config.yaml in your project root or ~/.config/radbot/
+# and customize according to your needs.
+
+# Core agent configuration
+agent:
+  # Primary model for main agent
+  main_model: "gemini-2.5-pro"
+  
+  # Model for simpler sub-agents
+  sub_agent_model: "gemini-2.0-flash"
+  
+  # Whether to use Vertex AI for model API access
+  use_vertex_ai: false
+  
+  # Vertex AI project ID (required if use_vertex_ai is true)
+  vertex_project: null
+  
+  # Vertex AI location (if not specified, defaults to us-central1)
+  vertex_location: "us-central1"
+  
+  # Directory containing instruction prompts
+  instruction_dir: "./config/instructions"
+  
+  # Directory containing JSON schemas
+  schema_dir: "./config/schemas"
+
+# Cache system configuration
+cache:
+  # Enable/disable caching
+  enabled: true
+  
+  # TTL for cached entries in seconds
+  ttl: 3600
+  
+  # Maximum entries in session cache
+  max_size: 1000
+  
+  # Only cache eligible requests
+  selective: true
+  
+  # Minimum tokens in response to cache
+  min_tokens: 50
+  
+  # Redis connection URL for global cache (null for in-memory only)
+  redis_url: null
+
+# API keys for various services
+api_keys:
+  # API key for Tavily web search service
+  tavily: "${TAVILY_API_KEY}"
+  
+  # API key for Google APIs
+  google: "${GOOGLE_API_KEY}"
+
+# Database configuration settings
+database:
+  # Full database URI for connecting to PostgreSQL
+  # uri: "postgresql://user:password@localhost:5432/dbname"
+  
+  # PostgreSQL host
+  host: "localhost"
+  
+  # PostgreSQL port
+  port: 5432
+  
+  # PostgreSQL username
+  user: "${POSTGRES_USER}"
+  
+  # PostgreSQL password
+  password: "${POSTGRES_PASSWORD}"
+  
+  # PostgreSQL database name
+  db_name: "${POSTGRES_DB}"
+  
+  # Port for the Task API
+  api_port: 8001
+
+# Vector database configuration for Qdrant
+vector_db:
+  # Qdrant server URL
+  url: "${QDRANT_URL}"
+  
+  # Qdrant API key
+  api_key: "${QDRANT_API_KEY}"
+  
+  # Qdrant host (used if URL not provided)
+  host: "localhost"
+  
+  # Qdrant port (used if URL not provided)
+  port: 6333
+  
+  # Qdrant collection name for radbot memories
+  collection: "radbot_memories"
+
+# External service integrations
+integrations:
+  # Home Assistant integration settings
+  home_assistant:
+    # Enable/disable Home Assistant integration
+    enabled: true
+    
+    # Home Assistant URL
+    url: "https://your-ha-instance.local:8123"
+    
+    # Home Assistant authentication token
+    # Use environment variable reference for sensitive data
+    token: "${HA_TOKEN}"
+    
+    # Home Assistant MCP SSE URL
+    mcp_sse_url: "${HA_MCP_SSE_URL}"
+
+  # Google Calendar integration settings
+  calendar:
+    # Enable/disable Google Calendar integration
+    enabled: true
+    
+    # Path to Google Calendar service account credentials file
+    service_account_file: "./radbot/tools/calendar/credentials/service-account.json"
+    
+    # Alternative: JSON string with service account credentials
+    # service_account_json: "${GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON}"
+    
+    # Calendar ID to use
+    calendar_id: "primary"
+    
+    # Default timezone for calendar operations
+    timezone: "UTC"
+    
+    # Email to impersonate for domain-wide delegation
+    impersonation_email: "${GOOGLE_IMPERSONATION_EMAIL}"
+
+  # Crawl4AI integration settings
+  crawl4ai:
+    # Enable/disable Crawl4AI integration
+    enabled: true
+    
+    # Crawl4AI API URL
+    api_url: "http://localhost:11235"
+    
+    # Crawl4AI API token
+    api_token: "${CRAWL4AI_API_TOKEN}"
+    
+    # Collection name for Crawl4AI vector storage
+    collection: "crawl4ai_docs"
+
+  # Filesystem access settings
+  filesystem:
+    # Root directory for filesystem access
+    root_dir: "${HOME}"
+    
+    # Allow write operations
+    allow_write: false
+    
+    # Allow delete operations
+    allow_delete: false
+
+  # Model Context Protocol (MCP) integration settings
+  mcp:
+    # List of MCP server configurations
+    servers:
+      # Crawl4AI MCP Server
+      - id: "crawl4ai"
+        name: "Crawl4AI Server"
+        enabled: true
+        transport: "sse"
+        url: "http://localhost:11235/mcp/sse"
+        auth_token: "${CRAWL4AI_TOKEN}"
+        timeout: 30
+        retry:
+          max_attempts: 3
+          backoff_factor: 0.5
+        tags:
+          - "web"
+          - "search"
+      
+      # Home Assistant MCP Server
+      - id: "home_assistant"
+        name: "Home Assistant Server"
+        enabled: true
+        transport: "sse"
+        url: "${HA_MCP_SSE_URL}"
+        auth_token: "${HA_TOKEN}"
+        tags:
+          - "home"
+          - "automation"
+      
+      # FireCrawl MCP Server
+      - id: "firecrawl"
+        name: "FireCrawl Server"
+        enabled: false
+        transport: "sse"
+        url: "http://localhost:11236/mcp/sse"
+        auth_token: "${FIRECRAWL_TOKEN}"
+        tags:
+          - "web"
+          - "search"
+      
+      # Example of WebSocket MCP Server with basic auth
+      - id: "custom_mcp"
+        name: "Custom MCP Server"
+        enabled: false
+        transport: "websocket"
+        url: "ws://localhost:8765/ws"
+        auth_type: "basic"
+        username: "${MCP_USERNAME}"
+        password: "${MCP_PASSWORD}"
+        headers:
+          X-Custom-Header: "custom-value"
+        tags:
+          - "custom"
+
+# Web interface configuration
+web:
+  # Port for the web interface
+  port: 8000
+  
+  # Host for the web interface
+  host: "0.0.0.0"
+  
+  # Enable debug mode
+  debug: false
+
+# Logging configuration
+logging:
+  # Logging level
+  level: "INFO"
+  
+  # Logging format string
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Log file path (null for console only)
+  file: null

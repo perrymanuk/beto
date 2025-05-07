@@ -1,21 +1,20 @@
 """
-MCP integration tools for connecting to Home Assistant.
+MCP integration tools for connecting to various servers.
 
-This module provides utilities for connecting to Home Assistant via the Model Context Protocol (MCP).
+This module provides utilities for connecting to external services via the Model Context Protocol (MCP).
 """
 
 import os
 import logging
 import asyncio
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 from contextlib import AsyncExitStack
 
-from dotenv import load_dotenv
 from google.adk.tools.mcp_tool import MCPToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import SseServerParams
 
-# Load environment variables
-load_dotenv()
+from radbot.config.config_loader import config_loader
+from radbot.tools.mcp.mcp_client_factory import MCPClientFactory, MCPClientError
 
 logger = logging.getLogger(__name__)
 
@@ -37,59 +36,176 @@ def get_available_mcp_tools() -> List[Any]:
     Get a list of all available MCP tools.
     
     This function returns a consolidated list of all available MCP tools
-    including Home Assistant, FileServer, and other MCP integrations.
+    including Home Assistant, FileServer, Crawl4AI, and other MCP integrations.
     
     Returns:
         List of available MCP tools
     """
     tools = []
     
-    # Try to get Home Assistant tools
+    # Get all tools from configured MCP servers
     try:
-        ha_tools = create_home_assistant_toolset()
-        if ha_tools:
-            if isinstance(ha_tools, list):
-                tools.extend(ha_tools)
-                logger.info(f"Added {len(ha_tools)} Home Assistant MCP tools")
-            else:
-                tools.append(ha_tools)
-                logger.info("Added Home Assistant MCP toolset")
+        # Get MCP server tools using ConfigLoader and MCPClientFactory
+        mcp_tools = create_mcp_tools()
+        if mcp_tools:
+            tools.extend(mcp_tools)
+            logger.info(f"Added {len(mcp_tools)} tools from MCP servers configured in config.yaml")
     except Exception as e:
-        logger.warning(f"Failed to get Home Assistant MCP tools: {str(e)}")
+        logger.warning(f"Failed to get tools from MCP servers in config.yaml: {str(e)}")
     
-    # Try to get FileServer tools if available
-    try:
-        # Import here to avoid circular imports
-        from radbot.tools.mcp.mcp_fileserver_client import create_fileserver_toolset
-        fs_tools = create_fileserver_toolset()
-        if fs_tools:
-            if isinstance(fs_tools, list):
-                tools.extend(fs_tools)
-                logger.info(f"Added {len(fs_tools)} FileServer MCP tools")
-            else:
-                tools.append(fs_tools)
-                logger.info("Added FileServer MCP toolset")
-    except Exception as e:
-        logger.warning(f"Failed to get FileServer MCP tools: {str(e)}")
+    # If no tools were added from config, try the legacy approach
+    if not tools:
+        logger.info("No MCP tools found from config.yaml, falling back to legacy approach")
         
-    # Try to get Crawl4AI tools if available
-    try:
-        # Import here to avoid circular imports
-        from radbot.tools.mcp.mcp_crawl4ai_client import create_crawl4ai_toolset
-        crawl4ai_tools = create_crawl4ai_toolset()
-        if crawl4ai_tools:
-            if isinstance(crawl4ai_tools, list):
-                tools.extend(crawl4ai_tools)
-                logger.info(f"Added {len(crawl4ai_tools)} Crawl4AI MCP tools")
-            else:
-                tools.append(crawl4ai_tools)
-                logger.info("Added Crawl4AI MCP toolset")
-    except Exception as e:
-        logger.warning(f"Failed to get Crawl4AI MCP tools: {str(e)}")
-    
-    # Add other MCP tools as they become available
+        # Try to get Home Assistant tools
+        try:
+            ha_tools = create_home_assistant_toolset()
+            if ha_tools:
+                if isinstance(ha_tools, list):
+                    tools.extend(ha_tools)
+                    logger.info(f"Added {len(ha_tools)} Home Assistant MCP tools")
+                else:
+                    tools.append(ha_tools)
+                    logger.info("Added Home Assistant MCP toolset")
+        except Exception as e:
+            logger.warning(f"Failed to get Home Assistant MCP tools: {str(e)}")
+        
+        # Try to get FileServer tools if available
+        try:
+            # Import here to avoid circular imports
+            from radbot.tools.mcp.mcp_fileserver_client import create_fileserver_toolset
+            fs_tools = create_fileserver_toolset()
+            if fs_tools:
+                if isinstance(fs_tools, list):
+                    tools.extend(fs_tools)
+                    logger.info(f"Added {len(fs_tools)} FileServer MCP tools")
+                else:
+                    tools.append(fs_tools)
+                    logger.info("Added FileServer MCP toolset")
+        except Exception as e:
+            logger.warning(f"Failed to get FileServer MCP tools: {str(e)}")
+            
+        # Try to get Crawl4AI tools if available
+        try:
+            # Import here to avoid circular imports
+            from radbot.tools.crawl4ai.mcp_crawl4ai_client import create_crawl4ai_toolset
+            crawl4ai_tools = create_crawl4ai_toolset()
+            if crawl4ai_tools:
+                if isinstance(crawl4ai_tools, list):
+                    tools.extend(crawl4ai_tools)
+                    logger.info(f"Added {len(crawl4ai_tools)} Crawl4AI MCP tools")
+                else:
+                    tools.append(crawl4ai_tools)
+                    logger.info("Added Crawl4AI MCP toolset")
+        except Exception as e:
+            logger.warning(f"Failed to get Crawl4AI MCP tools: {str(e)}")
     
     return tools
+
+def create_mcp_tools() -> List[Any]:
+    """
+    Create tools for all enabled MCP servers defined in the configuration.
+    
+    Returns:
+        List of MCP tools created from the configuration
+    """
+    tools = []
+    
+    # Get all enabled MCP servers from configuration
+    servers = config_loader.get_enabled_mcp_servers()
+    
+    if not servers:
+        logger.info("No enabled MCP servers found in configuration")
+        return tools
+    
+    logger.info(f"Found {len(servers)} enabled MCP servers in configuration")
+    
+    # Create tools for each enabled server
+    for server in servers:
+        server_id = server.get("id")
+        server_name = server.get("name", server_id)
+        
+        try:
+            # Get or create the MCP client for this server
+            client = MCPClientFactory.get_client(server_id)
+            
+            # Create tools from the client
+            server_tools = _create_tools_from_client(client, server)
+            
+            if server_tools:
+                logger.info(f"Created {len(server_tools)} tools for MCP server '{server_name}'")
+                tools.extend(server_tools)
+            else:
+                logger.warning(f"No tools created for MCP server '{server_name}'")
+                
+        except MCPClientError as e:
+            logger.warning(f"Failed to create client for MCP server '{server_name}': {e}")
+        except Exception as e:
+            logger.error(f"Error creating tools for MCP server '{server_name}': {e}")
+    
+    return tools
+
+def _create_tools_from_client(client: Any, server_config: Dict[str, Any]) -> List[Any]:
+    """
+    Create tools from an MCP client.
+    
+    Args:
+        client: The MCP client instance
+        server_config: The server configuration dictionary
+        
+    Returns:
+        List of tools created from the client
+    """
+    tools = []
+    server_id = server_config.get("id")
+    
+    try:
+        # Different MCP servers might have different APIs for getting tools
+        # Try common patterns
+        
+        # 1. Check if client has get_tools method
+        if hasattr(client, "get_tools") and callable(client.get_tools):
+            server_tools = client.get_tools()
+            if server_tools:
+                tools.extend(server_tools)
+                return tools
+        
+        # 2. Check if client has a tools attribute that's a list
+        if hasattr(client, "tools") and isinstance(client.tools, list):
+            tools.extend(client.tools)
+            return tools
+            
+        # 3. Check if client has a create_tools method
+        if hasattr(client, "create_tools") and callable(client.create_tools):
+            server_tools = client.create_tools()
+            if server_tools:
+                tools.extend(server_tools)
+                return tools
+        
+        # 4. Check if client is a descriptor class with tools attribute
+        if hasattr(client, "descriptor") and hasattr(client.descriptor, "tools"):
+            tools.extend(client.descriptor.tools)
+            return tools
+        
+        # If we get here, we couldn't find tools through standard methods
+        # Try to look for specific implementations based on server_id
+        
+        if server_id == "crawl4ai":
+            # Handle Crawl4AI special case
+            from radbot.tools.crawl4ai.mcp_crawl4ai_client import create_crawl4ai_toolset
+            crawl4ai_tools = create_crawl4ai_toolset()
+            if crawl4ai_tools:
+                tools.extend(crawl4ai_tools)
+                return tools
+        
+        # Add other special cases as needed
+        
+        logger.warning(f"Could not determine how to get tools from MCP server '{server_id}'")
+        return tools
+        
+    except Exception as e:
+        logger.error(f"Error creating tools from MCP client for '{server_id}': {e}")
+        return tools
 
 async def _create_home_assistant_toolset_async() -> Tuple[List[Any], Optional[AsyncExitStack]]:
     """
@@ -99,18 +215,30 @@ async def _create_home_assistant_toolset_async() -> Tuple[List[Any], Optional[As
         Tuple[List[MCPTool], AsyncExitStack]: The list of tools and exit stack, or ([], None) if configuration fails
     """
     try:
-        # Get connection parameters from environment variables
-        ha_mcp_url = os.getenv("HA_MCP_SSE_URL")
-        ha_auth_token = os.getenv("HA_AUTH_TOKEN")
+        # Get Home Assistant configuration from config.yaml
+        ha_config = config_loader.get_home_assistant_config()
+        
+        # Get connection parameters from configuration or fall back to environment variables
+        ha_mcp_url = ha_config.get("mcp_sse_url")
+        if not ha_mcp_url:
+            # Fall back to environment variable
+            ha_mcp_url = os.getenv("HA_MCP_SSE_URL")
+        
+        ha_auth_token = ha_config.get("token")
+        if not ha_auth_token:
+            # Fall back to environment variable
+            ha_auth_token = os.getenv("HA_AUTH_TOKEN")
         
         if not ha_mcp_url:
             logger.error("Home Assistant MCP URL not found. "
-                        "Please set HA_MCP_SSE_URL environment variable.")
+                        "Please set mcp_sse_url in the Home Assistant configuration section of config.yaml "
+                        "or set HA_MCP_SSE_URL environment variable.")
             return [], None
             
         if not ha_auth_token:
             logger.error("Home Assistant authentication token not found. "
-                        "Please set HA_AUTH_TOKEN environment variable.")
+                        "Please set token in the Home Assistant configuration section of config.yaml "
+                        "or set HA_AUTH_TOKEN environment variable.")
             return [], None
             
         # Normalize URL path - ensure it has the correct format
@@ -420,6 +548,42 @@ def search_home_assistant_entities(search_term: str, domain_filter: Optional[str
             "status": "error"
         }
 
+def create_mcp_enabled_agent(agent_factory: Callable, base_tools: Optional[List[Any]] = None, **kwargs) -> Any:
+    """
+    Create an agent with all MCP tools enabled.
+    
+    This function creates an agent with all MCP tools from config.yaml.
+    
+    Args:
+        agent_factory: Function to create an agent (like create_agent)
+        base_tools: Optional list of base tools to include
+        **kwargs: Additional arguments to pass to agent_factory
+        
+    Returns:
+        Agent: The created agent with MCP tools
+    """
+    try:
+        # Start with base tools or empty list
+        tools = list(base_tools or [])
+        
+        # Create MCP tools
+        mcp_tools = get_available_mcp_tools()
+        
+        if mcp_tools:
+            # Add the tools to our list
+            tools.extend(mcp_tools)
+            logger.info(f"Added {len(mcp_tools)} MCP tools to agent")
+        else:
+            logger.warning("No MCP tools were created")
+            
+        # Create the agent with the tools
+        agent = agent_factory(tools=tools, **kwargs)
+        return agent
+    except Exception as e:
+        logger.error(f"Error creating agent with MCP tools: {str(e)}")
+        # Create agent without MCP tools as fallback
+        return agent_factory(tools=base_tools, **kwargs)
+
 def create_tavily_search_tool(max_results=5, search_depth="advanced", include_answer=True, include_raw_content=True, include_images=False):
     """
     Create a Tavily search tool that can be used by the agent.
@@ -439,11 +603,20 @@ def create_tavily_search_tool(max_results=5, search_depth="advanced", include_an
     if not HAVE_TAVILY:
         logger.error("Tavily search tool requires langchain-community package with TavilySearchResults")
         return None
-        
-    # Check that TAVILY_API_KEY environment variable is set
-    if not os.environ.get("TAVILY_API_KEY"):
-        logger.error("TAVILY_API_KEY environment variable not set. The Tavily search tool will not function correctly.")
+    
+    # Get Tavily API key from config.yaml or environment variable
+    api_key = config_loader.get_config().get("api_keys", {}).get("tavily")
+    if not api_key:
+        # Fall back to environment variable
+        api_key = os.environ.get("TAVILY_API_KEY")
+    
+    if not api_key:
+        logger.error("Tavily API key not found in config.yaml or TAVILY_API_KEY environment variable. "
+                     "The Tavily search tool will not function correctly.")
         # We don't return None here to allow for testing/development without credentials
+    else:
+        # Set the environment variable for the LangChain tool
+        os.environ["TAVILY_API_KEY"] = api_key
     
     try:
         # Instantiate LangChain's Tavily search tool

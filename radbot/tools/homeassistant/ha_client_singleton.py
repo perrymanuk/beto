@@ -7,12 +7,9 @@ This module provides a shared Home Assistant client instance to avoid circular i
 import os
 import logging
 from typing import Optional
-from dotenv import load_dotenv
 
 from radbot.tools.homeassistant.ha_rest_client import HomeAssistantRESTClient
-
-# Load environment variables
-load_dotenv()
+from radbot.config.config_loader import config_loader
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -32,12 +29,21 @@ def get_ha_client() -> Optional[HomeAssistantRESTClient]:
     if _ha_client is not None:
         return _ha_client
         
-    # Get configuration from environment variables
-    ha_url = os.getenv("HA_URL")
-    ha_token = os.getenv("HA_TOKEN")
+    # Get configuration from config.yaml
+    ha_config = config_loader.get_home_assistant_config()
+    
+    # Get connection parameters from configuration or fall back to environment variables
+    ha_url = ha_config.get("url")
+    ha_token = ha_config.get("token")
+    
+    # Fall back to environment variables if not found in config
+    if not ha_url:
+        ha_url = os.getenv("HA_URL")
+    if not ha_token:
+        ha_token = os.getenv("HA_TOKEN")
     
     if not ha_url or not ha_token:
-        logger.warning("HA_URL or HA_TOKEN environment variables not set.")
+        logger.warning("Home Assistant URL or token not found in config.yaml or environment variables.")
         return None
         
     try:
@@ -48,7 +54,7 @@ def get_ha_client() -> Optional[HomeAssistantRESTClient]:
             logger.error("Failed to connect to Home Assistant API.")
             _ha_client = None
         else:
-            logger.info("Successfully connected to Home Assistant API.")
+            logger.info(f"Successfully connected to Home Assistant API at {ha_url}.")
         
         return _ha_client
     except Exception as e:

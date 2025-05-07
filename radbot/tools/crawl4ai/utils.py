@@ -9,7 +9,9 @@ import os
 import logging
 import asyncio
 import concurrent.futures
-from typing import Dict, Any, Callable, Coroutine
+from typing import Dict, Any, Callable, Coroutine, Tuple
+
+from radbot.config.config_loader import config_loader
 
 # Configure logging
 logging.basicConfig(
@@ -108,17 +110,26 @@ def _run_in_new_thread(coro):
         logger.error(f"Failed to create new event loop: {str(e)}")
         return {"success": False, "error": str(e), "message": f"Failed to create event loop: {str(e)}"}
 
-def get_crawl4ai_config():
+def get_crawl4ai_config() -> Tuple[str, str]:
     """
-    Get Crawl4AI configuration from environment variables.
+    Get Crawl4AI configuration from config.yaml or environment variables.
     
     Returns:
         Tuple of (api_url, api_token)
     """
-    # Get environment variables
-    # Default to localhost:11235 which is the standard port for Crawl4AI Docker container
-    api_url = os.getenv("CRAWL4AI_API_URL", "http://localhost:11235")
-    api_token = os.getenv("CRAWL4AI_API_TOKEN", "")  # Default to empty string instead of None
+    # Try to get configuration from config.yaml first
+    crawl4ai_config = config_loader.get_integrations_config().get("crawl4ai", {})
+    
+    # Get values from config or fall back to environment variables
+    api_url = crawl4ai_config.get("api_url")
+    if not api_url:
+        # Fall back to environment variable
+        api_url = os.getenv("CRAWL4AI_API_URL", "http://localhost:11235")
+    
+    api_token = crawl4ai_config.get("api_token")
+    if not api_token:
+        # Fall back to environment variable
+        api_token = os.getenv("CRAWL4AI_API_TOKEN", "")  # Default to empty string instead of None
     
     # Log configuration
     if api_token:

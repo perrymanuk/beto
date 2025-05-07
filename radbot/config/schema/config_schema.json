@@ -1,0 +1,437 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Radbot Configuration Schema",
+  "description": "Schema for validating radbot YAML configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agent"],
+  "properties": {
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Core agent configuration settings",
+      "required": ["main_model"],
+      "properties": {
+        "main_model": {
+          "type": "string",
+          "description": "Primary model for main agent",
+          "default": "gemini-2.5-pro"
+        },
+        "sub_agent_model": {
+          "type": "string",
+          "description": "Model for simpler sub-agents",
+          "default": "gemini-2.0-flash"
+        },
+        "use_vertex_ai": {
+          "type": "boolean",
+          "description": "Whether to use Vertex AI for model API access",
+          "default": false
+        },
+        "vertex_project": {
+          "type": ["string", "null"],
+          "description": "Google Cloud project ID for Vertex AI"
+        },
+        "vertex_location": {
+          "type": ["string", "null"],
+          "description": "Google Cloud location for Vertex AI (e.g., us-central1)",
+          "default": "us-central1"
+        },
+        "service_account_file": {
+          "type": ["string", "null"],
+          "description": "Path to Google Cloud service account JSON file for Vertex AI authentication"
+        },
+        "instruction_dir": {
+          "type": "string",
+          "description": "Directory containing instruction prompts",
+          "default": "./config/instructions"
+        },
+        "schema_dir": {
+          "type": "string",
+          "description": "Directory containing JSON schemas",
+          "default": "./config/schemas"
+        }
+      }
+    },
+    "cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cache system configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable/disable caching",
+          "default": true
+        },
+        "ttl": {
+          "type": "integer",
+          "description": "TTL for cached entries in seconds",
+          "minimum": 0,
+          "default": 3600
+        },
+        "max_size": {
+          "type": "integer",
+          "description": "Maximum entries in session cache",
+          "minimum": 1,
+          "default": 1000
+        },
+        "selective": {
+          "type": "boolean",
+          "description": "Only cache eligible requests",
+          "default": true
+        },
+        "min_tokens": {
+          "type": "integer",
+          "description": "Minimum tokens in response to cache",
+          "minimum": 0,
+          "default": 50
+        },
+        "redis_url": {
+          "type": ["string", "null"],
+          "description": "Redis connection URL for global cache",
+          "default": null
+        }
+      }
+    },
+    "api_keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "API tokens for various services",
+      "properties": {
+        "tavily": {
+          "type": ["string", "null"],
+          "description": "API key for Tavily web search service"
+        },
+        "google": {
+          "type": ["string", "null"],
+          "description": "API key for Google APIs"
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Database configuration settings",
+      "properties": {
+        "uri": {
+          "type": ["string", "null"],
+          "description": "Full database URI for connecting to PostgreSQL"
+        },
+        "host": {
+          "type": "string",
+          "description": "PostgreSQL host",
+          "default": "localhost"
+        },
+        "port": {
+          "type": ["integer", "string"],
+          "description": "PostgreSQL port",
+          "default": 5432
+        },
+        "user": {
+          "type": ["string", "null"],
+          "description": "PostgreSQL username"
+        },
+        "password": {
+          "type": ["string", "null"],
+          "description": "PostgreSQL password"
+        },
+        "db_name": {
+          "type": ["string", "null"],
+          "description": "PostgreSQL database name"
+        },
+        "api_port": {
+          "type": ["integer", "string"],
+          "description": "Port for the Task API",
+          "default": 8001
+        }
+      }
+    },
+    "vector_db": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Vector database configuration for Qdrant",
+      "properties": {
+        "url": {
+          "type": ["string", "null"],
+          "description": "Qdrant server URL"
+        },
+        "api_key": {
+          "type": ["string", "null"],
+          "description": "Qdrant API key"
+        },
+        "host": {
+          "type": "string",
+          "description": "Qdrant host",
+          "default": "localhost"
+        },
+        "port": {
+          "type": ["integer", "string"],
+          "description": "Qdrant port",
+          "default": 6333
+        },
+        "collection": {
+          "type": "string",
+          "description": "Qdrant collection name for radbot memories",
+          "default": "radbot_memories"
+        }
+      }
+    },
+    "integrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "External service integrations",
+      "properties": {
+        "home_assistant": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Home Assistant integration settings",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable/disable Home Assistant integration",
+              "default": false
+            },
+            "url": {
+              "type": ["string", "null"],
+              "description": "Home Assistant URL",
+              "pattern": "^(https?://.*)?$"
+            },
+            "token": {
+              "type": ["string", "null"],
+              "description": "Home Assistant authentication token"
+            },
+            "mcp_sse_url": {
+              "type": ["string", "null"],
+              "description": "Home Assistant MCP SSE URL"
+            }
+          }
+        },
+        "calendar": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Google Calendar integration settings",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable/disable Google Calendar integration",
+              "default": false
+            },
+            "service_account_file": {
+              "type": ["string", "null"],
+              "description": "Path to Google Calendar service account credentials file"
+            },
+            "service_account_json": {
+              "type": ["string", "null"],
+              "description": "JSON string with service account credentials"
+            },
+            "calendar_id": {
+              "type": "string",
+              "description": "Calendar ID to use",
+              "default": "primary"
+            },
+            "timezone": {
+              "type": "string",
+              "description": "Default timezone for calendar operations",
+              "default": "UTC"
+            },
+            "impersonation_email": {
+              "type": ["string", "null"],
+              "description": "Email to impersonate for domain-wide delegation"
+            }
+          }
+        },
+        "crawl4ai": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Crawl4AI integration settings",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable/disable Crawl4AI integration",
+              "default": false
+            },
+            "api_url": {
+              "type": "string",
+              "description": "Crawl4AI API URL",
+              "default": "http://localhost:11235"
+            },
+            "api_token": {
+              "type": ["string", "null"],
+              "description": "Crawl4AI API token"
+            },
+            "collection": {
+              "type": "string",
+              "description": "Collection name for Crawl4AI vector storage",
+              "default": "crawl4ai_docs"
+            }
+          }
+        },
+        "filesystem": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Filesystem access settings",
+          "properties": {
+            "root_dir": {
+              "type": ["string", "null"],
+              "description": "Root directory for filesystem access"
+            },
+            "allow_write": {
+              "type": "boolean",
+              "description": "Allow write operations",
+              "default": false
+            },
+            "allow_delete": {
+              "type": "boolean",
+              "description": "Allow delete operations",
+              "default": false
+            }
+          }
+        },
+        "mcp": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Model Context Protocol (MCP) integration settings",
+          "properties": {
+            "servers": {
+              "type": "array",
+              "description": "List of MCP server configurations",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "name", "url"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Unique identifier for this MCP server",
+                    "pattern": "^[a-z0-9_-]+$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Human-readable name for the MCP server"
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Whether this server is active",
+                    "default": true
+                  },
+                  "transport": {
+                    "type": "string",
+                    "description": "Transport protocol for communication",
+                    "enum": ["sse", "websocket", "http"],
+                    "default": "sse"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "Server endpoint URL",
+                    "pattern": "^(https?://|wss?://).*$"
+                  },
+                  "auth_token": {
+                    "type": ["string", "null"],
+                    "description": "Authentication token for the MCP server"
+                  },
+                  "timeout": {
+                    "type": "integer",
+                    "description": "Connection timeout in seconds",
+                    "minimum": 1,
+                    "default": 30
+                  },
+                  "retry": {
+                    "type": "object",
+                    "description": "Retry configuration for failed connections",
+                    "additionalProperties": false,
+                    "properties": {
+                      "max_attempts": {
+                        "type": "integer",
+                        "description": "Maximum number of retry attempts",
+                        "minimum": 0,
+                        "default": 3
+                      },
+                      "backoff_factor": {
+                        "type": "number",
+                        "description": "Exponential backoff factor",
+                        "minimum": 0,
+                        "default": 0.5
+                      }
+                    }
+                  },
+                  "auth_type": {
+                    "type": "string",
+                    "description": "Authentication type",
+                    "enum": ["token", "basic", "none"],
+                    "default": "token"
+                  },
+                  "username": {
+                    "type": ["string", "null"],
+                    "description": "Username for basic authentication"
+                  },
+                  "password": {
+                    "type": ["string", "null"],
+                    "description": "Password for basic authentication"
+                  },
+                  "headers": {
+                    "type": "object",
+                    "description": "Additional HTTP headers to include in requests",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "description": "Tags for categorizing or grouping MCP servers",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "web": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Web interface configuration",
+      "properties": {
+        "port": {
+          "type": ["integer", "string"],
+          "description": "Port for the web interface",
+          "default": 8000
+        },
+        "host": {
+          "type": "string",
+          "description": "Host for the web interface",
+          "default": "0.0.0.0"
+        },
+        "debug": {
+          "type": "boolean",
+          "description": "Enable debug mode",
+          "default": false
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Logging configuration",
+      "properties": {
+        "level": {
+          "type": "string",
+          "description": "Logging level",
+          "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+          "default": "INFO"
+        },
+        "format": {
+          "type": "string",
+          "description": "Logging format string",
+          "default": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        },
+        "file": {
+          "type": ["string", "null"],
+          "description": "Log file path (null for console only)"
+        }
+      }
+    }
+  }
+}
