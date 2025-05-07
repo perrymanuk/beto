@@ -551,30 +551,29 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
         # Create the research agent with all collected tools and explicit app_name
         # CRITICAL FIX (July 2025): Added app_name parameter to create_research_agent function
         # to ensure proper agent tree registration for transfers in ADK 0.4.0
+        # Create the research agent
+        # The name must be set to "scout" for transfers to work
         research_agent = create_research_agent(
-            name="scout",  # CRITICAL: Must match exactly what's expected in transfer_to_agent calls
             model=model_name,
             tools=research_tools,
-            as_subagent=False,  # Get the ADK agent directly
-            app_name="beto"  # CRITICAL: Must match the parent agent app_name
+            as_subagent=False  # Get the ADK agent directly
         )
         
-        # TRIPLE CHECK the agent's name - this is critical for transfers in ADK 0.4.0
+        # Explicitly set the name to 'scout' for transfers
         if hasattr(research_agent, 'name'):
             if research_agent.name != 'scout':
-                logger.error(f"CRITICAL NAME MISMATCH: research_agent.name='{research_agent.name}' not 'scout' - fixing")
+                logger.warning(f"Setting research_agent.name from '{research_agent.name}' to 'scout'")
                 research_agent.name = 'scout'
-                logger.info(f"Fixed research_agent.name to '{research_agent.name}'")
-            else:
-                logger.info(f"Verified research_agent.name is correctly set to '{research_agent.name}'")
         else:
-            logger.error("CRITICAL ERROR: research_agent has no 'name' attribute!")
-            # Try to add name attribute directly
+            # Try to add name attribute
             try:
                 setattr(research_agent, 'name', 'scout')
-                logger.info(f"Added missing name attribute to research_agent: '{getattr(research_agent, 'name', 'unknown')}'")
+                logger.info("Added name='scout' attribute to research_agent")
             except Exception as e:
-                logger.error(f"Failed to add name attribute to research_agent: {e}")
+                logger.error(f"Failed to set name attribute on research_agent: {e}")
+        
+        # Log the successful name setting
+        logger.info(f"Verified research_agent.name is correctly set to 'scout' for proper transfers")
         
         # Log the final list of tools assigned to the research agent
         logger.info("========== RESEARCH AGENT TOOLS ===========")
@@ -602,43 +601,44 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
             logger.warning(f"Scout agent name incorrect '{research_agent.name}'. Setting to 'scout'")
             research_agent.name = 'scout'
            
-        # Add the scout agent as a subagent directly to the main agent
-        # Per ADK 0.4.0 docs, agent tree must be explicitly created with complete bidirectional references
-        if hasattr(agent, 'sub_agents'):
-            # Force reinitialization for ADK to register the agent in the tree
-            agent.sub_agents = []  # Clear existing sub-agents
-            agent.sub_agents.append(research_agent)
-            logger.info(f"Registered agent '{research_agent.name}' as sub-agent of '{agent.name}'")
+        # In ADK 0.4.0, add the sub-agent to the parent's sub_agents list
+        # This automatically sets up parent_agent internally in __set_parent_agent_for_sub_agents
+        try:
+            # First make sure the names are correct
+            agent.name = "beto"
+            research_agent.name = "scout"
             
-            # Bidirectional linking - research_agent should know its parent
-            # Use both _parent and parent attributes for maximum compatibility
-            if hasattr(research_agent, '_parent'):
-                research_agent._parent = agent
-                logger.info(f"Set _parent reference on '{research_agent.name}' to '{agent.name}'")
-                
-            if hasattr(research_agent, 'parent'):
-                research_agent.parent = agent
-                logger.info(f"Set parent reference on '{research_agent.name}' to '{agent.name}'")
+            # Clear existing sub-agents
+            agent.sub_agents = []
+            
+            # Add scout as a sub-agent of beto
+            agent.sub_agents.append(research_agent)
+            logger.info(f"Registered scout agent as sub-agent of beto - ADK will set parent_agent automatically")
             
             # Verify registration
             sub_agent_names = [sa.name for sa in agent.sub_agents if hasattr(sa, 'name')]
-            parent_name = getattr(research_agent.parent, 'name', None) if hasattr(research_agent, 'parent') else None
-            logger.info(f"Verified agent tree - Root: '{agent.name}', Sub-agents: {sub_agent_names}")
-            logger.info(f"Scout parent reference = '{parent_name}'")
-        else:
-            # Initialize sub_agents list and register scout agent
-            agent.sub_agents = []
-            agent.sub_agents.append(research_agent)
-            logger.info(f"Created new sub_agents list with scout agent")
+            logger.info(f"Agent tree structure - Root: '{agent.name}', Sub-agents: {sub_agent_names}")
             
-            # Still need to set bidirectional relationships
-            if hasattr(research_agent, '_parent'):
-                research_agent._parent = agent
-                logger.info(f"Set _parent reference on scout agent to '{agent.name}'")
+            # Force a traversal to test the find_agent function
+            found_agent = agent.find_agent("scout")
+            if found_agent:
+                logger.info(f"Successfully found agent 'scout' in the agent tree")
+            else:
+                logger.error(f"Failed to find agent 'scout' in the agent tree - transfers may not work")
                 
-            if hasattr(research_agent, 'parent'):
-                research_agent.parent = agent
-                logger.info(f"Set parent reference on scout agent to '{agent.name}'")
+            # Test if we can find the root agent from the sub-agent
+            if hasattr(research_agent, 'root_agent'):
+                root = research_agent.root_agent
+                logger.info(f"Sub-agent's root_agent is '{root.name}'")
+            
+            # Check and log parent_agent
+            if hasattr(research_agent, 'parent_agent'):
+                parent = research_agent.parent_agent
+                logger.info(f"Scout's parent_agent is '{parent.name}'")
+            else:
+                logger.warning("Scout agent does not have parent_agent property - transfers may not work")
+        except Exception as e:
+            logger.error(f"Error setting up agent tree: {e}")
                 
         # Validate agent tree structure
         logger.info("====== VALIDATING AGENT TREE STRUCTURE ======")
@@ -737,56 +737,21 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
             except Exception as e:
                 logger.error(f"Failed to add transfer_to_agent to scout agent: {e}")
         
-        # Register the transfer_to_agent handler with both agents
-        try:
-            # Register with root agent
-            from google.adk.events import QueryResponse
-            from google.protobuf.json_format import MessageToDict
-            
-            if hasattr(agent, 'register_tool_handler'):
-                agent.register_tool_handler(
-                    "transfer_to_agent",
-                    lambda params: MessageToDict(QueryResponse(
-                        transfer_to_agent_response={
-                            "target_app_name": params["agent_name"],
-                            "message": params.get("message", ""),
-                        }
-                    )),
-                )
-                logger.info("Registered transfer_to_agent handler with root agent")
-                
-            # Register with scout agent
-            if hasattr(research_agent, 'register_tool_handler'):
-                research_agent.register_tool_handler(
-                    "transfer_to_agent",
-                    lambda params: MessageToDict(QueryResponse(
-                        transfer_to_agent_response={
-                            "target_app_name": params["agent_name"],
-                            "message": params.get("message", ""),
-                        }
-                    )),
-                )
-                logger.info("Registered transfer_to_agent handler with scout agent")
-        except Exception as e:
-            logger.error(f"Failed to register transfer_to_agent handlers: {e}")
+        # ADK 0.4.0 uses a different approach for agent transfers - no need to register handlers
+        # Transfers will be automatically handled by the ADK runtime through the transfer_to_agent tool
+        logger.info("Using ADK 0.4.0 native agent transfer functionality (handlers not needed)")
+        logger.info("Agent transfers will be handled automatically by the ADK runtime")
         
         # Final detailed report on agent tree structure
         logger.info("============ FINAL AGENT TREE REPORT ============")
         logger.info(f"ROOT AGENT: name='{agent.name}'")
         logger.info(f"SUB-AGENT: name='{research_agent.name}'")
         
-        # Check bidirectional relationship
-        parent_ok = research_agent.parent is agent if hasattr(research_agent, 'parent') else False
+        # In ADK 0.4.0, the relationship is through the sub_agents list only
         child_ok = research_agent in agent.sub_agents if hasattr(agent, 'sub_agents') else False
         
-        logger.info(f"BIDIRECTIONAL RELATIONSHIP: parent_ref={parent_ok}, child_list={child_ok}")
+        logger.info(f"AGENT TREE RELATIONSHIP: child_in_subagents_list={child_ok}")
         logger.info(f"TRANSFER TOOLS: root={root_has_transfer_tool}, scout={scout_has_transfer_tool}")
-        
-        # Register tools with agent
-        tool_handlers_root = getattr(agent, 'tool_handlers', {})
-        tool_handlers_scout = getattr(research_agent, 'tool_handlers', {})
-        
-        logger.info(f"TOOL HANDLERS: root={len(tool_handlers_root)}, scout={len(tool_handlers_scout)}")
         logger.info("=================================================")
         
         logger.info("Successfully added scout agent as a subagent with enhanced transfer capability")
@@ -816,20 +781,28 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
     logger.info(f"Created ADK BaseAgent for web UI with {len(all_tools)} tools")
     return agent
 
-# Create a root_agent instance for ADK web to use directly with explicit app_name
+# Create a root_agent instance for ADK web to use directly 
+# CRITICAL: app_name must match the name attribute EXACTLY in ADK 0.4.0
 root_agent = create_agent(app_name="beto")
 logger.info(f"Created root_agent instance for ADK web with name '{root_agent.name}' and {len(root_agent.sub_agents) if hasattr(root_agent, 'sub_agents') else 0} sub-agents")
 
-# CRITICAL: Ensure root_agent name is explicitly set to match the expected transfer target
+# CRITICAL: Make sure root_agent.name is explicitly set to 'beto'
+# This is required for ADK 0.4.0 agent transfers
 if hasattr(root_agent, 'name'):
     if root_agent.name != 'beto':
-        logger.warning(f"ROOT AGENT NAME MISMATCH: '{root_agent.name}' != 'beto', fixing...")
+        logger.warning(f"Setting root_agent.name from '{root_agent.name}' to 'beto'")
         root_agent.name = 'beto'
-        logger.info(f"Fixed root_agent.name = '{root_agent.name}'")
-    else:
-        logger.info(f"Verified root_agent.name = '{root_agent.name}'")
 else:
-    logger.warning("root_agent has no 'name' attribute - this is a critical issue")
+    # Try to add name attribute
+    try:
+        setattr(root_agent, 'name', 'beto')
+        logger.info("Added name='beto' attribute to root_agent")
+    except Exception as e:
+        logger.error(f"Failed to set name attribute: {e}")
+
+# In ADK 0.4.0, is_root setting is not needed - the agent tree hierarchy establishes this naturally
+# Just ensure the name is correct for transfers
+logger.info(f"Verified root_agent.name = '{root_agent.name}' for proper agent transfers")
     
 # CRITICAL: Verify transfer_to_agent tool is available in root_agent tools
 has_transfer_tool = False

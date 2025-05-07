@@ -15,6 +15,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
 from google.protobuf.json_format import MessageToDict
+# Note: In ADK 0.4.0, agent transfers use transfer_to_agent directly without QueryResponse
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -437,16 +438,9 @@ class RadBotAgent:
                 lambda params: MessageToDict(store_important_information(params)),
             )
             
-            # Register agent transfer tool
-            self.root_agent.register_tool_handler(
-                "transfer_to_agent",
-                lambda params: MessageToDict(QueryResponse(
-                    transfer_to_agent_response={
-                        "target_app_name": params["agent_name"],
-                        "message": params.get("message", ""),
-                    }
-                )),
-            )
+            # In ADK 0.4.0, agent transfers are handled differently
+            # No need to explicitly register transfer_to_agent handler
+            logger.info("Using ADK 0.4.0 native agent transfer functionality")
             
             logger.info("Registered common tool handlers for agent")
         except Exception as e:
@@ -613,7 +607,6 @@ class AgentFactory:
                 from radbot.tools.mcp.mcp_fileserver_client import handle_fileserver_tool_call
                 from radbot.tools.crawl4ai.mcp_crawl4ai_client import handle_crawl4ai_tool_call
                 from radbot.tools.memory.memory_tools import search_past_conversations, store_important_information
-                from google.adk.agents import QueryResponse
                 
                 # Register filesystem tool handlers
                 agent.register_tool_handler(
@@ -668,16 +661,8 @@ class AgentFactory:
                     lambda params: MessageToDict(store_important_information(params)),
                 )
                 
-                # Register agent transfer tool
-                agent.register_tool_handler(
-                    "transfer_to_agent",
-                    lambda params: MessageToDict(QueryResponse(
-                        transfer_to_agent_response={
-                            "target_app_name": params["agent_name"],
-                            "message": params.get("message", ""),
-                        }
-                    )),
-                )
+                # In ADK 0.4.0, agent transfers are handled natively
+                # No need to register custom transfer_to_agent handler
                 
                 logger.info("Registered common tool handlers for web agent")
             except Exception as e:
