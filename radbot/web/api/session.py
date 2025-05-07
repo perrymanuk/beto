@@ -28,6 +28,7 @@ if project_root not in sys.path:
 # Import needed ADK components
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.adk.artifacts import InMemoryArtifactService
 
 # Import root_agent directly from agent.py
 from agent import root_agent
@@ -47,362 +48,53 @@ class SessionRunner:
         self.session_id = session_id
         self.session_service = InMemorySessionService()
         
-        # Debug the root_agent directly for diagnosis of transfers
-        if hasattr(root_agent, 'name'):
-            logger.info(f"DIRECT AGENT NAME CHECK: root_agent.name='{root_agent.name}'")
-        else:
-            logger.warning("root_agent has no 'name' attribute!")
-            
-        # This is critical: explicitly set the name of the root_agent to match what the scout agent uses in transfers
-        if hasattr(root_agent, 'name') and root_agent.name != 'beto':
-            logger.warning(f"CRITICAL NAME MISMATCH: root_agent.name='{root_agent.name}' should be 'beto' - attempting to fix")
-            root_agent.name = 'beto'
-            logger.info(f"FIXED: root_agent.name now set to '{root_agent.name}'")
+        # Create artifact service for this session
+        self.artifact_service = InMemoryArtifactService()
+        logger.info("Created InMemoryArtifactService for the session")
         
-        # CRITICAL FIX: Check if any sub_agent exists and ensure its name is consistent too
-        if hasattr(root_agent, 'sub_agents') and root_agent.sub_agents:
-            logger.info(f"Found {len(root_agent.sub_agents)} sub-agents in root_agent")
-            for i, sa in enumerate(root_agent.sub_agents):
-                if hasattr(sa, 'name'):
-                    sa_name = sa.name
-                    if sa_name != 'scout':
-                        logger.warning(f"CRITICAL NAME MISMATCH: sub_agent[{i}].name='{sa_name}' should be 'scout' - fixing")
-                        sa.name = 'scout'
-                        logger.info(f"Fixed sub_agent name to 'scout'")
-                    
-                    # CRITICAL FIX: For ADK 0.4.0, don't try to directly access 'parent' attribute
-                    # Instead, rely on the sub_agents list for relationships
-                    # Parent-child relationships in ADK 0.4.0 are maintained internally by the ADK
-                    logger.info(f"Parent-child relationship is maintained by ADK via sub_agents list")
+        # Log agent tree structure
+        self._log_agent_tree()
         
-        # CRITICAL FIX: Ensure transfer_to_agent function is in tools lists
-        # In ADK 0.4.0, transfers are handled differently via actions.transfer_to_agent
-        try:
-            # Import just the transfer_to_agent function (no constant in 0.4.0)
-            from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
-            
-            # Check root agent transfer tool
-            has_root_transfer = False
-            if hasattr(root_agent, 'tools') and root_agent.tools:
-                for tool in root_agent.tools:
-                    tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                    if tool_name == 'transfer_to_agent':
-                        has_root_transfer = True
-                        break
-                        
-                if not has_root_transfer:
-                    logger.warning("Root agent missing transfer_to_agent tool - adding")
-                    try:
-                        root_agent.tools.append(transfer_to_agent)
-                        logger.info("Added transfer_to_agent tool to root agent")
-                    except Exception as e:
-                        logger.error(f"Failed to add transfer tool to root agent: {e}")
-                    
-            # Check all sub-agents for transfer tool
-            if hasattr(root_agent, 'sub_agents') and root_agent.sub_agents:
-                for i, sa in enumerate(root_agent.sub_agents):
-                    if hasattr(sa, 'tools') and sa.tools:
-                        has_sa_transfer = False
-                        for tool in sa.tools:
-                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                            if tool_name == 'transfer_to_agent':
-                                has_sa_transfer = True
-                                break
-                                
-                        if not has_sa_transfer:
-                            logger.warning(f"Sub-agent {i} missing transfer_to_agent tool - adding")
-                            try:
-                                sa.tools.append(transfer_to_agent)
-                                logger.info(f"Added transfer_to_agent tool to sub-agent {i}")
-                            except Exception as e:
-                                logger.error(f"Failed to add transfer tool to sub-agent {i}: {e}")
-        except ImportError as e:
-            logger.error(f"Error importing transfer_to_agent: {e}")
+        # Create the ADK Runner with app_name matching the agent name for ADK 0.4.0+
+        app_name = root_agent.name if hasattr(root_agent, 'name') else "beto"
+        logger.info(f"Using app_name='{app_name}' for session management")
         
-        # CRITICAL FIX JULY 2025: COMPLETELY REBUILD THE AGENT TREE FIRST
-        self._verify_agent_structure()
-        
-        # CRITICAL: Monkeypatch the find_agent method to always find our agents
-        # This is a drastic but effective approach to ensure transfers work
-        def patched_find_agent(self, name: str) -> Optional[Any]:
-            """Patched find_agent method that always works for our agents"""
-            logger.info(f"PATCHED FIND_AGENT CALLED FOR: '{name}'")
-            
-            # Return the agent we know exists based on name
-            if name == "beto":
-                logger.info("PATCHED FIND_AGENT: Returning root_agent for 'beto'")
-                return root_agent
-            elif name == "scout":
-                # Find the scout agent - it should be in sub_agents
-                for sa in root_agent.sub_agents:
-                    if hasattr(sa, 'name') and sa.name == 'scout':
-                        logger.info("PATCHED FIND_AGENT: Returning scout agent")
-                        return sa
-                
-                logger.warning("PATCHED FIND_AGENT: Could not find scout agent in sub_agents")
-            
-            # Otherwise use the original method
-            logger.info(f"PATCHED FIND_AGENT: Using original method for '{name}'")
-            if self.name == name:
-                return self
-            return self.find_sub_agent(name)
-        
-        # Apply the monkey patch to BaseAgent class
-        from google.adk.agents.base_agent import BaseAgent
-        original_find_agent = BaseAgent.find_agent
-        BaseAgent.find_agent = patched_find_agent
-        logger.info("MONKEY PATCHED BaseAgent.find_agent for reliable agent transfers")
-        
-        # Also patch the Runner._find_agent_to_run method 
-        from google.adk.runners import Runner as ADKRunner
-        original_find_agent_to_run = ADKRunner._find_agent_to_run
-        
-        # Create a patched version that always finds our agents
-        def patched_find_agent_to_run(self, session, root_agent: BaseAgent) -> BaseAgent:
-            """Patched method to ensure we always find the right agent to run"""
-            logger.info(f"PATCHED _find_agent_to_run called")
-            
-            # First try normal logic
-            try:
-                result = original_find_agent_to_run(self, session, root_agent)
-                logger.info(f"Original _find_agent_to_run returned: {result.name if hasattr(result, 'name') else 'unnamed'}")
-                return result
-            except Exception as e:
-                logger.warning(f"Original _find_agent_to_run failed: {e}, using fallback")
-            
-            # Fallback - check recent events
-            for event in filter(lambda e: e.author != 'user', reversed(session.events)):
-                logger.info(f"Examining event from author: {event.author}")
-                if event.author == 'beto':
-                    logger.info("Found event from beto, returning root_agent")
-                    return root_agent
-                elif event.author == 'scout':
-                    # Find scout in sub_agents
-                    for sa in root_agent.sub_agents:
-                        if hasattr(sa, 'name') and sa.name == 'scout':
-                            logger.info("Found event from scout, returning scout agent")
-                            return sa
-            
-            # Default fallback - always return root agent
-            logger.info("No agent found in event history, defaulting to root_agent")
-            return root_agent
-            
-        # Apply the patch
-        ADKRunner._find_agent_to_run = patched_find_agent_to_run
-        logger.info("MONKEY PATCHED Runner._find_agent_to_run for reliable agent transfers")
-        
-        # Also patch the LLM Flow's _get_agent_to_run method which is the actual source of our error
-        from google.adk.flows.llm_flows.base_llm_flow import BaseLlmFlow
-        original_llm_get_agent_to_run = BaseLlmFlow._get_agent_to_run
-        
-        def patched_llm_get_agent_to_run(self, invocation_context: Any, agent_name: str) -> BaseAgent:
-            """Patched method to prevent the 'Agent not found' error"""
-            logger.info(f"PATCHED LLM _get_agent_to_run called for agent: '{agent_name}'")
-            
-            # Log information about the invocation_context for debugging
-            if not isinstance(agent_name, str):
-                logger.warning(f"agent_name is not a string: {type(agent_name).__name__}, value: {agent_name}")
-                # Try to convert to string if possible
-                try:
-                    agent_name = str(agent_name)
-                    logger.info(f"Converted agent_name to string: '{agent_name}'")
-                except Exception as e:
-                    logger.error(f"Failed to convert agent_name to string: {e}")
-                    # Default to 'beto' if conversion fails
-                    agent_name = "beto"
-                    logger.info(f"Using default agent_name 'beto'")
-            
-            # Log the invocation_context type
-            logger.info(f"invocation_context type: {type(invocation_context).__name__}")
-            
-            # Use direct lookup for our agent names
-            if agent_name == "beto":
-                logger.info("LLM Flow patched lookup returning root_agent for 'beto'")
-                return root_agent
-            elif agent_name == "scout":
-                # Find scout in root_agent's sub_agents
-                for sa in root_agent.sub_agents:
-                    if hasattr(sa, 'name') and sa.name == 'scout':
-                        logger.info("LLM Flow patched lookup returning scout agent")
-                        return sa
-                logger.warning("LLM Flow patched lookup could not find scout in sub_agents")
-            # Check for ADK built-in agents
-            elif agent_name == "search_agent" or agent_name == "code_execution_agent":
-                # Find the requested built-in agent in root_agent's sub_agents
-                for sa in root_agent.sub_agents:
-                    if hasattr(sa, 'name') and sa.name == agent_name:
-                        logger.info(f"LLM Flow patched lookup returning built-in agent '{agent_name}'")
-                        return sa
-                logger.warning(f"LLM Flow patched lookup could not find built-in agent '{agent_name}' in sub_agents")
-                
-            # Always try our direct lookup first - much more reliable
-            # Check for known built-in agents first
-            agent_lookup = {
-                "beto": root_agent,
-                "scout": None,
-                "search_agent": None,
-                "code_execution_agent": None
-            }
-            
-            # Find scout in sub_agents
-            if hasattr(root_agent, 'sub_agents'):
-                for subagent in root_agent.sub_agents:
-                    if hasattr(subagent, 'name'):
-                        agent_lookup[subagent.name] = subagent
-            
-            # Check if we have a direct match
-            if agent_name in agent_lookup and agent_lookup[agent_name] is not None:
-                logger.info(f"Found agent '{agent_name}' through direct lookup")
-                return agent_lookup[agent_name]
-                
-            # Try the original method but handle errors
-            try:
-                # Only try the original method if invocation_context is an object and not a string
-                if not isinstance(invocation_context, str):
-                    logger.info(f"Direct lookup failed, trying original method for '{agent_name}'")
-                    result = original_llm_get_agent_to_run(self, invocation_context, agent_name)
-                    logger.info(f"Original method found agent: {result.name if hasattr(result, 'name') else 'unnamed'}")
-                    return result
-                else:
-                    logger.warning(f"Skipping original method call - invocation_context is a string: '{invocation_context}'")
-                    raise TypeError("invocation_context is a string, not an object")
-            except Exception as e:
-                logger.warning(f"Original LLM _get_agent_to_run failed: {e}")
-                
-                # Check if invocation_context is the expected object type
-                if hasattr(invocation_context, 'agent'):
-                    # Fallback - look in the root_agent's tree
-                    agent = invocation_context.agent
-                    root = agent.root_agent if hasattr(agent, 'root_agent') and agent.root_agent else agent
-                    logger.info(f"Using root agent ({root.name if hasattr(root, 'name') else 'unnamed'}) to find '{agent_name}'")
-                    
-                    # Try explicit lookup
-                    found_agent = root.find_agent(agent_name)
-                    if found_agent:
-                        logger.info(f"Fallback found agent '{agent_name}' through root.find_agent()")
-                        return found_agent
-                else:
-                    logger.warning(f"invocation_context doesn't have 'agent' attribute. Type: {type(invocation_context).__name__}")
-                    
-                # Last resort - return root_agent
-                logger.warning(f"All lookup methods failed, defaulting to root_agent")
-                return root_agent
-                
-        # Apply the patch
-        BaseLlmFlow._get_agent_to_run = patched_llm_get_agent_to_run
-        logger.info("MONKEY PATCHED BaseLlmFlow._get_agent_to_run for reliable agent transfers")
-        
-        # Set critical app_name for the runner to match the agent
-        app_name_for_runner = "beto"  # Always use beto for app_name
-        logger.info(f"CRITICAL FIX: Using 'beto' as app_name")
-            
-        # Create the ADK Runner with app_name
+        # Create the Runner with the artifact service
         self.runner = Runner(
             agent=root_agent,
-            app_name=app_name_for_runner,
-            session_service=self.session_service
+            app_name=app_name,
+            session_service=self.session_service,
+            artifact_service=self.artifact_service  # Pass artifact service to Runner
         )
+    
+    def _log_agent_tree(self):
+        """Log the agent tree structure for debugging."""
+        logger.info("===== AGENT TREE STRUCTURE =====")
         
-        # In ADK 0.4.0, no need to set is_root - the agent tree hierarchy establishes this naturally
+        # Check root agent
+        if hasattr(root_agent, 'name'):
+            logger.info(f"ROOT AGENT: name='{root_agent.name}'")
+        else:
+            logger.warning("ROOT AGENT: No name attribute")
         
-        # CRITICAL FIX: Triple-check runner's app_name matches agent name
-        if hasattr(self.runner, 'app_name') and hasattr(root_agent, 'name') and self.runner.app_name != root_agent.name:
-            logger.warning(f"CRITICAL APP_NAME MISMATCH: runner.app_name='{self.runner.app_name}' should match root_agent.name='{root_agent.name}'")
-            # Try to fix if possible
-            try:
-                self.runner.app_name = root_agent.name
-                logger.info(f"Fixed runner app_name to '{root_agent.name}'")
-            except Exception as e:
-                logger.error(f"Unable to fix runner app_name: {e}")
-        
-        # CRITICAL FIX: Debug the full agent tree in extreme detail
-        logger.info("============= DETAILED AGENT TREE DUMP =============")
-        logger.info(f"ROOT AGENT: name='{root_agent.name if hasattr(root_agent, 'name') else 'UNNAMED'}'")
-        logger.info(f"RUNNER APP_NAME: '{self.runner.app_name if hasattr(self.runner, 'app_name') else 'NO APP_NAME'}'")
-        
+        # Check sub-agents
         if hasattr(root_agent, 'sub_agents') and root_agent.sub_agents:
-            sub_agent_count = len(root_agent.sub_agents)
             sub_agent_names = [sa.name for sa in root_agent.sub_agents if hasattr(sa, 'name')]
-            logger.info(f"SUB-AGENTS COUNT: {sub_agent_count}")
-            logger.info(f"SUB-AGENT NAMES: {sub_agent_names}")
+            logger.info(f"SUB-AGENTS: {sub_agent_names}")
             
-            # List all built-in tool agents separately for clarity
-            builtin_agents = [sa for sa in root_agent.sub_agents if hasattr(sa, 'name') and 
-                             sa.name in ['search_agent', 'code_execution_agent']]
-            if builtin_agents:
-                logger.info(f"BUILT-IN TOOL AGENTS: {[a.name for a in builtin_agents]}")
-                # Check if they have the right tools
-                for i, ba in enumerate(builtin_agents):
-                    # Check correct tools for each type of agent
-                    if ba.name == 'search_agent':
-                        has_google_search = False
-                        has_transfer_tool = False
-                        
-                        if hasattr(ba, 'tools') and ba.tools:
-                            for tool in ba.tools:
-                                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                                if tool_name == 'google_search':
-                                    has_google_search = True
-                                elif tool_name == 'transfer_to_agent':
-                                    has_transfer_tool = True
-                        
-                        logger.info(f"  SEARCH AGENT: Has google_search: {has_google_search}, Has transfer_to_agent: {has_transfer_tool}")
-                    
-                    elif ba.name == 'code_execution_agent':
-                        has_code_exec = False
-                        has_transfer_tool = False
-                        
-                        if hasattr(ba, 'tools') and ba.tools:
-                            for tool in ba.tools:
-                                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                                if tool_name == 'built_in_code_execution':
-                                    has_code_exec = True
-                                elif tool_name == 'transfer_to_agent':
-                                    has_transfer_tool = True
-                        
-                        logger.info(f"  CODE EXECUTION AGENT: Has built_in_code_execution: {has_code_exec}, Has transfer_to_agent: {has_transfer_tool}")
-            elif os.environ.get("RADBOT_ENABLE_ADK_SEARCH", "false").lower() in ["true", "1", "yes", "enable"] or os.environ.get("RADBOT_ENABLE_ADK_CODE_EXEC", "false").lower() in ["true", "1", "yes", "enable"]:
-                logger.warning("NO BUILT-IN TOOL AGENTS FOUND BUT THEY SHOULD BE ENABLED!")
-            
+            # Check each sub-agent
             for i, sa in enumerate(root_agent.sub_agents):
                 sa_name = sa.name if hasattr(sa, 'name') else f"unnamed-{i}"
-                sa_parent = "CORRECT-PARENT" if (hasattr(sa, 'parent') and sa.parent is root_agent) else "WRONG-PARENT"
-                logger.info(f"SUB-AGENT {i}: NAME='{sa_name}', PARENT={sa_parent}")
+                logger.info(f"SUB-AGENT {i}: name='{sa_name}'")
                 
-                # Check if sub-agent also knows root agent is 'beto'
-                if hasattr(sa, 'parent') and hasattr(sa.parent, 'name'):
-                    logger.info(f"SUB-AGENT {i}'s PARENT NAME: '{sa.parent.name}'")
-                
-                # Check if the transfer_to_agent tool is available on this sub-agent
-                if hasattr(sa, 'tools') and sa.tools:
-                    has_transfer_tool = False
-                    for tool in sa.tools:
-                        tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                        if tool_name == 'transfer_to_agent':
-                            has_transfer_tool = True
-                            break
-                    logger.info(f"SUB-AGENT {i}: Has transfer_to_agent tool: {has_transfer_tool}")
-                else:
-                    logger.warning(f"SUB-AGENT {i}: No tools found!")
+                # Check if sub-agent has its own sub-agents
+                if hasattr(sa, 'sub_agents') and sa.sub_agents:
+                    sa_sub_names = [ssa.name for ssa in sa.sub_agents if hasattr(ssa, 'name')]
+                    logger.info(f"  SUB-AGENTS OF '{sa_name}': {sa_sub_names}")
         else:
-            logger.warning("NO SUB-AGENTS FOUND IN ROOT AGENT!")
-            
-        # Log tool information
-        if hasattr(root_agent, 'tools') and root_agent.tools:
-            tool_count = len(root_agent.tools)
-            tool_names = []
-            for tool in root_agent.tools:
-                if hasattr(tool, 'name'):
-                    tool_names.append(tool.name)
-                elif hasattr(tool, '__name__'):
-                    tool_names.append(tool.__name__)
-                else:
-                    tool_names.append(str(tool))
-            
-            logger.info(f"ROOT AGENT TOOLS: {tool_count} tools")
-            logger.info(f"HAS TRANSFER TOOL: {'transfer_to_agent' in tool_names}")
-            
-        logger.info("=====================================================")
+            logger.warning("ROOT AGENT: No sub_agents found")
+        
+        logger.info("===============================")
     
     def process_message(self, message: str) -> dict:
         """Process a user message and return the agent's response with event data.
@@ -420,62 +112,33 @@ class SessionRunner:
                 role="user"
             )
             
-            # CRITICAL: Verify agent tree before processing
-            self._verify_agent_structure()
+            # Get the app_name from the runner
+            app_name = self.runner.app_name if hasattr(self.runner, 'app_name') else "beto"
             
-            # Use the runner's app_name for session operations
-            # In ADK 0.4.0, app_name must match the agent's name for transfers
-            session_app_name = getattr(self.runner, 'app_name', root_agent.name if hasattr(root_agent, 'name') else "beto")
-            
-            # Get or create session with proper app_name
-            logger.info(f"Using session with app_name='{session_app_name}' (matched to agent name)")
+            # Get or create a session with the user_id and session_id
             session = self.session_service.get_session(
-                app_name=session_app_name,
+                app_name=app_name,
                 user_id=self.user_id,
                 session_id=self.session_id
             )
             
             if not session:
-                logger.info(f"Creating new session for user {self.user_id} with app_name='{session_app_name}'")
+                logger.info(f"Creating new session for user {self.user_id} with app_name='{app_name}'")
                 session = self.session_service.create_session(
-                    app_name=session_app_name,  # Must match agent name in ADK 0.4.0
+                    app_name=app_name,
                     user_id=self.user_id,
                     session_id=self.session_id
                 )
-                
-                # TRIPLE CHECK session app_name matches agent name
-                if hasattr(session, 'app_name') and session.app_name != session_app_name:
-                    logger.error(f"SESSION APP_NAME MISMATCH: '{session.app_name}' should be '{session_app_name}' - fixing")
-                    try:
-                        session.app_name = session_app_name
-                        logger.info(f"Fixed session.app_name = '{session_app_name}'")
-                    except Exception as e:
-                        logger.error(f"Failed to fix session app_name: {e}")
-                
-                # CRITICAL FIX: Final verification after creation
-                if hasattr(session, 'app_name') and session.app_name != session_app_name:
-                    logger.error(f"SESSION APP_NAME FINAL MISMATCH: Created session has app_name='{session.app_name}' instead of '{session_app_name}'")
-                    try:
-                        session.app_name = session_app_name
-                        logger.info(f"Fixed session app_name to '{session_app_name}'")
-                    except Exception as e:
-                        logger.error(f"Failed to fix session app_name: {e}")
-                
-                logger.info(f"Created new session for user {self.user_id}")
-            
-            # CRITICAL FIX: Verify agent tree structure before processing
-            self._verify_agent_structure()
             
             # Use the runner to process the message
             logger.info(f"Running agent with message: {message[:50]}{'...' if len(message) > 50 else ''}")
             
-            # CRITICAL FIX: Log critical runner and session parameters for debugging
-            logger.info(f"RUNNER APP_NAME: '{self.runner.app_name if hasattr(self.runner, 'app_name') else 'unknown'}'")
-            logger.info(f"SESSION APP_NAME: '{session.app_name if hasattr(session, 'app_name') else 'unknown'}'")
-            logger.info(f"SESSION ID: '{session.id}'")
-            logger.info(f"USER ID: '{self.user_id}'")
+            # Log key parameters
+            logger.info(f"USER_ID: '{self.user_id}'")
+            logger.info(f"SESSION_ID: '{self.session_id}'")
+            logger.info(f"APP_NAME: '{app_name}'")
             
-            # Run with double-checked parameters
+            # Run with consistent parameters
             events = list(self.runner.run(
                 user_id=self.user_id,
                 session_id=session.id,
@@ -522,24 +185,7 @@ class SessionRunner:
                 
                 # If no final response has been found yet, try to extract it
                 if final_response is None:
-                    # Method 1: Check if it's a final response
-                    if hasattr(event, 'is_final_response') and event.is_final_response():
-                        if hasattr(event, 'content') and event.content:
-                            if hasattr(event.content, 'parts') and event.content.parts:
-                                for part in event.content.parts:
-                                    if hasattr(part, 'text') and part.text:
-                                        final_response = part.text
-                                        break
-                                
-                    # Method 2: Check for content directly
-                    if final_response is None and hasattr(event, 'content'):
-                        if hasattr(event.content, 'text') and event.content.text:
-                            final_response = event.content.text
-                            
-                    # Method 3: Check for message attribute
-                    if final_response is None and hasattr(event, 'message'):
-                        if hasattr(event.message, 'content'):
-                            final_response = event.message.content
+                    final_response = self._extract_response_from_event(event)
             
             if not final_response:
                 logger.warning("No text response found in events")
@@ -558,7 +204,29 @@ class SessionRunner:
                 "response": error_message,
                 "events": []
             }
-            
+    
+    def _extract_response_from_event(self, event):
+        """Extract response text from various event types."""
+        # Method 1: Check if it's a final response
+        if hasattr(event, 'is_final_response') and event.is_final_response():
+            if hasattr(event, 'content') and event.content:
+                if hasattr(event.content, 'parts') and event.content.parts:
+                    for part in event.content.parts:
+                        if hasattr(part, 'text') and part.text:
+                            return part.text
+                            
+        # Method 2: Check for content directly
+        if hasattr(event, 'content'):
+            if hasattr(event.content, 'text') and event.content.text:
+                return event.content.text
+                
+        # Method 3: Check for message attribute
+        if hasattr(event, 'message'):
+            if hasattr(event.message, 'content'):
+                return event.message.content
+        
+        return None
+        
     def _get_current_timestamp(self):
         """Get the current timestamp in ISO format."""
         from datetime import datetime
@@ -566,31 +234,23 @@ class SessionRunner:
     
     def _get_event_type(self, event):
         """Determine the type of event."""
-        # Debug: Log event attributes for debugging
-        logger.debug(f"Event class: {event.__class__.__name__}, dir(event): {dir(event)}")
-        
         # For tool events in ADK 0.4.0, check for function_call / tool_calls attribute
         if hasattr(event, 'function_call') or hasattr(event, 'tool_calls'):
-            logger.info(f"Detected tool call via function_call/tool_calls: {event}")
             return "tool_call"
             
         # Check for tool result event
         if hasattr(event, 'function_response') or hasattr(event, 'tool_results'):
-            logger.info(f"Detected tool result: {event}")
             return "tool_call"
         
         # Try to get type attribute
         if hasattr(event, 'type'):
-            event_type = str(event.type)
-            logger.debug(f"Event has explicit type: {event_type}")
-            return event_type
+            return str(event.type)
         
         # Check for tool call events
         if (hasattr(event, 'tool_name') or 
             (hasattr(event, 'payload') and 
              isinstance(event.payload, dict) and 
              'toolName' in event.payload)):
-            logger.info(f"Detected tool call via tool_name or payload.toolName")
             return "tool_call"
         
         # Check for agent transfer events
@@ -609,18 +269,11 @@ class SessionRunner:
         
         # Check for model response events
         if hasattr(event, 'is_final_response'):
-            is_final = event.is_final_response()
-            final_status = "final" if is_final else "intermediate"
-            logger.debug(f"Detected model response ({final_status})")
             return "model_response"
         
         # Check for content which indicates model response (ADK 0.4.0+)
         if hasattr(event, 'content') or hasattr(event, 'message'):
-            logger.debug(f"Detected model response via content/message attributes")
             return "model_response"
-            
-        # Log the event for debugging
-        logger.warning(f"Unrecognized event type: {event.__class__.__name__}")
         
         # Default category
         return "other"
@@ -693,9 +346,6 @@ class SessionRunner:
                 event_data["output"] = self._safely_serialize(event.output)
             elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'output' in event.payload:
                 event_data["output"] = self._safely_serialize(event.payload['output'])
-        
-        # Log the processed event data for debugging
-        logger.debug(f"Processed tool event data: {event_data}")
         
         # Get the full event for details
         event_data["details"] = self._get_event_details(event)
@@ -859,358 +509,30 @@ class SessionRunner:
     def reset_session(self):
         """Reset the session conversation history."""
         try:
-            # CRITICAL FIX: Re-check agent tree structure before reset
-            self._verify_agent_structure()
+            # Get the app_name from the runner
+            app_name = self.runner.app_name if hasattr(self.runner, 'app_name') else "beto"
             
-            # Use the runner's app_name for session operations
-            # In ADK 0.4.0, app_name must match the agent's name for transfers
-            session_app_name = getattr(self.runner, 'app_name', root_agent.name if hasattr(root_agent, 'name') else "beto")
-            logger.info(f"Using session with app_name='{session_app_name}' for session reset (matched to agent name)")
-            
-            # Simply delete and recreate the session
-            logger.info(f"Deleting session for user {self.user_id} with app_name='{session_app_name}'")
+            # Delete and recreate the session
             self.session_service.delete_session(
-                app_name=session_app_name,
+                app_name=app_name,
                 user_id=self.user_id,
                 session_id=self.session_id
             )
             
             # Create a new session
-            logger.info(f"Recreating session for user {self.user_id} with app_name='{session_app_name}'")
             session = self.session_service.create_session(
-                app_name=session_app_name,
+                app_name=app_name,
                 user_id=self.user_id,
                 session_id=self.session_id
             )
-            
-            # CRITICAL FIX: Verify session app_name after recreation
-            if hasattr(session, 'app_name') and session.app_name != session_app_name:
-                logger.error(f"SESSION APP_NAME MISMATCH: Recreated session has app_name='{session.app_name}' instead of '{session_app_name}'")
-                try:
-                    session.app_name = session_app_name
-                    logger.info(f"Fixed session app_name to '{session_app_name}'")
-                except Exception as e:
-                    logger.error(f"Failed to fix session app_name: {e}")
-            
-            # CRITICAL FIX: Re-check agent tree structure after reset
-            self._verify_agent_structure()
             
             logger.info(f"Reset session for user {self.user_id}")
             return True
         except Exception as e:
             logger.error(f"Error resetting session: {str(e)}")
             return False
-    
-    def _verify_agent_structure(self):
-        """Verify and fix agent tree structure issues for ADK 0.4.0+ compatibility."""
-        logger.info("STARTING COMPREHENSIVE AGENT TREE VERIFICATION")
-        
-        # CRITICAL FIX: Complete rebuild of the agent tree according to ADK 0.4.0 standards
-        try:
-            # 1. First, ensure root_agent has the right name
-            if hasattr(root_agent, 'name') and root_agent.name != 'beto':
-                logger.warning(f"ROOT AGENT NAME MISMATCH: '{root_agent.name}' should be 'beto' - fixing")
-                root_agent.name = 'beto'
-                logger.info(f"Set root_agent.name = '{root_agent.name}'")
-            elif not hasattr(root_agent, 'name'):
-                logger.error("CRITICAL ERROR: root_agent has no 'name' attribute!")
-                try:
-                    # Try to add the name attribute
-                    setattr(root_agent, 'name', 'beto')
-                    logger.info("Added name='beto' attribute to root_agent")
-                except Exception as e:
-                    logger.error(f"Failed to add name attribute: {e}")
-            
-            # 2. Look for sub-agents and identify them
-            existing_sub_agents = {}
-            if hasattr(root_agent, 'sub_agents') and root_agent.sub_agents:
-                # Find all existing sub-agents
-                for i, sa in enumerate(root_agent.sub_agents):
-                    if hasattr(sa, 'name'):
-                        existing_sub_agents[sa.name] = sa
-                        logger.info(f"Found existing sub-agent '{sa.name}' in sub_agents[{i}]")
-                    else:
-                        logger.warning(f"Found unnamed sub-agent at index {i}")
-            
-            scout_agent = existing_sub_agents.get('scout')
-            search_agent = existing_sub_agents.get('search_agent')
-            code_execution_agent = existing_sub_agents.get('code_execution_agent')
-            
-            # 3. If we don't have a scout agent, create one (last resort)
-            if not scout_agent:
-                logger.warning("No scout agent found in root_agent sub_agents - creating a copy")
-                try:
-                    # Create a minimal scout agent as placeholder
-                    from google.adk.agents import Agent
-                    scout_agent = Agent(
-                        name="scout",
-                        model=getattr(root_agent, 'model', None),
-                        instruction="You are the scout agent. Transfer back to 'beto' for a more complete experience."
-                    )
-                    logger.info("Created emergency scout agent placeholder")
-                except Exception as e:
-                    logger.error(f"Failed to create emergency scout agent: {e}")
-                    
-            # 4. COMPLETELY REBUILD THE AGENT TREE PROPERLY FOR ADK 0.4.0
-            # First, preserve or create the sub_agents list
-            logger.info("Completely rebuilding agent tree from scratch for ADK 0.4.0")
-            if hasattr(root_agent, 'sub_agents'):
-                root_agent.sub_agents = []
-                logger.info("Cleared root_agent.sub_agents list")
-            else:
-                try:
-                    setattr(root_agent, 'sub_agents', [])
-                    logger.info("Created new root_agent.sub_agents list")
-                except Exception as e:
-                    logger.error(f"Failed to create sub_agents list: {e}")
-            
-            # Add scout agent to the tree if available
-            if scout_agent and hasattr(root_agent, 'sub_agents'):
-                # First make sure the name is correct
-                if hasattr(scout_agent, 'name') and scout_agent.name != 'scout':
-                    logger.warning(f"FIXING scout_agent name: '{scout_agent.name}' to 'scout'")
-                    scout_agent.name = 'scout'
-                
-                # Now add it to the tree - this is the ADK 0.4.0 way to establish parent-child relationship
-                root_agent.sub_agents.append(scout_agent)
-                logger.info(f"Added scout_agent to root_agent.sub_agents")
-            
-            # Add search_agent to the tree if available
-            if search_agent and hasattr(root_agent, 'sub_agents'):
-                # First make sure the name is correct
-                if hasattr(search_agent, 'name') and search_agent.name != 'search_agent':
-                    logger.warning(f"FIXING search_agent name: '{search_agent.name}' to 'search_agent'")
-                    search_agent.name = 'search_agent'
-                
-                # Add to the tree
-                root_agent.sub_agents.append(search_agent)
-                logger.info(f"Added search_agent to root_agent.sub_agents")
-            # If search_agent isn't found but should be enabled, create one
-            elif os.environ.get("RADBOT_ENABLE_ADK_SEARCH", "false").lower() in ["true", "1", "yes", "enable"] and hasattr(root_agent, 'sub_agents'):
-                logger.warning("Search agent should be enabled but not found - creating emergency replacement")
-                try:
-                    # Import what we need
-                    from google.adk.agents import Agent
-                    from google.adk.tools import google_search
-                    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
-                    
-                    # Create a minimal search agent
-                    search_agent = Agent(
-                        name="search_agent",
-                        model=getattr(root_agent, 'model', None),
-                        instruction="You are a web search agent that can search for current information on the internet. Transfer back to 'beto' when you're done.",
-                        description="A specialized agent that can search the web using Google Search.",
-                        tools=[google_search, transfer_to_agent]
-                    )
-                    
-                    # Add to the agent tree
-                    root_agent.sub_agents.append(search_agent)
-                    logger.info("Created and added emergency search_agent to root_agent.sub_agents")
-                except Exception as e:
-                    logger.error(f"Failed to create emergency search_agent: {e}")
-            
-            # Add code_execution_agent to the tree if available
-            if code_execution_agent and hasattr(root_agent, 'sub_agents'):
-                # First make sure the name is correct
-                if hasattr(code_execution_agent, 'name') and code_execution_agent.name != 'code_execution_agent':
-                    logger.warning(f"FIXING code_execution_agent name: '{code_execution_agent.name}' to 'code_execution_agent'")
-                    code_execution_agent.name = 'code_execution_agent'
-                
-                # Add to the tree
-                root_agent.sub_agents.append(code_execution_agent)
-                logger.info(f"Added code_execution_agent to root_agent.sub_agents")
-            # If code_execution_agent isn't found but should be enabled, create one
-            elif os.environ.get("RADBOT_ENABLE_ADK_CODE_EXEC", "false").lower() in ["true", "1", "yes", "enable"] and hasattr(root_agent, 'sub_agents'):
-                logger.warning("Code execution agent should be enabled but not found - creating emergency replacement")
-                try:
-                    # Import what we need
-                    from google.adk.agents import Agent
-                    from google.adk.tools import built_in_code_execution
-                    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
-                    
-                    # Create a minimal code execution agent
-                    code_execution_agent = Agent(
-                        name="code_execution_agent",
-                        model=getattr(root_agent, 'model', None),
-                        instruction="You are a code execution agent that can write and run Python code. Transfer back to 'beto' when you're done.",
-                        description="A specialized agent that can execute Python code securely.",
-                        tools=[built_in_code_execution, transfer_to_agent]
-                    )
-                    
-                    # Add to the agent tree
-                    root_agent.sub_agents.append(code_execution_agent)
-                    logger.info("Created and added emergency code_execution_agent to root_agent.sub_agents")
-                except Exception as e:
-                    logger.error(f"Failed to create emergency code_execution_agent: {e}")
-                
-                # 5. Add transfer_to_agent tool to ALL agents
-                try:
-                    # In ADK 0.4.0, just use the transfer_to_agent function
-                    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
-                    
-                    # Add to root agent
-                    if hasattr(root_agent, 'tools'):
-                        # Check if tool already exists
-                        has_transfer_tool = False
-                        for tool in root_agent.tools:
-                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                            if tool_name == 'transfer_to_agent':
-                                has_transfer_tool = True
-                                break
-                                
-                        if not has_transfer_tool:
-                            root_agent.tools.append(transfer_to_agent)
-                            logger.info("Added transfer_to_agent to root_agent.tools")
-                    
-                    # Add to scout agent
-                    if hasattr(scout_agent, 'tools'):
-                        # Check if tool already exists
-                        has_transfer_tool = False
-                        for tool in scout_agent.tools:
-                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                            if tool_name == 'transfer_to_agent':
-                                has_transfer_tool = True
-                                break
-                                
-                        if not has_transfer_tool:
-                            scout_agent.tools.append(transfer_to_agent)
-                            logger.info("Added transfer_to_agent to scout_agent.tools")
-                    else:
-                        # Create tools list if missing
-                        try:
-                            scout_agent.tools = [transfer_to_agent]
-                            logger.info("Created tools list for scout_agent with transfer_to_agent")
-                        except Exception as e:
-                            logger.error(f"Failed to create tools list: {e}")
-                    
-                    # Add to search_agent if available
-                    if search_agent:
-                        if hasattr(search_agent, 'tools'):
-                            # Check if tool already exists
-                            has_transfer_tool = False
-                            for tool in search_agent.tools:
-                                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                                if tool_name == 'transfer_to_agent':
-                                    has_transfer_tool = True
-                                    break
-                                    
-                            if not has_transfer_tool:
-                                search_agent.tools.append(transfer_to_agent)
-                                logger.info("Added transfer_to_agent to search_agent.tools")
-                        else:
-                            # Create tools list if missing
-                            try:
-                                # Keep existing google_search tool AND add transfer_to_agent
-                                from google.adk.tools import google_search
-                                search_agent.tools = [google_search, transfer_to_agent]
-                                logger.info("Created tools list for search_agent with required tools")
-                            except Exception as e:
-                                logger.error(f"Failed to create tools list for search_agent: {e}")
-                    
-                    # Add to code_execution_agent if available
-                    if code_execution_agent:
-                        if hasattr(code_execution_agent, 'tools'):
-                            # Check if tool already exists
-                            has_transfer_tool = False
-                            for tool in code_execution_agent.tools:
-                                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                                if tool_name == 'transfer_to_agent':
-                                    has_transfer_tool = True
-                                    break
-                                    
-                            if not has_transfer_tool:
-                                code_execution_agent.tools.append(transfer_to_agent)
-                                logger.info("Added transfer_to_agent to code_execution_agent.tools")
-                        else:
-                            # Create tools list if missing
-                            try:
-                                # Keep existing built_in_code_execution tool AND add transfer_to_agent
-                                from google.adk.tools import built_in_code_execution
-                                code_execution_agent.tools = [built_in_code_execution, transfer_to_agent]
-                                logger.info("Created tools list for code_execution_agent with required tools")
-                            except Exception as e:
-                                logger.error(f"Failed to create tools list for code_execution_agent: {e}")
-                except ImportError as e:
-                    logger.error(f"Failed to import transfer_to_agent tool: {e}")
-                    
-            # Final debug log of the rebuilt tree
-            logger.info("==== AGENT TREE AFTER COMPLETE REBUILD ====")
-            if hasattr(root_agent, 'name'):
-                logger.info(f"ROOT AGENT: name='{root_agent.name}'")
-            if hasattr(root_agent, 'sub_agents'):
-                subagent_names = [sa.name if hasattr(sa, 'name') else "unnamed" for sa in root_agent.sub_agents]
-                logger.info(f"SUB-AGENTS: {subagent_names}")
-                
-                for i, sa in enumerate(root_agent.sub_agents):
-                    # In ADK 0.4.0, the relationship is established through the sub_agents list
-                    in_parent_list = sa in root_agent.sub_agents
-                    
-                    logger.info(f"  Sub-agent[{i}]: name='{getattr(sa, 'name', 'unnamed')}'")
-                    logger.info(f"  Relationships: in_parent_list={in_parent_list}")
-                    
-                    # Check tools
-                    if hasattr(sa, 'tools'):
-                        tool_names = []
-                        for tool in sa.tools:
-                            if hasattr(tool, 'name'):
-                                tool_names.append(tool.name)
-                            elif hasattr(tool, '__name__'):
-                                tool_names.append(tool.__name__)
-                            else:
-                                tool_names.append(str(type(tool)))
-                        logger.info(f"  Tools: {tool_names}")
-            logger.info("=========================================")
-            
-        except Exception as e:
-            logger.error(f"Error in agent tree rebuild: {str(e)}", exc_info=True)
-        
-        # 4. Verify the runner's app_name is consistent with agent name
-        if hasattr(self, 'runner') and hasattr(self.runner, 'app_name'):
-            if self.runner.app_name != 'beto':
-                logger.warning(f"RUNNER APP_NAME MISMATCH: '{self.runner.app_name}' should be 'beto'")
-                try:
-                    # Fix the runner app_name if possible
-                    self.runner.app_name = 'beto'
-                    logger.info("Fixed runner.app_name = 'beto'")
-                except Exception as e:
-                    logger.error(f"Failed to fix runner.app_name: {e}")
-        
-        # 5. Provide detailed report on agent tree structure
-        logger.info("=============== AGENT TREE VERIFICATION REPORT ================")
-        logger.info(f"ROOT AGENT: name='{root_agent.name if hasattr(root_agent, 'name') else 'MISSING'}'")
-        
-        # Check agent tools 
-        root_tools_count = len(root_agent.tools) if hasattr(root_agent, 'tools') and root_agent.tools else 0
-        logger.info(f"ROOT TOOLS: {root_tools_count} tools")
-        
-        # Check sub-agents
-        if hasattr(root_agent, 'sub_agents') and root_agent.sub_agents:
-            sub_agent_names = [sa.name if hasattr(sa, 'name') else 'UNNAMED' for sa in root_agent.sub_agents]
-            logger.info(f"SUB-AGENTS: {', '.join(sub_agent_names)}")
-            
-            # Check all individual sub-agents
-            for i, sa in enumerate(root_agent.sub_agents):
-                sa_name = sa.name if hasattr(sa, 'name') else f"UNNAMED-{i}"
-                sa_tools_count = len(sa.tools) if hasattr(sa, 'tools') and sa.tools else 0
-                
-                # In ADK 0.4.0, the relationship is through sub_agents list
-                parent_in_tree = sa in root_agent.sub_agents
-                
-                logger.info(f"  SUB-AGENT[{i}]: name='{sa_name}', tools={sa_tools_count}")
-                logger.info(f"  SUB-AGENT[{i}] RELATIONSHIP: in_tree={parent_in_tree}")
-        else:
-            logger.warning("  NO SUB-AGENTS FOUND")
-            
-        # Check runner
-        if hasattr(self, 'runner'):
-            runner_app_name = self.runner.app_name if hasattr(self.runner, 'app_name') else 'MISSING'
-            logger.info(f"RUNNER: app_name='{runner_app_name}'")
-        else:
-            logger.warning("  NO RUNNER FOUND")
-        
-        logger.info("==============================================================")
-        logger.info("AGENT TREE VERIFICATION COMPLETED")
 
+# Singleton session manager
 class SessionManager:
     """Manager for web sessions and their associated runners."""
     
@@ -1221,47 +543,27 @@ class SessionManager:
         logger.info("Session manager initialized")
     
     async def get_runner(self, session_id: str) -> Optional[SessionRunner]:
-        """Get runner for a session.
-        
-        Args:
-            session_id: Session ID
-            
-        Returns:
-            SessionRunner instance or None if session not found
-        """
+        """Get runner for a session."""
         async with self.lock:
             return self.sessions.get(session_id)
     
     async def set_runner(self, session_id: str, runner: SessionRunner):
-        """Set runner for a session.
-        
-        Args:
-            session_id: Session ID
-            runner: SessionRunner instance
-        """
+        """Set runner for a session."""
         async with self.lock:
             self.sessions[session_id] = runner
             logger.info(f"Runner set for session {session_id}")
     
     async def reset_session(self, session_id: str):
-        """Reset a session.
-        
-        Args:
-            session_id: Session ID to reset
-        """
+        """Reset a session."""
         runner = await self.get_runner(session_id)
         if runner:
             runner.reset_session()
             logger.info(f"Reset session {session_id}")
         else:
             logger.warning(f"Attempted to reset non-existent session {session_id}")
-
+    
     async def remove_session(self, session_id: str):
-        """Remove a session.
-        
-        Args:
-            session_id: Session ID to remove
-        """
+        """Remove a session."""
         async with self.lock:
             if session_id in self.sessions:
                 del self.sessions[session_id]
@@ -1269,30 +571,20 @@ class SessionManager:
             else:
                 logger.warning(f"Attempted to remove non-existent session {session_id}")
 
-# Singleton session manager
+# Singleton session manager instance
 _session_manager = SessionManager()
 
+# Session manager dependency
 def get_session_manager() -> SessionManager:
-    """Get the session manager.
-    
-    Returns:
-        SessionManager instance
-    """
+    """Get the session manager."""
     return _session_manager
 
+# Runner dependency for FastAPI
 async def get_or_create_runner_for_session(
     session_id: str, 
     session_manager: SessionManager = Depends(get_session_manager)
 ) -> SessionRunner:
-    """Get or create a SessionRunner for a session.
-    
-    Args:
-        session_id: Session ID
-        session_manager: SessionManager instance
-        
-    Returns:
-        SessionRunner instance
-    """
+    """Get or create a SessionRunner for a session."""
     # Check if we already have a runner for this session
     runner = await session_manager.get_runner(session_id)
     if runner:

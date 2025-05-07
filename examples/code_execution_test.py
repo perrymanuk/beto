@@ -3,11 +3,14 @@ Test script for the ADK built-in code execution tool.
 
 This script creates a standalone agent that uses the built-in code execution tool
 and tests it with a simple factorial calculation.
+
+To test: python -m examples.code_execution_test
 """
 
 import asyncio
 import logging
 import os
+import sys
 from dotenv import load_dotenv
 
 # Set up logging
@@ -17,15 +20,36 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Make sure radbot is in the path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Make sure code execution is enabled
+os.environ["RADBOT_ENABLE_ADK_CODE_EXEC"] = "true"
+os.environ["RADBOT_FORCE_CODE_EXEC"] = "true"
+
 # Import ADK components
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.genai.types import Content, Part, GenerateContentConfig, Tool, ToolCodeExecution
+from google.genai.types import Content, Part, GenerateContentConfig, Tool
+
+# Handle different import paths for ToolCodeExecution
+try:
+    # Try to import from types directly (newer versions)
+    from google.genai.types import ToolCodeExecution
+except ImportError:
+    try:
+        # Try to import from separate types classes (older versions)
+        from google.genai.types.tool_types import ToolCodeExecution
+    except ImportError:
+        # Define a minimal wrapper if not available
+        class ToolCodeExecution:
+            def __init__(self):
+                pass
 
 # Constants
-AGENT_NAME = "code_execution_test"
-APP_NAME = "code_execution_test"
 USER_ID = "test_user"
 SESSION_ID = "test_session"
 # Use your desired model
@@ -35,40 +59,37 @@ def main():
     """Run the code execution test."""
     logger.info(f"Creating code execution test agent with model {MODEL_NAME}")
     
-    # Create a simple agent with code execution configured directly
-    agent = Agent(
-        name=AGENT_NAME,
+    # Import our proper code execution agent from the tools module
+    from radbot.tools.adk_builtin.code_execution_tool import create_code_execution_agent
+    
+    # Create the agent using our standard factory function, disabling transfer_tool for standalone tests
+    code_agent = create_code_execution_agent(
+        name="code_execution_agent",
         model=MODEL_NAME,
-        instruction="""
-        You are a code execution agent. When asked to calculate something, write and execute
-        Python code to perform the calculation. 
-        
-        For example, if asked to calculate a factorial, you should:
-        1. Write the Python code to calculate the factorial
-        2. Execute the code using the built-in code execution capability
-        3. Return the result along with an explanation
-        
-        Always explain your code and the results.
-        """,
-        description="An agent that can execute Python code."
+        instruction_name="code_execution_agent",  # Will load from config if exists
+        include_transfer_tool=False  # Disable transfer tool for standalone tests
     )
     
-    # Configure code execution explicitly
-    agent.config = GenerateContentConfig()
-    agent.config.tools = [Tool(code_execution=ToolCodeExecution())]
-    logger.info("Configured code execution explicitly")
+    logger.info(f"Created agent without transfer_to_agent tool for standalone testing")
+    
+    # Log the agent details
+    logger.info(f"Created code execution agent with name '{code_agent.name}' using model '{code_agent.model}'")
+    
+    # Log the tools available
+    tool_names = [getattr(tool, 'name', None) or getattr(tool, '__name__', str(tool)) for tool in code_agent.tools]
+    logger.info(f"Agent has {len(code_agent.tools)} tools: {', '.join(tool_names)}")
     
     # Create session service and runner
     session_service = InMemorySessionService()
     session = session_service.create_session(
-        app_name=APP_NAME,
+        app_name=code_agent.name,  # Use agent name as app_name for ADK 0.4.0+
         user_id=USER_ID,
         session_id=SESSION_ID
     )
     
     runner = Runner(
-        agent=agent,
-        app_name=APP_NAME,
+        agent=code_agent,
+        app_name=code_agent.name,  # Use agent name as app_name for ADK 0.4.0+
         session_service=session_service
     )
     

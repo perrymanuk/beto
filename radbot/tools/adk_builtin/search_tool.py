@@ -10,6 +10,7 @@ from typing import Optional, Any
 
 from google.adk.agents import Agent, LlmAgent
 from google.adk.tools import google_search
+from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
 
 from radbot.config import config_manager
 from radbot.config.settings import ConfigManager
@@ -22,19 +23,27 @@ def create_search_agent(
     model: Optional[str] = None,
     config: Optional[ConfigManager] = None,
     instruction_name: str = "search_agent",
+    include_transfer_tool: bool = True,
 ) -> Agent:
     """
     Create an agent with Google Search capabilities.
     
     Args:
-        name: Name for the agent
+        name: Name for the agent (should be "search_agent" for consistent transfers)
         model: Optional model override (defaults to config's main_model)
         config: Optional config manager (uses global if not provided)
         instruction_name: Name of instruction to load from config
+        include_transfer_tool: Whether to include transfer_to_agent tool (default: True)
+                              Set to False for standalone usage with Vertex AI
         
     Returns:
         Agent with Google Search tool
     """
+    # Ensure agent name is always "search_agent" for consistent transfers
+    if name != "search_agent":
+        logger.warning(f"Agent name '{name}' changed to 'search_agent' for consistent transfers")
+        name = "search_agent"
+        
     # Use provided config or default
     cfg = config or config_manager
     
@@ -59,25 +68,72 @@ def create_search_agent(
             "You are a web search agent. When asked about recent events, news, "
             "or facts that may have changed since your training, use the Google Search "
             "tool to find current information. Always cite your sources clearly. "
-            "When you don't need to search, answer from your knowledge."
+            "When you don't need to search, answer from your knowledge. "
+            "When your task is complete, transfer back to the main agent using "
+            "transfer_to_agent(agent_name='beto') or transfer to another agent "
+            "if needed using transfer_to_agent(agent_name='agent_name')."
         )
     
-    # Create the search agent
+    # Import transfer_to_agent
     from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+    
+    # Due to Vertex AI limitations, we can only use one tool at a time
+    # Prioritize the google_search tool for this agent
+    tools = [google_search]
+    
+    # Create the agent with just the search tool
+    # Add instructions for how to transfer back
+    transfer_instructions = "\n\nWhen you're done, say 'TRANSFER_BACK_TO_BETO' to return to the main agent."
+    
     search_agent = Agent(
         name=name,
         model=model_name,
-        instruction=instruction,
+        instruction=instruction + transfer_instructions,
         description="A specialized agent that can search the web using Google Search.",
-        tools=[google_search, transfer_to_agent]
+        tools=tools
     )
     
     # Enable search explicitly if using Vertex AI
     if cfg.is_using_vertex_ai():
-        from google.genai import types
-        search_agent.config = types.GenerateContentConfig()
-        search_agent.config.tools = [types.Tool(google_search=types.ToolGoogleSearch())]
-        logger.info("Explicitly configured Google Search tool for Vertex AI")
+        try:
+            from google.genai import types
+            
+            # Handle different import paths for ToolGoogleSearch
+            try:
+                # Try to import from types directly (newer versions)
+                ToolGoogleSearch = types.ToolGoogleSearch
+            except AttributeError:
+                try:
+                    # Try to import from separate types classes (older versions)
+                    from google.genai.types.tool_types import ToolGoogleSearch
+                except ImportError:
+                    # Define a minimal wrapper if not available
+                    class ToolGoogleSearch:
+                        def __init__(self):
+                            pass
+            
+            # Check if the agent has a config attribute already
+            if not hasattr(search_agent, "config"):
+                # For LlmAgent type in ADK 0.4.0+
+                if hasattr(search_agent, "set_config"):
+                    # Use set_config method if available
+                    config = types.GenerateContentConfig()
+                    config.tools = [types.Tool(google_search=ToolGoogleSearch())]
+                    search_agent.set_config(config)
+                    logger.info("Set Google Search config via set_config method for Vertex AI")
+                else:
+                    # Try to add config attribute directly
+                    search_agent.config = types.GenerateContentConfig()
+                    search_agent.config.tools = [types.Tool(google_search=ToolGoogleSearch())]
+                    logger.info("Added config attribute directly for Google Search with Vertex AI")
+            else:
+                # Update existing config
+                if not hasattr(search_agent.config, "tools"):
+                    search_agent.config.tools = []
+                search_agent.config.tools.append(types.Tool(google_search=ToolGoogleSearch()))
+                logger.info("Updated existing config with Google Search tool for Vertex AI")
+        except Exception as e:
+            logger.warning(f"Failed to configure Google Search for Vertex AI: {str(e)}")
     
     logger.info(f"Created search agent '{name}' with google_search tool")
     return search_agent
@@ -94,22 +150,71 @@ def register_search_agent(parent_agent: Agent, search_agent: Optional[Agent] = N
     agent_to_register = search_agent or create_search_agent()
     
     # Get current sub-agents
-    current_sub_agents = list(parent_agent.sub_agents) if parent_agent.sub_agents else []
+    current_sub_agents = list(parent_agent.sub_agents) if hasattr(parent_agent, 'sub_agents') and parent_agent.sub_agents else []
     
     # Check if we already have a search agent
+    search_agent_exists = False
     for existing_agent in current_sub_agents:
-        if existing_agent.name == agent_to_register.name:
+        if hasattr(existing_agent, 'name') and existing_agent.name == agent_to_register.name:
             logger.warning(f"Search agent '{agent_to_register.name}' already registered")
-            return
+            search_agent_exists = True
+            agent_to_register = existing_agent  # Use the existing agent for further updates
+            break
     
-    # Add the search agent to the sub-agents list
-    current_sub_agents.append(agent_to_register)
-    parent_agent.sub_agents = current_sub_agents
+    # Add the search agent to the sub-agents list if not already there
+    if not search_agent_exists:
+        current_sub_agents.append(agent_to_register)
+        parent_agent.sub_agents = current_sub_agents
+        logger.info(f"Registered search agent '{agent_to_register.name}' with parent agent '{parent_agent.name if hasattr(parent_agent, 'name') else 'unnamed'}'")
     
-    # Set parent relationship for agent transfers
-    if hasattr(agent_to_register, 'parent'):
-        agent_to_register.parent = parent_agent
-    elif hasattr(agent_to_register, '_parent'):
-        agent_to_register._parent = parent_agent
+    # For ADK 0.4.0+, bidirectional navigation requires the parent to be in the
+    # search agent's sub_agents list as well (for transfers back)
+    try:
+        # Set up bidirectional navigation
+        search_sub_agents = list(agent_to_register.sub_agents) if hasattr(agent_to_register, 'sub_agents') and agent_to_register.sub_agents else []
+        
+        # Check if parent is already in search agent's sub_agents
+        parent_exists = False
+        for existing_agent in search_sub_agents:
+            if hasattr(existing_agent, 'name') and existing_agent.name == parent_agent.name:
+                parent_exists = True
+                break
+        
+        # Add parent to search agent's sub_agents if not already there
+        if not parent_exists:
+            from google.adk.agents import Agent
+            # Create a proxy for the parent (minimal version with just enough for transfers)
+            parent_proxy = Agent(
+                name=parent_agent.name if hasattr(parent_agent, 'name') else "beto",
+                model=parent_agent.model if hasattr(parent_agent, 'model') else None,
+                instruction="Main coordinating agent",
+                description="Main agent for coordinating tasks",
+                tools=[transfer_to_agent]  # Critical to have transfer_to_agent
+            )
             
-    logger.info(f"Registered search agent '{agent_to_register.name}' with parent agent '{parent_agent.name}'")
+            search_sub_agents.append(parent_proxy)
+            agent_to_register.sub_agents = search_sub_agents
+            logger.info(f"Added parent agent '{parent_proxy.name}' to search agent sub_agents for bidirectional navigation")
+    except Exception as e:
+        logger.warning(f"Failed to add parent to search agent's sub_agents: {str(e)}")
+    
+    # For Vertex AI compatibility, we don't add transfer_to_agent tool
+    # as Vertex AI only supports one tool at a time.
+    # Instead, we rely on the instruction to tell the agent to say "TRANSFER_BACK_TO_BETO"
+    
+    # Check if agent is already using more than one tool
+    if hasattr(agent_to_register, 'tools') and len(agent_to_register.tools) > 1:
+        # If we're using Vertex AI, restrict to only google_search
+        if config_manager.is_using_vertex_ai():
+            # Keep only the google_search tool
+            agent_to_register.tools = [google_search]
+            logger.warning(
+                f"Restricted search agent '{agent_to_register.name}' to only "
+                "google_search tool for Vertex AI compatibility"
+            )
+    
+    # Ensure the agent has the transfer_back instruction
+    if hasattr(agent_to_register, 'instruction') and "TRANSFER_BACK_TO_BETO" not in agent_to_register.instruction:
+        transfer_instructions = "\n\nWhen you're done, say 'TRANSFER_BACK_TO_BETO' to return to the main agent."
+        agent_to_register.instruction += transfer_instructions
+        logger.info(f"Added transfer_back instructions to agent '{agent_to_register.name}'")

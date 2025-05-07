@@ -7,7 +7,8 @@ The ADK web interface uses this file directly based on the adk.config.json setti
 
 import logging
 import os
-from typing import Optional, Any, List, Dict, Union
+from typing import Optional, Any, List
+from datetime import date
 
 # Set up logging
 logging.basicConfig(
@@ -22,13 +23,9 @@ load_dotenv()
 
 # Import ADK components
 from google.adk.agents import Agent
+from google.adk.agents.callback_context import CallbackContext
+from google.genai import types
 from radbot.config import config_manager
-
-# Import the core agent implementation
-from radbot.agent.agent import create_core_agent_for_web
-
-# Import the ADK's built-in transfer_to_agent tool
-from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
 
 # Import calendar tools
 from radbot.tools.calendar.calendar_tools import (
@@ -39,67 +36,226 @@ from radbot.tools.calendar.calendar_tools import (
     check_calendar_availability_tool
 )
 
-# Log configuration
+# Log basic info
 logger.info(f"Config manager loaded. Model config: {config_manager.model_config}")
 logger.info(f"Main model from config: '{config_manager.get_main_model()}'")
-logger.info(f"Environment RADBOT_MAIN_MODEL: '{os.environ.get('RADBOT_MAIN_MODEL')}'")
-logger.info(f"Using Vertex AI: {config_manager.is_using_vertex_ai()}")
-
-# Check Google Cloud credentials for built-in tools
-google_cloud_project = os.environ.get("GOOGLE_CLOUD_PROJECT")
-google_cloud_location = os.environ.get("GOOGLE_CLOUD_LOCATION")
-if google_cloud_project and google_cloud_location:
-    logger.info(f"Google Cloud credentials found: Project={google_cloud_project}, Location={google_cloud_location}")
-    # Set up Application Default Credentials access
-    try:
-        from google.auth import default
-        creds, project = default()
-        logger.info(f"Successfully loaded ADC credentials for project: {project}")
-    except Exception as e:
-        logger.warning(f"Failed to load ADC credentials: {e}")
-        logger.warning("ADK built-in tools like google_search may not work properly without valid ADC credentials")
-        logger.warning("Run 'gcloud auth application-default login' to set up ADC credentials")
-else:
-    logger.warning("Google Cloud credentials not found in environment variables")
-    logger.warning("Set GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION for ADK built-in tools")
-    logger.warning("Also ensure you've run 'gcloud auth application-default login'")
-
 
 # Import tools
+from google.adk.tools import load_artifacts
 from radbot.tools.basic import get_current_time, get_weather
 from radbot.tools.memory import search_past_conversations, store_important_information
 from radbot.tools.web_search import create_tavily_search_tool
 from radbot.tools.mcp import create_fileserver_toolset
-from radbot.tools.mcp import create_crawl4ai_toolset, test_crawl4ai_connection
-from radbot.tools.shell import get_shell_tool  # ADK-compatible tool function
-from radbot.tools.todo import ALL_TOOLS, init_database  # Todo tools
+from radbot.tools.mcp import create_crawl4ai_toolset
+from radbot.tools.shell import get_shell_tool
+from radbot.tools.todo import ALL_TOOLS, init_database
 
-# Import Home Assistant REST API tools
+# Import Home Assistant tools
 from radbot.tools.homeassistant import (
     list_ha_entities,
     get_ha_entity_state,
     turn_on_ha_entity,
     turn_off_ha_entity,
     toggle_ha_entity,
-    search_ha_entities  # Use our direct implementation
+    search_ha_entities,
+    get_ha_client
 )
 
-# Ensure the Home Assistant client is properly initialized
-from radbot.tools.homeassistant import get_ha_client
+# Import agent factory functions
+from radbot.tools.adk_builtin.search_tool import create_search_agent
+from radbot.tools.adk_builtin.code_execution_tool import create_code_execution_agent
+from radbot.agent.research_agent.factory import create_research_agent
 
-# Import Home Assistant integration
-from radbot.agent.home_assistant_agent_factory import create_home_assistant_agent_factory
-from radbot.config.settings import ConfigManager
+# Import the AgentTool functions for sub-agent interactions
+from radbot.tools.agent_tools import (
+    call_search_agent,
+    call_code_execution_agent,
+    call_scout_agent
+)
 
-# Import Research Agent
-from radbot.agent.research_agent import create_research_agent
+# Create all the sub-agents we'll need
+search_agent = create_search_agent(name="search_agent")
+code_execution_agent = create_code_execution_agent(name="code_execution_agent")
+scout_agent = create_research_agent(name="scout", as_subagent=False)
 
 # Log startup
 logger.info("ROOT agent.py loaded - this is the main implementation loaded by ADK web")
 print(f"SPECIAL DEBUG: agent.py loaded with MCP_FS_ROOT_DIR={os.environ.get('MCP_FS_ROOT_DIR', 'Not set')}")
 
-# We're using REST API approach for Home Assistant
 
+def setup_before_agent_call(callback_context: CallbackContext):
+    """Setup agent before each call."""
+    # Initialize Todo database schema if needed
+    if "todo_init" not in callback_context.state:
+        try:
+            init_database()
+            callback_context.state["todo_init"] = True
+            logger.info("Todo database schema initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Todo database: {str(e)}")
+            callback_context.state["todo_init"] = False
+    
+    # Initialize Home Assistant client if not already done
+    if "ha_client_init" not in callback_context.state:
+        try:
+            ha_client = get_ha_client()
+            if ha_client:
+                try:
+                    entities = ha_client.list_entities()
+                    if entities:
+                        logger.info(f"Successfully connected to Home Assistant. Found {len(entities)} entities.")
+                        callback_context.state["ha_client_init"] = True
+                    else:
+                        logger.warning("Connected to Home Assistant but no entities were returned")
+                        callback_context.state["ha_client_init"] = False
+                except Exception as e:
+                    logger.error(f"Error testing Home Assistant connection: {e}")
+                    callback_context.state["ha_client_init"] = False
+            else:
+                logger.warning("Home Assistant client could not be initialized")
+                callback_context.state["ha_client_init"] = False
+        except Exception as e:
+            logger.error(f"Error initializing Home Assistant client: {e}")
+            callback_context.state["ha_client_init"] = False
+
+
+# Create all the tools we'll use
+tools = []
+
+# Add AgentTool functions first (high priority)
+tools.extend([
+    call_search_agent,
+    call_code_execution_agent,
+    call_scout_agent
+])
+
+# Add Tavily web search tool
+try:
+    web_search_tool = create_tavily_search_tool(
+        max_results=3,
+        search_depth="advanced",
+        include_answer=True,
+        include_raw_content=True
+    )
+    if web_search_tool:
+        tools.append(web_search_tool)
+        logger.info("Added web_search tool")
+except Exception as e:
+    logger.warning(f"Failed to create Tavily search tool: {e}")
+
+# Add basic tools
+tools.extend([
+    get_current_time,
+    get_weather
+])
+
+# Add calendar tools
+tools.extend([
+    list_calendar_events_tool,
+    create_calendar_event_tool,
+    update_calendar_event_tool,
+    delete_calendar_event_tool,
+    check_calendar_availability_tool
+])
+
+# Add Home Assistant tools
+tools.extend([
+    search_ha_entities,
+    list_ha_entities,
+    get_ha_entity_state,
+    turn_on_ha_entity,
+    turn_off_ha_entity,
+    toggle_ha_entity
+])
+
+# Add filesystem tools
+try:
+    fs_tools = create_fileserver_toolset()
+    if fs_tools:
+        tools.extend(fs_tools)
+        logger.info(f"Added {len(fs_tools)} filesystem tools")
+except Exception as e:
+    logger.warning(f"Failed to create filesystem tools: {e}")
+
+# Add Crawl4AI tools
+try:
+    crawl4ai_tools = create_crawl4ai_toolset()
+    if crawl4ai_tools:
+        tools.extend(crawl4ai_tools)
+        logger.info(f"Added {len(crawl4ai_tools)} Crawl4AI tools")
+except Exception as e:
+    logger.warning(f"Failed to create Crawl4AI tools: {e}")
+
+# Add Shell Command Execution tool
+try:
+    # Default to strict mode
+    shell_tool = get_shell_tool(strict_mode=True)
+    tools.append(shell_tool)
+    logger.info("Added shell command execution tool in STRICT mode")
+except Exception as e:
+    logger.warning(f"Failed to create shell command execution tool: {e}")
+
+# Add Todo Tools
+try:
+    tools.extend(ALL_TOOLS)
+    logger.info(f"Added {len(ALL_TOOLS)} Todo tools")
+except Exception as e:
+    logger.warning(f"Failed to add Todo tools: {e}")
+
+# Add memory tools
+tools.extend([
+    search_past_conversations,
+    store_important_information
+])
+
+# Add artifacts loading tool
+tools.append(load_artifacts)
+
+# Get the instruction from the config manager
+instruction = config_manager.get_instruction("main_agent")
+
+# Add AgentTool instructions
+instruction += """
+## Specialized Agent Tools
+
+You have access to specialized agents through these tools:
+
+1. `call_search_agent(query, max_results=5)` - Perform web searches using Google Search.
+   Example: call_search_agent(query="latest news on quantum computing")
+
+2. `call_code_execution_agent(code, description="")` - Execute Python code.
+   Example: call_code_execution_agent(code="print('Hello world')", description="Simple test")
+
+3. `call_scout_agent(research_topic)` - Research a topic using a specialized agent.
+   Example: call_scout_agent(research_topic="environmental impact of electric vehicles")
+
+Use these tools when you need specialized capabilities.
+"""
+
+# Get the model name from config
+model_name = config_manager.get_main_model()
+logger.info(f"Using model: {model_name}")
+
+# Get today's date for the global instruction
+today = date.today()
+
+# Create the root agent
+root_agent = Agent(
+    model=model_name,
+    name="beto",
+    instruction=instruction,
+    global_instruction=f"""
+    You are an intelligent agent for handling various tasks.
+    Today's date: {today}
+    """,
+    sub_agents=[search_agent, code_execution_agent, scout_agent],
+    tools=tools,
+    before_agent_callback=setup_before_agent_call,
+    generate_content_config=types.GenerateContentConfig(temperature=0.2),
+)
+
+# Log agent creation
+logger.info(f"Created root agent 'beto' with {len(tools)} tools and {len(root_agent.sub_agents)} sub-agents")
 
 def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
     """
@@ -114,806 +270,10 @@ def create_agent(tools: Optional[List[Any]] = None, app_name: str = "beto"):
     Returns:
         An ADK BaseAgent instance
     """
-    logger.info("Creating agent for ADK web interface")
-    
-    # Start with basic tools - added back get_weather as requested
-    basic_tools = [get_current_time, get_weather]
-    
-    # Add calendar tools
-    calendar_tools = [
-        list_calendar_events_tool,
-        create_calendar_event_tool,
-        update_calendar_event_tool,
-        delete_calendar_event_tool,
-        check_calendar_availability_tool
-    ]
-    logger.info(f"Adding calendar tools")
-    basic_tools.extend(calendar_tools)
-    
-    # Always include memory tools
-    memory_tools = [search_past_conversations, store_important_information]
-    logger.info(f"Including memory tools: {[t.__name__ for t in memory_tools]}")
-    
-    # Initialize Todo Database
-    try:
-        logger.info("Initializing Todo database schema...")
-        init_database()
-        logger.info("Todo database schema initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize Todo database: {str(e)}")
-        logger.error("Todo functionality will not be available")
-    
-    # Add Home Assistant REST API integration
-    logger.info("Using Home Assistant REST API integration in agent creation")
-    
-    # Initialize Home Assistant client
-    ha_client = get_ha_client()
-    if ha_client:
-        logger.info(f"Home Assistant client initialized: {ha_client.base_url}")
-        
-        # Test connection by listing entities
-        try:
-            entities = ha_client.list_entities()
-            if entities:
-                logger.info(f"Successfully connected to Home Assistant. Found {len(entities)} entities.")
-            else:
-                logger.warning("Connected to Home Assistant but no entities were returned")
-        except Exception as e:
-            logger.error(f"Error testing Home Assistant connection: {e}")
-    else:
-        logger.warning("Home Assistant client could not be initialized - check HA_URL and HA_TOKEN")
-    
-    # Add Home Assistant REST API tools
-    ha_tools = [
-        search_ha_entities,
-        list_ha_entities,
-        get_ha_entity_state,
-        turn_on_ha_entity,
-        turn_off_ha_entity,
-        toggle_ha_entity
-    ]
-    basic_tools.extend(ha_tools)
-    logger.info(f"Added {len(ha_tools)} Home Assistant REST API tools")
-    
-    # Add Direct Filesystem tools (previously used MCP Fileserver)
-    try:
-        # Print filesystem configuration
-        mcp_fs_root_dir = os.environ.get("MCP_FS_ROOT_DIR")
-        if mcp_fs_root_dir:
-            logger.info(f"Filesystem: Using root directory {mcp_fs_root_dir}")
-            print(f"SPECIAL DEBUG: MCP_FS_ROOT_DIR={mcp_fs_root_dir}")  # Will print even in subprocess
-        else:
-            logger.info("Filesystem: Root directory not set (MCP_FS_ROOT_DIR not found in environment)")
-            print("SPECIAL DEBUG: MCP_FS_ROOT_DIR not set")  # Will print even in subprocess
-            
-        logger.info("Creating filesystem tools using direct implementation...")
-        print("SPECIAL DEBUG: About to call create_fileserver_toolset() [direct implementation]")  # Will print even in subprocess
-        fs_tools = create_fileserver_toolset()
-        if fs_tools:
-            # Log detailed information about each filesystem tool
-            logger.debug(f"Direct filesystem implementation returned {len(fs_tools)} tools")
-            for i, tool in enumerate(fs_tools):
-                tool_name = tool.name if hasattr(tool, 'name') else str(tool)
-                tool_type = type(tool).__name__
-                logger.debug(f"  FS Tool {i+1}: {tool_name} (type: {tool_type})")
-            
-            # fs_tools is now a list of tools, so extend basic_tools with it
-            basic_tools.extend(fs_tools)
-            
-            # Log tools individually for better debugging
-            fs_tool_names = [tool.name if hasattr(tool, 'name') else str(tool) for tool in fs_tools]
-            logger.info(f"Successfully added {len(fs_tools)} filesystem tools: {', '.join(fs_tool_names)}")
-        else:
-            logger.warning("Filesystem tools not available (returned None)")
-            
-        logger.info("NOTE: Using direct filesystem implementation (no MCP server required)")
-        print("SPECIAL DEBUG: Using direct filesystem implementation (no MCP server required)")
-
-    except Exception as e:
-        logger.warning(f"Failed to create filesystem tools: {str(e)}")
-        logger.debug(f"Filesystem tool creation error details:", exc_info=True)
-        
-    # Add Crawl4AI tools
-    try:
-        logger.info("Creating Crawl4AI toolset...")
-        # First check if we have the necessary environment variables
-        crawl4ai_api_url = os.environ.get("CRAWL4AI_API_URL", "https://crawl4ai.demonsafe.com")
-        
-        # We'll proceed with or without a token
-        logger.info(f"Crawl4AI: Using API URL {crawl4ai_api_url}")
-        crawl4ai_tools = create_crawl4ai_toolset()
-        
-        if crawl4ai_tools:
-            # Log detailed information about each Crawl4AI tool
-            logger.debug(f"Crawl4AI returned {len(crawl4ai_tools)} tools")
-            for i, tool in enumerate(crawl4ai_tools):
-                tool_name = tool.name if hasattr(tool, 'name') else str(tool)
-                tool_type = type(tool).__name__
-                logger.debug(f"  Crawl4AI Tool {i+1}: {tool_name} (type: {tool_type})")
-            
-            # Add tools to basic_tools
-            basic_tools.extend(crawl4ai_tools)
-            
-            # Log tools individually for better debugging
-            crawl4ai_tool_names = [tool.name if hasattr(tool, 'name') else str(tool) for tool in crawl4ai_tools]
-            logger.info(f"Successfully added {len(crawl4ai_tools)} Crawl4AI tools: {', '.join(crawl4ai_tool_names)}")
-        else:
-            logger.warning("Crawl4AI tools not available (returned None)")
-    except Exception as e:
-        logger.warning(f"Failed to create Crawl4AI tools: {str(e)}")
-        logger.debug(f"Crawl4AI tool creation error details:", exc_info=True)
-    
-    # Add Tavily web search tool
-    try:
-        web_search_tool = create_tavily_search_tool(
-            max_results=3,
-            search_depth="advanced",
-            include_answer=True,
-            include_raw_content=True
-        )
-        if web_search_tool:
-            basic_tools.insert(0, web_search_tool)  # Add as highest priority
-            logger.info("Successfully added web_search tool to base tools")
-    except Exception as e:
-        logger.warning(f"Failed to create Tavily search tool: {str(e)}")
-        
-        # If the function tool creation failed, try a simple direct function approach
-        try:
-            # Define a simple function without decorators
-            def web_search(query: str) -> str:
-                """Search the web for current information on a topic."""
-                from radbot.tools.web_search import HAVE_TAVILY, TavilySearchResults
-                
-                logger.info(f"Running fallback web search for query: {query}")
-                
-                try:
-                    if HAVE_TAVILY and os.environ.get("TAVILY_API_KEY"):
-                        # Instantiate LangChain's Tavily search tool
-                        tavily_search = TavilySearchResults(
-                            max_results=3,
-                            search_depth="advanced",
-                            include_answer=True,
-                            include_raw_content=True,
-                            include_images=False,
-                        )
-                        # Use the tool directly
-                        results = tavily_search.invoke(query)
-                        return results
-                    else:
-                        return f"Unable to search for '{query}'. Tavily search is not available."
-                except Exception as e:
-                    logger.error(f"Error in fallback web_search: {str(e)}")
-                    return f"Error searching for '{query}': {str(e)}"
-            
-            # Try to wrap it with FunctionTool
-            from google.adk.tools import FunctionTool
-            web_search.__name__ = "web_search"  # Ensure function name is correct for LLM
-            search_tool = FunctionTool(web_search)
-            basic_tools.insert(0, search_tool)
-            logger.info("Added fallback web_search tool to base tools")
-        except Exception as e:
-            logger.error(f"Failed to create fallback web search tool: {str(e)}")
-    
-    # Add Shell Command Execution tool
-    try:
-        # Check for shell command execution flag in environment
-        enable_shell = os.environ.get("RADBOT_ENABLE_SHELL", "strict").lower()
-        
-        if enable_shell in ["true", "1", "yes", "enable", "all", "allow"]:
-            # Allow all mode (SECURITY RISK)
-            logger.warning(
-                "SECURITY WARNING: Adding shell command execution in ALLOW ALL mode. "
-                "This allows execution of ANY command without restrictions!"
-            )
-            # Note: get_shell_tool now returns an ADK-compatible FunctionTool
-            shell_tool = get_shell_tool(strict_mode=False)
-            basic_tools.append(shell_tool)
-            logger.info("Added shell command execution tool in ALLOW ALL mode")
-        elif enable_shell in ["strict", "restricted", "secure"]:
-            # Strict mode (only allow-listed commands)
-            logger.info("Adding shell command execution tool in STRICT mode (only allow-listed commands)")
-            # Note: get_shell_tool now returns an ADK-compatible FunctionTool
-            shell_tool = get_shell_tool(strict_mode=True)
-            basic_tools.append(shell_tool)
-            logger.info("Added shell command execution tool in STRICT mode")
-        else:
-            logger.info("Shell command execution is disabled")
-    except Exception as e:
-        logger.warning(f"Failed to create shell command execution tool: {str(e)}")
-        logger.debug(f"Shell command tool creation error details:", exc_info=True)
-    
-    # Add Todo Tools
-    try:
-        logger.info("Adding Todo tools to agent...")
-        basic_tools.extend(ALL_TOOLS)
-        logger.info(f"Added {len(ALL_TOOLS)} Todo tools to agent")
-    except Exception as e:
-        logger.warning(f"Failed to add Todo tools: {str(e)}")
-        logger.debug(f"Todo tool addition error details:", exc_info=True)
-    
-    # Add the ADK's built-in transfer_to_agent tool
-    try:
-        # Rather than wrapping in a FunctionTool, add transfer_to_agent directly
-        # as it's likely already properly registered within the ADK
-        basic_tools.append(transfer_to_agent)
-        logger.info("Added transfer_to_agent function directly to tools list")
-        
-        # Check if the function tool is available in the ADK
-        try:
-            from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
-            if TRANSFER_TO_AGENT_TOOL:
-                basic_tools.append(TRANSFER_TO_AGENT_TOOL)
-                logger.info("Added TRANSFER_TO_AGENT_TOOL from ADK")
-        except ImportError:
-            # Not available in this ADK version, ignore
-            pass
-    except Exception as e:
-        logger.warning(f"Failed to add transfer_to_agent tool: {str(e)}")
-        logger.debug(f"Transfer tool addition error details:", exc_info=True)
-    
-    # Add any additional tools if provided
-    all_tools = list(basic_tools) + memory_tools
+    # If additional tools are provided, add them to the agent
     if tools:
-        all_tools.extend(tools)
+        all_tools = list(root_agent.tools) + list(tools)
+        root_agent.tools = all_tools
+        logger.info(f"Added {len(tools)} additional tools to agent")
     
-    # Log all tools being added
-    tool_names = []
-    for tool in all_tools:
-        if hasattr(tool, '__name__'):
-            tool_names.append(tool.__name__)
-        elif hasattr(tool, 'name'):
-            tool_names.append(tool.name)
-        else:
-            tool_names.append(str(type(tool)))
-    
-    logger.info(f"Creating web agent with tools: {', '.join(tool_names)}")
-    
-    # Get the instruction
-    try:
-        instruction = config_manager.get_instruction("main_agent")
-        
-        # Safely check tools (avoiding errors with None values)
-        file_tool_exists = False
-        ha_tool_exists = False
-        shell_tool_exists = False
-        todo_tool_exists = False
-        
-        for tool in all_tools:
-            if tool is None:
-                continue
-                
-            tool_str = str(tool).lower()
-            if "file" in tool_str:
-                file_tool_exists = True
-            if "home_assistant" in tool_str or "ha_" in tool_str:
-                ha_tool_exists = True
-            if "shell" in tool_str or "command" in tool_str or "execute" in tool_str:
-                shell_tool_exists = True
-            if "task" in tool_str or "todo" in tool_str:
-                todo_tool_exists = True
-        
-        # Add filesystem instructions if available
-        if file_tool_exists:
-            fs_instruction = """
-            You can access files on the system through the filesystem tools. Here are some examples:
-            - To list files: Use the list_directory tool with the path parameter
-            - To read a file: Use the read_file tool with the path parameter
-            - To get file info: Use the get_info tool with the path parameter
-            - To search for files: Use the search tool with path and pattern parameters
-            
-            If write operations are enabled, you can also:
-            - Write to a file: Use the write_file tool with path and content parameters
-            - Edit a file: Use the edit_file tool with path and edits parameters
-            - Copy files: Use the copy tool with source_path and destination_path parameters
-            
-            If delete operations are enabled, you can also:
-            - Delete files: Use the delete tool with the path parameter
-            
-            Always tell the user what action you're taking, and report back the results. If a filesystem operation fails, inform the user politely about the issue.
-            """
-            instruction += "\n\n" + fs_instruction
-            logger.info("Added filesystem instructions to agent instruction")
-            
-        # Add Home Assistant REST API instructions
-        if ha_tool_exists:
-            ha_instruction = """
-            You have access to Home Assistant smart home control tools through the REST API integration.
-            
-            First, search for entities:
-            - Use search_ha_entities("search_term") to find entities matching your search
-            - For domain-specific search, use search_ha_entities("search_term", "domain_filter") 
-              Example domains: light, switch, sensor, climate, media_player, etc.
-            
-            You can also list all entities:
-            - Use list_ha_entities() to get all Home Assistant entities
-            
-            Get information about specific entities:
-            - Use get_ha_entity_state("entity_id") to get the state of a specific entity
-              Example: get_ha_entity_state("light.living_room")
-            
-            Once you have the entity IDs, you can control them using:
-            - turn_on_ha_entity("entity_id") - to turn on devices
-            - turn_off_ha_entity("entity_id") - to turn off devices
-            - toggle_ha_entity("entity_id") - to toggle devices (on if off, off if on)
-            
-            Always check the entity state before controlling it to understand its current status.
-            """
-            instruction += "\n\n" + ha_instruction
-            logger.info("Added detailed Home Assistant REST API instructions to agent instruction")
-            
-        # Add Shell Command Execution instructions if available
-        if shell_tool_exists:
-            enable_shell = os.environ.get("RADBOT_ENABLE_SHELL", "strict").lower()
-            shell_instruction = """
-            You can execute shell commands using the execute_shell_command tool.
-            
-            Usage:
-            - execute_shell_command(command="command_name", arguments=["arg1", "arg2"], timeout=30)
-            
-            Examples:
-            - execute_shell_command(command="ls", arguments=["-la"])
-            - execute_shell_command(command="cat", arguments=["/etc/hostname"])
-            
-            Always tell the user what command you're executing and what the results are.
-            Never execute potentially destructive commands like rm, dd, or anything that could
-            modify or delete important files.
-            """
-            
-            if enable_shell in ["strict", "restricted", "secure"]:
-                from radbot.tools.shell import ALLOWED_COMMANDS
-                allowed_cmds = ", ".join(sorted(list(ALLOWED_COMMANDS)))
-                shell_instruction += f"\n\nNOTE: You can only execute these allowed commands: {allowed_cmds}"
-                
-            instruction += "\n\n" + shell_instruction
-            logger.info("Added shell command execution instructions to agent instruction")
-            
-        # Add Todo Tools instructions if available
-        if todo_tool_exists:
-            todo_instruction = """
-            You can manage a persistent todo list using these todo tools:
-            
-            - add_task(description, project_id, category, origin, related_info): Creates a new task in the database
-              description: The main text content describing the task (Required)
-              project_id: Can be a UUID or a simple project name like 'home' or 'work' (Required)
-              category: An optional label to categorize the task (e.g., 'work', 'personal')
-              origin: An optional string indicating the source of the task (e.g., 'chat', 'email')
-              related_info: An optional dictionary for storing supplementary structured data
-            
-            - list_tasks(project_id, status_filter): Retrieves tasks for a specific project
-              project_id: Can be a UUID or a simple project name like 'home' or 'work' (Required)
-              status_filter: Optional filter for task status ('backlog', 'inprogress', 'done')
-            
-            - list_projects(): Lists all available projects with their UUIDs and names
-              Use this to show the user what projects are available
-            
-            - complete_task(task_id): Marks a specific task as 'done'
-              task_id: The UUID identifier of the task to mark as completed (Required)
-            
-            - remove_task(task_id): Permanently deletes a task from the database
-              task_id: The UUID identifier of the task to delete (Required)
-            
-            You don't need to generate UUIDs for projects - simply use common names like 'home', 'work', or any name the user
-            chooses for their projects. The system will handle creating and mapping UUIDs internally.
-            
-            Always confirm actions before executing them and provide helpful feedback about the results of todo operations.
-            Keep track of task IDs for the user so they don't need to remember them.
-            """
-            instruction += "\n\n" + todo_instruction
-            logger.info("Added Todo tools instructions to agent instruction")
-            
-        # Add Calendar instructions
-        calendar_instruction = """
-        You have access to Google Calendar tools to view and manage calendar events.
-        
-        Available tools:
-        - list_calendar_events_wrapper - Lists upcoming events from Google Calendar
-        - create_calendar_event_wrapper - Creates a new event in Google Calendar
-        - update_calendar_event_wrapper - Updates an existing event in Google Calendar
-        - delete_calendar_event_wrapper - Deletes an event from Google Calendar
-        - check_calendar_availability_wrapper - Checks availability on calendars
-        
-        Example usage:
-        - To list events: list_calendar_events_wrapper(max_results=5, days_ahead=7)
-        - To create an event: create_calendar_event_wrapper(summary="Meeting", start_time="2025-06-01T10:00:00", end_time="2025-06-01T11:00:00", description="Discuss project")
-        - To update an event: update_calendar_event_wrapper(event_id="event123", summary="Updated Meeting")
-        - To delete an event: delete_calendar_event_wrapper(event_id="event123")
-        - To check availability: check_calendar_availability_wrapper(calendar_ids=["primary"], days_ahead=7)
-        
-        When working with calendar events, always provide clear details and confirm actions with the user.
-        """
-        instruction += "\n\n" + calendar_instruction
-        logger.info("Added Calendar tools instructions to agent instruction")
-    except Exception as e:
-        logger.warning(f"Failed to load main_agent instruction: {str(e)}")
-        instruction = """You are a helpful assistant. Your goal is to understand the user's request and fulfill it by using available tools."""
-    
-    # Log the model we're using
-    model_name = config_manager.get_main_model()
-    logger.info(f"Creating agent with model: {model_name}")
-    
-    # Check if we should enable built-in tools
-    enable_google_search = os.environ.get("RADBOT_ENABLE_ADK_SEARCH", "false").lower() in ["true", "1", "yes", "enable"]
-    enable_code_execution = os.environ.get("RADBOT_ENABLE_ADK_CODE_EXEC", "false").lower() in ["true", "1", "yes", "enable"]
-    
-    if enable_google_search:
-        logger.info("Google Search ADK built-in tool is enabled")
-    
-    if enable_code_execution:
-        logger.info("Code Execution ADK built-in tool is enabled")
-    
-    # Use the core implementation to create the web agent with explicit app_name
-    agent = create_core_agent_for_web(
-        tools=all_tools, 
-        name="beto", 
-        app_name="beto",
-        include_google_search=enable_google_search,
-        include_code_execution=enable_code_execution
-    )
-    
-    # Manually set the instruction with the extended one we created
-    agent.instruction = instruction
-    
-    # Add built-in tools instructions if enabled
-    if enable_google_search or enable_code_execution:
-        builtin_instruction = """
-        You have access to ADK built-in tools through specialized sub-agents:
-        """
-        
-        if enable_google_search:
-            search_instruction = """
-            You can perform web searches using the Google Search tool through a sub-agent.
-            To use this capability, transfer control to the search_agent:
-            - transfer_to_agent(agent_name="search_agent")
-            
-            The search agent has access to Google Search and can find up-to-date information
-            from the web. Use this for current events, recent information, or any factual
-            queries that may have changed since your training.
-            """
-            builtin_instruction += "\n\n" + search_instruction
-            
-        if enable_code_execution:
-            code_instruction = """
-            You can execute Python code using the Code Execution tool through a sub-agent.
-            To use this capability, transfer control to the code_execution_agent:
-            - transfer_to_agent(agent_name="code_execution_agent")
-            
-            The code execution agent can run Python code to perform calculations, data analysis,
-            or other computational tasks. Use this for mathematical operations, data processing,
-            or any task that benefits from programmatic execution.
-            """
-            builtin_instruction += "\n\n" + code_instruction
-            
-        agent.instruction += "\n\n" + builtin_instruction
-        logger.info("Added built-in tools instructions to main agent")
-    
-    # Add research agent as a subagent if available
-    try:
-        logger.info("Creating research agent as a subagent")
-        
-        # Collect tools for the research agent
-        research_tools = []
-        
-        # Include ALL tools EXCEPT Home Assistant tools
-        logger.info("USING NEW DIRECT APPROACH: Include all tools except HA tools")
-        
-        # Copy all tools except Home Assistant tools
-        for tool in all_tools:
-            # Get the tool name
-            tool_name = None
-            if hasattr(tool, 'name'):
-                tool_name = tool.name
-            elif hasattr(tool, '__name__'):
-                tool_name = tool.__name__
-            else:
-                tool_name = str(tool)
-            
-            # Skip Home Assistant tools
-            ha_keywords = ["ha_", "home_assistant", "entity", "entities", "turn_on_ha", "turn_off_ha", "toggle_ha", "list_ha", "get_ha"]
-            if any(ha_kw in str(tool_name).lower() for ha_kw in ha_keywords):
-                logger.info(f"Skipping Home Assistant tool: {tool_name}")
-                continue
-            
-            # Add all other tools (including get_weather tool)
-            research_tools.append(tool)
-            logger.info(f"Added tool to research agent: {tool_name}")
-        
-        # Create the research agent with all collected tools and explicit app_name
-        # CRITICAL FIX (July 2025): Added app_name parameter to create_research_agent function
-        # to ensure proper agent tree registration for transfers in ADK 0.4.0
-        # Create the research agent
-        # The name must be set to "scout" for transfers to work
-        research_agent = create_research_agent(
-            model=model_name,
-            tools=research_tools,
-            as_subagent=False,  # Get the ADK agent directly
-            enable_google_search=enable_google_search,
-            enable_code_execution=enable_code_execution
-        )
-        
-        # Explicitly set the name to 'scout' for transfers
-        if hasattr(research_agent, 'name'):
-            if research_agent.name != 'scout':
-                logger.warning(f"Setting research_agent.name from '{research_agent.name}' to 'scout'")
-                research_agent.name = 'scout'
-        else:
-            # Try to add name attribute
-            try:
-                setattr(research_agent, 'name', 'scout')
-                logger.info("Added name='scout' attribute to research_agent")
-            except Exception as e:
-                logger.error(f"Failed to set name attribute on research_agent: {e}")
-        
-        # Log the successful name setting
-        logger.info(f"Verified research_agent.name is correctly set to 'scout' for proper transfers")
-        
-        # Log the final list of tools assigned to the research agent
-        logger.info("========== RESEARCH AGENT TOOLS ===========")
-        logger.info(f"Total tools assigned to research agent: {len(research_tools)}")
-        for i, tool in enumerate(research_tools):
-            tool_name = "Unknown"
-            
-            if hasattr(tool, 'name'):
-                tool_name = tool.name
-            elif hasattr(tool, '__name__'):
-                tool_name = tool.__name__
-            else:
-                tool_name = str(tool)
-                
-            logger.info(f"Research Tool {i+1}: {tool_name}")
-        logger.info("===========================================")
-        
-        # CRITICAL FIX: Properly register scout agent in agent tree
-        # Explicitly verify both agent names first
-        if hasattr(agent, 'name') and agent.name != 'beto':
-            logger.warning(f"Root agent name incorrect '{agent.name}'. Setting to 'beto'")
-            agent.name = 'beto'
-            
-        if hasattr(research_agent, 'name') and research_agent.name != 'scout':
-            logger.warning(f"Scout agent name incorrect '{research_agent.name}'. Setting to 'scout'")
-            research_agent.name = 'scout'
-           
-        # In ADK 0.4.0, add the sub-agent to the parent's sub_agents list
-        # This automatically sets up parent_agent internally in __set_parent_agent_for_sub_agents
-        try:
-            # First make sure the names are correct
-            agent.name = "beto"
-            research_agent.name = "scout"
-            
-            # Get current sub-agents (may include built-in tool agents)
-            current_sub_agents = list(agent.sub_agents) if hasattr(agent, 'sub_agents') and agent.sub_agents else []
-            
-            # Add scout as a sub-agent if not already there
-            scout_already_added = False
-            for sa in current_sub_agents:
-                if hasattr(sa, 'name') and sa.name == "scout":
-                    scout_already_added = True
-                    break
-                    
-            if not scout_already_added:
-                current_sub_agents.append(research_agent)
-                agent.sub_agents = current_sub_agents
-                logger.info(f"Registered scout agent as sub-agent of beto")
-            else:
-                logger.info(f"Scout agent already registered as sub-agent")
-            
-            # Verify registration
-            sub_agent_names = [sa.name for sa in agent.sub_agents if hasattr(sa, 'name')]
-            logger.info(f"Agent tree structure - Root: '{agent.name}', Sub-agents: {sub_agent_names}")
-            
-            # Force a traversal to test the find_agent function
-            found_agent = agent.find_agent("scout")
-            if found_agent:
-                logger.info(f"Successfully found agent 'scout' in the agent tree")
-            else:
-                logger.error(f"Failed to find agent 'scout' in the agent tree - transfers may not work")
-                
-            # Test if we can find the root agent from the sub-agent
-            if hasattr(research_agent, 'root_agent'):
-                root = research_agent.root_agent
-                logger.info(f"Sub-agent's root_agent is '{root.name}'")
-            
-            # Check and log parent_agent
-            if hasattr(research_agent, 'parent_agent'):
-                parent = research_agent.parent_agent
-                logger.info(f"Scout's parent_agent is '{parent.name}'")
-            else:
-                logger.warning("Scout agent does not have parent_agent property - transfers may not work")
-        except Exception as e:
-            logger.error(f"Error setting up agent tree: {e}")
-                
-        # Validate agent tree structure
-        logger.info("====== VALIDATING AGENT TREE STRUCTURE ======")
-        if hasattr(agent, 'sub_agents'):
-            logger.info(f"Root agent '{agent.name}' has {len(agent.sub_agents)} sub-agents")
-            for i, sa in enumerate(agent.sub_agents):
-                sa_name = sa.name if hasattr(sa, 'name') else f"unnamed-{i}"
-                logger.info(f"  Sub-agent {i}: name='{sa_name}'")
-                # Check bidirectional reference
-                has_parent = hasattr(sa, 'parent') and sa.parent is agent
-                logger.info(f"  ↳ Has parent reference: {has_parent}")
-        else:
-            logger.warning("Root agent has no sub_agents attribute!")
-        logger.info("===============================================")
-            
-        # Ensure bidirectional relationship
-        if hasattr(research_agent, '_parent'):
-            research_agent._parent = agent
-            logger.info(f"Set parent (_parent) reference on scout agent to '{agent.name}'")
-        elif hasattr(research_agent, 'parent'):
-            research_agent.parent = agent
-            logger.info(f"Set parent reference on scout agent to '{agent.name}'")
-            
-        # Force agent name consistency
-        if hasattr(research_agent, 'name') and research_agent.name != 'scout':
-            logger.warning(f"Scout agent name mismatch: '{research_agent.name}' not 'scout', fixing...")
-            research_agent.name = 'scout'
-            
-        # We've already verified the agent names and relationships above
-        # But let's check one more time and focus on the transfer tools
-        
-        # CRITICAL FIX: Verify transfer_to_agent tool is available to both agents
-        root_has_transfer_tool = False
-        scout_has_transfer_tool = False
-        
-        # Check root agent transfer tool
-        for tool in agent.tools:
-            tool_name = None
-            if hasattr(tool, 'name'):
-                tool_name = tool.name
-            elif hasattr(tool, '__name__'):
-                tool_name = tool.__name__
-            
-            if tool_name == 'transfer_to_agent':
-                root_has_transfer_tool = True
-                break
-        
-        # Check scout agent transfer tool
-        for tool in research_agent.tools:
-            tool_name = None
-            if hasattr(tool, 'name'):
-                tool_name = tool.name
-            elif hasattr(tool, '__name__'):
-                tool_name = tool.__name__
-                
-            if tool_name == 'transfer_to_agent':
-                scout_has_transfer_tool = True
-                break
-                
-        logger.info(f"Transfer tool availability - Root: {root_has_transfer_tool}, Scout: {scout_has_transfer_tool}")
-        
-        # Add transfer tools if missing - CRITICAL for transfers to work
-        if not root_has_transfer_tool:
-            logger.warning("Root agent missing transfer_to_agent tool - adding")
-            try:
-                # Add both function and tool
-                agent.tools.append(transfer_to_agent)
-                logger.info("Added transfer_to_agent function to root agent tools")
-                
-                # Try to add the TRANSFER_TO_AGENT_TOOL constant as well
-                try:
-                    from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
-                    if TRANSFER_TO_AGENT_TOOL:
-                        agent.tools.append(TRANSFER_TO_AGENT_TOOL)
-                        logger.info("Added TRANSFER_TO_AGENT_TOOL constant from ADK to root agent")
-                except (ImportError, Exception) as e:
-                    logger.warning(f"Could not add TRANSFER_TO_AGENT_TOOL constant: {e}")
-            except Exception as e:
-                logger.error(f"Failed to add transfer_to_agent to root agent: {e}")
-                
-        if not scout_has_transfer_tool:
-            logger.warning("Scout agent missing transfer_to_agent tool - adding")
-            try:
-                # Add both function and tool
-                research_agent.tools.append(transfer_to_agent)
-                logger.info("Added transfer_to_agent function to scout agent tools")
-                
-                # Try to add the TRANSFER_TO_AGENT_TOOL constant as well
-                try:
-                    from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
-                    if TRANSFER_TO_AGENT_TOOL:
-                        research_agent.tools.append(TRANSFER_TO_AGENT_TOOL)
-                        logger.info("Added TRANSFER_TO_AGENT_TOOL constant from ADK to scout agent")
-                except (ImportError, Exception) as e:
-                    logger.warning(f"Could not add TRANSFER_TO_AGENT_TOOL constant: {e}")
-            except Exception as e:
-                logger.error(f"Failed to add transfer_to_agent to scout agent: {e}")
-        
-        # ADK 0.4.0 uses a different approach for agent transfers - no need to register handlers
-        # Transfers will be automatically handled by the ADK runtime through the transfer_to_agent tool
-        logger.info("Using ADK 0.4.0 native agent transfer functionality (handlers not needed)")
-        logger.info("Agent transfers will be handled automatically by the ADK runtime")
-        
-        # Final detailed report on agent tree structure
-        logger.info("============ FINAL AGENT TREE REPORT ============")
-        logger.info(f"ROOT AGENT: name='{agent.name}'")
-        logger.info(f"SUB-AGENT: name='{research_agent.name}'")
-        
-        # In ADK 0.4.0, the relationship is through the sub_agents list only
-        child_ok = research_agent in agent.sub_agents if hasattr(agent, 'sub_agents') else False
-        
-        logger.info(f"AGENT TREE RELATIONSHIP: child_in_subagents_list={child_ok}")
-        logger.info(f"TRANSFER TOOLS: root={root_has_transfer_tool}, scout={scout_has_transfer_tool}")
-        logger.info("=================================================")
-        
-        logger.info("Successfully added scout agent as a subagent with enhanced transfer capability")
-        
-        # Add instruction for scout agent delegation
-        research_agent_instruction = """
-        If the user has a technical research question or wants to discuss a design/architecture,
-        you can transfer the conversation to the scout agent by using the
-        transfer_to_agent function. Example: transfer_to_agent(agent_name='scout')
-        
-        The scout agent is specialized for:
-        1. Technical research using web search, internal knowledge, and GitHub
-        2. Design discussions (rubber duck debugging) to help think through technical designs
-        
-        Before transferring, make sure you've fully understood what the user wants to research
-        or discuss, then use session.state to pass the context to the scout agent.
-        
-        The scout agent can transfer control back to you using the same function:
-        transfer_to_agent(agent_name='beto')
-        """
-        agent.instruction += "\n\n" + research_agent_instruction
-        logger.info("Added scout agent delegation instructions to main agent")
-    except Exception as e:
-        logger.warning(f"Failed to add scout agent as a subagent: {str(e)}")
-        logger.debug("Scout agent creation error details:", exc_info=True)
-    
-    logger.info(f"Created ADK BaseAgent for web UI with {len(all_tools)} tools")
-    return agent
-
-# Create a root_agent instance for ADK web to use directly 
-# Check if we should enable built-in tools from config
-enable_google_search = config_manager.is_adk_search_enabled()
-enable_code_execution = config_manager.is_adk_code_execution_enabled()
-
-# CRITICAL: app_name must match the name attribute EXACTLY in ADK 0.4.0
-root_agent = create_agent(app_name="beto")
-logger.info(f"Created root_agent instance for ADK web with name '{root_agent.name}' and {len(root_agent.sub_agents) if hasattr(root_agent, 'sub_agents') else 0} sub-agents")
-
-# CRITICAL: Make sure root_agent.name is explicitly set to 'beto'
-# This is required for ADK 0.4.0 agent transfers
-if hasattr(root_agent, 'name'):
-    if root_agent.name != 'beto':
-        logger.warning(f"Setting root_agent.name from '{root_agent.name}' to 'beto'")
-        root_agent.name = 'beto'
-else:
-    # Try to add name attribute
-    try:
-        setattr(root_agent, 'name', 'beto')
-        logger.info("Added name='beto' attribute to root_agent")
-    except Exception as e:
-        logger.error(f"Failed to set name attribute: {e}")
-
-# In ADK 0.4.0, is_root setting is not needed - the agent tree hierarchy establishes this naturally
-# Just ensure the name is correct for transfers
-logger.info(f"Verified root_agent.name = '{root_agent.name}' for proper agent transfers")
-    
-# CRITICAL: Verify transfer_to_agent tool is available in root_agent tools
-has_transfer_tool = False
-if hasattr(root_agent, 'tools') and root_agent.tools:
-    for tool in root_agent.tools:
-        tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-        if tool_name == 'transfer_to_agent':
-            has_transfer_tool = True
-            break
-    
-    if not has_transfer_tool:
-        logger.warning("ROOT AGENT MISSING TRANSFER TOOL - adding at the root level...")
-        try:
-            # Add the function directly
-            root_agent.tools.append(transfer_to_agent)
-            logger.info("Added transfer_to_agent function to root_agent tools")
-            
-            # Try to add the TRANSFER_TO_AGENT_TOOL constant as well for redundancy
-            try:
-                from google.adk.tools.transfer_to_agent_tool import TRANSFER_TO_AGENT_TOOL
-                if TRANSFER_TO_AGENT_TOOL:
-                    root_agent.tools.append(TRANSFER_TO_AGENT_TOOL)
-                    logger.info("Added TRANSFER_TO_AGENT_TOOL constant to root_agent tools")
-            except (ImportError, Exception) as e:
-                logger.warning(f"Could not add TRANSFER_TO_AGENT_TOOL constant: {e}")
-        except Exception as e:
-            logger.error(f"Failed to add transfer_to_agent tool to root_agent: {e}")
-    else:
-        logger.info("ROOT AGENT HAS TRANSFER TOOL - verified")
+    return root_agent

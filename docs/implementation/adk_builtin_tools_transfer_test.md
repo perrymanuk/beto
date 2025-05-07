@@ -1,134 +1,150 @@
-# ADK Built-in Tools Transfer Test Guide
+# ADK Built-in Tools Transfer Testing
 
-This document provides step-by-step instructions for testing agent transfers between the main agent and ADK built-in tool agents (Google Search and Code Execution).
+## Overview
 
-## Prerequisites
+This document describes how to test agent transfers between the main agent (beto), research agent (scout), and ADK built-in agents (search_agent, code_execution_agent). It outlines the available testing tools and approaches to validate that agent transfers work correctly.
 
-- Ensure you have the latest version of the codebase
-- Make sure all dependencies are installed (run `make setup`)
-- Verify you have Google API credentials configured properly
+## Testing Utilities
 
-## Test Setup
+### 1. `test_adk_builtin_transfers.py` Script
 
-1. Run the test script to start the web application:
+We've created a dedicated test script to validate agent transfers:
 
 ```bash
-python tools/test_adk_builtin_transfers.py
+# Path: tools/test_adk_builtin_transfers.py
+
+# Run validation tests (programmatic validation)
+python -m tools.test_adk_builtin_transfers --validate
+
+# Run web application for manual testing
+python -m tools.test_adk_builtin_transfers --web
 ```
 
-This script:
-- Enables the ADK built-in search and code execution tools
-- Sets verbose logging for debugging
-- Starts the web application
+#### Validation Mode
 
-2. Open a browser and navigate to: http://localhost:8080
+The validation mode (`--validate`) tests different configurations:
 
-## Test Cases
+1. No built-in tools enabled
+2. Only search enabled
+3. Only code execution enabled
+4. Both built-in tools enabled
 
-### Test Case 1: Transfer to Google Search Agent
+For each configuration, it checks:
+- If the source agent has the transfer_to_agent tool
+- If the target agent is in the source agent's sub_agents list
+- Whether transfers are expected to work based on these criteria
 
-1. Enter the following message in the chat:
-   ```
-   What are the current trending AI news stories?
-   ```
+The validation reports a summary showing which transfers are valid and which have issues.
 
-2. Observe the response. The main agent should:
-   - Identify this requires current information
-   - Transfer to the search agent
-   - The search agent should respond with current AI news results
+#### Web Mode
 
-3. Check terminal logs for:
-   - `PATCHED LLM _get_agent_to_run called for agent: 'search_agent'`
-   - `LLM Flow patched lookup returning built-in agent 'search_agent'`
+The web mode (`--web`) starts the web application with all built-in agents enabled, allowing you to manually test transfers by:
 
-### Test Case 2: Transfer back from Google Search Agent
+1. Starting a conversation
+2. Asking the agent to search for something (triggers transfer to search_agent)
+3. Asking the agent to execute code (triggers transfer to code_execution_agent)
+4. Testing transfers from these agents back to beto
 
-1. After receiving search results, enter:
-   ```
-   Thank you for the search results. Can you summarize them for me?
-   ```
+### 2. Environment Controls
 
-2. The search agent should:
-   - Complete its task
-   - Transfer back to the main beto agent
-   - The main agent should provide a summary
+You can control which built-in tools are enabled using environment variables:
 
-3. Check terminal logs for:
-   - `PATCHED LLM _get_agent_to_run called for agent: 'beto'`
-   - `LLM Flow patched lookup returning root_agent for 'beto'`
+```bash
+# Enable/disable ADK built-in search
+export RADBOT_ENABLE_ADK_SEARCH=true  # or false
 
-### Test Case 3: Transfer to Code Execution Agent
+# Enable/disable ADK built-in code execution
+export RADBOT_ENABLE_ADK_CODE_EXEC=true  # or false
 
-1. Enter the following message:
-   ```
-   Can you write a Python function to calculate the Fibonacci sequence up to n terms?
-   ```
+# Force enable code execution (useful for testing)
+export RADBOT_FORCE_CODE_EXEC=true
+```
 
-2. Observe the response. The main agent should:
-   - Identify this requires code execution
-   - Transfer to the code execution agent
-   - The code execution agent should write and run the requested code
+### 3. Test Examples
 
-3. Check terminal logs for:
-   - `PATCHED LLM _get_agent_to_run called for agent: 'code_execution_agent'`
-   - `LLM Flow patched lookup returning built-in agent 'code_execution_agent'`
+#### Code Execution Transfer Test
 
-### Test Case 4: Transfer back from Code Execution Agent
+The following code can be used to test the code execution agent transfer:
 
-1. After receiving code execution results, enter:
-   ```
-   Thanks for the code. Can you explain how this algorithm works?
-   ```
+```python
+# Run this in the web application 
+# (Should trigger transfer to code_execution_agent)
 
-2. The code execution agent should:
-   - Complete its explanation
-   - Transfer back to the main beto agent
-   - The main agent should provide additional explanation
+def calculate_fibonacci(n):
+    """Calculate the nth Fibonacci number."""
+    if n <= 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return calculate_fibonacci(n-1) + calculate_fibonacci(n-2)
 
-3. Check terminal logs for:
-   - `PATCHED LLM _get_agent_to_run called for agent: 'beto'`
-   - `LLM Flow patched lookup returning root_agent for 'beto'`
+# Calculate and print the 10th Fibonacci number
+result = calculate_fibonacci(10)
+print(f"The 10th Fibonacci number is: {result}")
+```
 
-## Expected Results
+After execution, the agent should transfer back to beto.
 
-If the agent transfer fix is working correctly:
+#### Search Transfer Test
 
-1. Each transfer should occur smoothly without errors in the logs
-2. The correct agent should respond to each request
-3. The logs should show our patched methods handling the agent lookups
-4. Transfers in both directions should work (to built-in agents and back)
+Test the search agent with:
 
-## Troubleshooting
+```
+Please search for the latest news on quantum computing.
+```
 
-If transfers fail:
+This should trigger a transfer to the search_agent, and after providing results, it should transfer back to beto.
 
-1. **Check logs for errors**:
-   - Look for error messages related to agent transfers
-   - Verify that the patched methods are being called
+#### Scout Transfer Test
 
-2. **Verify agent registration**:
-   - Check logs for sub-agent list at startup
-   - Confirm both built-in agents are in the sub-agents list
+Test the Scout agent with:
 
-3. **Check tool availability**:
-   - Look for log messages about `transfer_to_agent` availability
-   - Verify built-in agents have the required tools
+```
+I need research on the environmental impact of electric vehicles.
+```
 
-4. **Test direct transfers**:
-   - Try using explicit transfer commands like:
-     ```
-     transfer_to_agent(agent_name="search_agent")
-     ```
-     and
-     ```
-     transfer_to_agent(agent_name="beto")
-     ```
+This should trigger a transfer to Scout, which should be able to transfer back to beto when done.
 
-## Recording Results
+## Debugging Transfer Issues
 
-Document the test results for future reference, noting:
+### Common Issues and Solutions
 
-1. Whether each test case passed or failed
-2. Any unexpected behavior or warnings
-3. Relevant log messages that helped diagnose issues
-4. Suggested improvements for future implementation
+1. **Missing sub-agent relationships**
+   - Ensure the target agent is in the source agent's sub_agents list
+   - For bidirectional transfers, both agents need to have each other in their sub_agents lists
+
+2. **Missing transfer_to_agent tool**
+   - All agents must have the transfer_to_agent tool in their tools list
+
+3. **Incorrect agent names**
+   - Agent names must be consistent: "beto", "scout", "search_agent", "code_execution_agent"
+   - Transfers won't work if the name doesn't match exactly
+
+4. **LlmAgent config errors**
+   - LlmAgent objects need proper configuration for Vertex AI 
+   - Use proper error handling when configuring LlmAgent objects
+
+### Checking Agent Configuration
+
+Use these log statements to debug agent relationships:
+
+```python
+logger.info(f"Agent name: {agent.name if hasattr(agent, 'name') else 'unnamed'}")
+logger.info(f"Sub-agents: {[sa.name for sa in agent.sub_agents if hasattr(sa, 'name')]}")
+logger.info(f"Tools: {[getattr(t, 'name', str(t)) for t in agent.tools]}")
+```
+
+## What Makes Transfers Work
+
+For transfers to work correctly between agents in ADK 0.4.0+:
+
+1. The source agent must have the transfer_to_agent tool
+2. The target agent must be in the source agent's sub_agents list
+3. For bidirectional transfers, both agents must have each other in their sub_agents lists
+
+Our implementation ensures these conditions are met by:
+
+1. Adding the transfer_to_agent tool to all agents
+2. Creating proxy agents when needed to establish parent-child relationships
+3. Adding each agent to the other's sub_agents list for bidirectional navigation

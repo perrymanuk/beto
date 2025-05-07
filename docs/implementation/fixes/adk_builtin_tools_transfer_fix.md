@@ -1,57 +1,48 @@
 # ADK Built-in Tools Transfer Fix
 
-## Issue
+## Overview
 
-After adding the Google search and code execution tools from ADK, transfers to these built-in agents were not working. The logs showed that the agent subagent list had entries for these agents, but they were not being found in the agent tree during transfer attempts.
+This document describes fixes for the agent transfer functionality between the main agent (beto), research agent (scout), and the ADK built-in agents (search_agent and code_execution_agent). The fixes ensure proper bidirectional transfers between all agents in the system.
 
-## Root Causes
+## Issues Addressed
 
-1. **Agent Resolution Bug**: The `patched_llm_get_agent_to_run` function in `session.py` was not looking for built-in agents like `search_agent` and `code_execution_agent` by name.
+1. The scout agent was unable to transfer back to the beto agent
+2. Transfers to and from the code_execution_agent weren't working properly
+3. Transfers to and from the search_agent weren't working properly
 
-2. **Parameter Order Mismatch**: The `patched_llm_get_agent_to_run` function had incorrect parameter ordering:
-   - Our implementation: `(self, agent_name, invocation_context)`
-   - ADK's implementation: `(self, invocation_context, agent_name)`
-
-3. **Missing Transfer Tools**: The built-in agents were added to the sub-agent tree but were not given the `transfer_to_agent` tool, which is required for transfers to work.
-
-4. **Agent Tree Rebuilding**: During the `_verify_agent_structure` method, only the scout agent was being preserved and re-added to the tree, causing built-in agents to be lost.
-
-## Implemented Fixes
-
-1. **Fixed Parameter Order**: Corrected the order of parameters in the `patched_llm_get_agent_to_run` method to match ADK's expected order.
-
-2. **Added Built-in Agent Recognition**: Updated the agent lookup code to explicitly handle `search_agent` and `code_execution_agent` names.
-
-3. **Enhanced Agent Tree Verification**: Modified the `_verify_agent_structure` method to preserve and properly reattach all sub-agents, including built-in tool agents.
-
-4. **Added Transfer Tools**: Added the `transfer_to_agent` tool to all agents, including the built-in tool agents, to enable bidirectional transfers.
-
-5. **Improved Debugging**: Added more detailed logging for the agent tree structure, explicitly showing information about built-in tool agents.
+These issues occurred after migrating to ADK 0.4.0, which changed how agent transfers work by requiring agents to be in each other's sub_agents lists.
 
 ## Implementation Details
 
-The changes were made in the following areas:
+For a detailed implementation description, see [ADK Built-in Tools Fix](adk_builtin_tools_fix.md).
 
-1. `radbot/web/api/session.py`:
-   - Updated parameter order in `patched_llm_get_agent_to_run`
-   - Added explicit handling for `search_agent` and `code_execution_agent` in the agent lookup
-   - Modified `_verify_agent_structure` to detect and properly restore all types of sub-agents
-   - Enhanced the logging to show more details about the agent tree
+For testing information, see [ADK Built-in Tools Transfer Test](adk_builtin_tools_transfer_test.md).
 
-2. Agent Tool Management:
-   - Added code to ensure the `transfer_to_agent` tool is available to all agents
-   - Added fallback to recreate tool lists for built-in agents if they're missing
+### Key Changes
 
-## Testing
+1. Added backward compatibility for AgentTransferTool in `radbot/tools/agent_transfer.py`
+2. Fixed the scout agent factory to include beto in scout's sub-agents list
+3. Enhanced built-in agent registration to ensure bidirectional transfers
+4. Fixed LlmAgent configuration issues for Vertex AI
+5. Modified agent tools for Vertex AI limitations (only one tool per agent)
+6. Added comprehensive testing for agent transfers
 
-To verify the fix works:
-1. Enable built-in tools with `RADBOT_ENABLE_ADK_SEARCH=true` and `RADBOT_ENABLE_ADK_CODE_EXEC=true`
-2. Check the logs when the application starts to confirm all agents are properly registered
-3. Test transfers to both the search agent and code execution agent
-4. Verify that transfers back to the main agent also work correctly
+## Testing the Fix
 
-## Future Considerations
+The fix can be tested with the dedicated test script:
 
-- Add more explicit checks for built-in agents to avoid similar issues in the future
-- Consider enhancing the agent structure validation to detect and fix missing tools automatically
-- Add comprehensive logging about the agent tree structure at application startup
+```bash
+# Run validation tests
+python -m tools.test_adk_builtin_transfers --validate
+
+# Run web application for manual testing
+python -m tools.test_adk_builtin_transfers --web
+```
+
+## Lessons Learned
+
+1. **ADK 0.4.0 Changes**: In ADK 0.4.0+, for agent A to transfer to agent B, agent B must be in agent A's sub_agents list
+2. **Bidirectional Transfers**: For bidirectional transfers, agents must be in each other's sub_agents lists
+3. **Agent Naming**: Agent names must be consistent for transfers to work properly
+4. **Tool Availability**: All agents must have the transfer_to_agent tool available
+5. **Proxy Agents**: For complex relationships, proxy agents can be used to establish proper parent-child relationships

@@ -1,57 +1,140 @@
-# ADK Built-in Tools Fix
+# ADK Built-in Tools Fix Implementation
 
-## Issue
+## Overview
 
-After integrating Google Search and Code Execution tools from ADK 0.4.0, an error occurred:
+This document describes the implementation of fixes for the ADK built-in tools integration. Specifically, it addresses issues with:
+
+1. The code execution tool registration
+2. Agent transfers between the main agent (beto), research agent (scout), and built-in agents (search, code execution)
+3. Bidirectional transfers between agents
+
+## Implementation Details
+
+### 1. Agent Transfer Compatibility Layer
+
+Created a backward compatibility layer in `radbot/tools/agent_transfer.py` that wraps the ADK's `transfer_to_agent` function in an `AgentTransferTool` class to maintain compatibility with existing code:
 
 ```python
-async for event in self._postprocess_handle_function_calls_async(
-  File "/Users/perry.manuk/git/perrymanuk/radbot/.venv/lib/python3.11/site-packages/google/adk/flows/llm_flows/base_llm_flow.py", line 416, in _postprocess_handle_function_calls_async
-    agent_to_run = self._get_agent_to_run(
-                   ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/perry.manuk/git/perrymanuk/radbot/radbot/web/api/session.py", line 224, in patched_llm_get_agent_to_run
-    agent = invocation_context.agent
-            ^^^^^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'str' object has no attribute 'agent'
+"""
+Agent transfer functionality for backward compatibility.
+"""
+
+import logging
+from typing import Optional, Any
+
+# Import the ADK transfer_to_agent function
+from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+
+# Create a wrapper class with the same interface as expected by older code
+class AgentTransferTool:
+    """
+    Wrapper around transfer_to_agent for backward compatibility.
+    """
+    
+    def __init__(self):
+        self.name = "transfer_to_agent"
+        self.description = "Transfers control to another agent"
+        self._transfer_fn = transfer_to_agent
+    
+    def __call__(self, agent_name: str, **kwargs) -> Any:
+        """Call the transfer_to_agent function with the given agent name."""
+        return self._transfer_fn(agent_name=agent_name, **kwargs)
+
+# For backward compatibility
+transfer_to_agent_tool = AgentTransferTool()
 ```
 
-## Root Cause Analysis
+### 2. ADK Built-in Tools Configuration Fix
 
-1. The issue occurred in the `patched_llm_get_agent_to_run` function in `/radbot/web/api/session.py`.
+Fixed the `config` attribute handling for LlmAgent in both search and code execution tools by adding proper error handling and using the `set_config` method when available:
 
-2. The problem was a parameter order mismatch between our monkey-patched function and the ADK's actual implementation:
+```python
+# Enable search/code execution explicitly if using Vertex AI
+if cfg.is_using_vertex_ai():
+    try:
+        from google.genai import types
+        # Check if the agent has a config attribute already
+        if not hasattr(agent, "config"):
+            # For LlmAgent type in ADK 0.4.0+
+            if hasattr(agent, "set_config"):
+                # Use set_config method if available
+                config = types.GenerateContentConfig()
+                config.tools = [types.Tool(...)]
+                agent.set_config(config)
+            else:
+                # Try to add config attribute directly
+                agent.config = types.GenerateContentConfig()
+                agent.config.tools = [types.Tool(...)]
+        else:
+            # Update existing config
+            if not hasattr(agent.config, "tools"):
+                agent.config.tools = []
+            agent.config.tools.append(types.Tool(...))
+    except Exception as e:
+        logger.warning(f"Failed to configure tool for Vertex AI: {str(e)}")
+```
 
-   - **Our implementation:** `def patched_llm_get_agent_to_run(self, agent_name: str, invocation_context: Any)`
-   - **ADK implementation:** `def _get_agent_to_run(self, invocation_context: InvocationContext, transfer_to_agent)`
+### 3. Bidirectional Agent Transfers
 
-3. When the ADK called our patched function, it passed:
-   - The `invocation_context` object as the first parameter (which our code interpreted as `agent_name`)
-   - The agent name string as the second parameter (which our code interpreted as `invocation_context`)
+Enhanced the research agent factory to correctly add the parent agent (beto) to the scout's sub-agents list and vice versa:
 
-4. This caused the error when our code tried to access `invocation_context.agent` since the `invocation_context` parameter was actually a string.
+```python
+# Add parent agent (beto) to sub-agents list for proper backlinks
+try:
+    from google.adk.agents import Agent
+    
+    # Create a proxy agent for beto (parent) to allow transfers back
+    beto_agent = Agent(
+        name="beto",  # Must be exactly "beto" for transfers back
+        model=model or config_manager.get_main_model(),
+        instruction="Main coordinating agent",  # Simple placeholder
+        description="Main coordinating agent that handles user requests",
+        tools=[transfer_to_agent]  # Essential to have transfer_to_agent
+    )
+    
+    # Add beto to the list of sub-agents if not already there
+    if not any(sa.name == "beto" for sa in sub_agents if hasattr(sa, 'name')):
+        sub_agents.append(beto_agent)
+        logger.info("Added 'beto' agent to scout's sub_agents list for proper back-transfers")
+```
 
-## Fix Implementation
+Similarly, added similar code to the search and code execution tools to ensure bidirectional transfers work correctly.
 
-1. Fixed the parameter order in our monkey-patched function to match the ADK's implementation:
-   ```python
-   def patched_llm_get_agent_to_run(self, invocation_context: Any, agent_name: str) -> BaseAgent:
-   ```
+### 4. Validation Test Script
 
-2. Added defensive checks to handle unexpected parameter types:
-   - Verifying if `agent_name` is a string
-   - Handling cases where `invocation_context` is a string
-   - Adding detailed logging for debugging
+Created a validation test script (`tools/test_adk_builtin_transfers.py`) to verify agent transfers in different configurations:
 
-3. Updated the call to the original method to use the correct parameter order:
-   ```python
-   result = original_llm_get_agent_to_run(self, invocation_context, agent_name)
-   ```
+1. No built-in tools enabled
+2. Only search enabled
+3. Only code execution enabled  
+4. Both search and code execution enabled
 
-## Validation
+The test validates:
+- Agent sub-agent relationships
+- Availability of transfer_to_agent tool
+- All agent transfers work bidirectionally
 
-This fix ensures compatibility with the ADK built-in tools like Google Search and Code Execution, while maintaining our custom agent transfer functionality.
+## Issues Addressed
 
-## Additional Resources
+1. **Code Execution Registration**: Fixed the code execution tool not being properly registered with the main agent.
+2. **Scout to Beto Transfers**: Fixed Scout's inability to transfer back to the Beto agent.
+3. **ADK 0.4.0 Compatibility**: Updated code to work with ADK 0.4.0's agent transfer mechanism.
+4. **LlmAgent Configuration**: Fixed "LlmAgent object has no field 'config'" error by adding proper configuration handling.
 
-- [ADK 0.4.0 Agent Transfer Guide](/docs/implementation/adk_agent_transfer_guide.md)
-- [ADK Built-in Tools Documentation](/docs/implementation/adk_builtin_tools.md)
+## Testing
+
+The fix can be tested with:
+
+```bash
+# Run validation tests
+python -m tools.test_adk_builtin_transfers --validate
+
+# Run web application for manual testing
+python -m tools.test_adk_builtin_transfers --web
+```
+
+## Future Improvements
+
+1. Add full sub-agent relationship testing (testing transfers from non-root agents)
+2. Implement automated end-to-end tests for agent transfers
+3. Add validation of tool functionality in transferred contexts

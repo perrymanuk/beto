@@ -5,9 +5,9 @@ This script creates a standalone agent that uses the built-in Google Search tool
 and tests it with a simple search query.
 """
 
-import asyncio
 import logging
 import os
+import sys
 from dotenv import load_dotenv
 
 # Set up logging
@@ -17,11 +17,33 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Make sure radbot is in the path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Make sure search is enabled
+os.environ["RADBOT_ENABLE_ADK_SEARCH"] = "true"
+
 # Import ADK components
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.genai.types import Content, Part, GenerateContentConfig, Tool, ToolGoogleSearch
+from google.genai.types import Content, Part, GenerateContentConfig, Tool
+
+# Handle different import paths for ToolGoogleSearch
+try:
+    # Try to import from types directly (newer versions)
+    from google.genai.types import ToolGoogleSearch
+except ImportError:
+    try:
+        # Try to import from separate types classes (older versions)
+        from google.genai.types.tool_types import ToolGoogleSearch
+    except ImportError:
+        # Define a minimal wrapper if not available
+        class ToolGoogleSearch:
+            def __init__(self):
+                pass
 
 # Constants
 AGENT_NAME = "search_test"
@@ -35,36 +57,36 @@ def main():
     """Run the Google Search test."""
     logger.info(f"Creating Google Search test agent with model {MODEL_NAME}")
     
-    # Create a simple agent with Google Search configured directly
-    agent = Agent(
-        name=AGENT_NAME,
+    # Import our proper search agent from the tools module
+    from radbot.tools.adk_builtin.search_tool import create_search_agent
+    
+    # Create the agent using our standard factory function, disabling transfer_tool for standalone tests
+    agent = create_search_agent(
+        name="search_agent",
         model=MODEL_NAME,
-        instruction="""
-        You are a search agent. When asked about current events, news, or any information 
-        that may have changed since your training, use Google Search to find the most 
-        up-to-date information.
-        
-        Always cite your sources and provide accurate information based on search results.
-        """,
-        description="An agent that can search the web using Google Search."
+        instruction_name="search_agent",  # Will load from config if exists
+        include_transfer_tool=False  # Disable transfer tool for standalone tests
     )
     
-    # Configure Google Search explicitly
-    agent.config = GenerateContentConfig()
-    agent.config.tools = [Tool(google_search=ToolGoogleSearch())]
-    logger.info("Configured Google Search explicitly")
+    logger.info(f"Created agent without transfer_to_agent tool for standalone testing")
+    
+    logger.info(f"Created search agent with name '{agent.name}' using model '{agent.model}'")
+    
+    # Log the tools available
+    tool_names = [getattr(tool, 'name', None) or getattr(tool, '__name__', str(tool)) for tool in agent.tools]
+    logger.info(f"Agent has {len(agent.tools)} tools: {', '.join(tool_names)}")
     
     # Create session service and runner
     session_service = InMemorySessionService()
     session = session_service.create_session(
-        app_name=APP_NAME,
+        app_name=agent.name,  # Use agent name as app_name for ADK 0.4.0+
         user_id=USER_ID,
         session_id=SESSION_ID
     )
     
     runner = Runner(
         agent=agent,
-        app_name=APP_NAME,
+        app_name=agent.name,  # Use agent name as app_name for ADK 0.4.0+
         session_service=session_service
     )
     

@@ -820,15 +820,59 @@ def create_agent(
             
             if include_google_search:
                 try:
-                    register_search_agent(agent.root_agent)
-                    logger.info(f"Registered Google Search agent with parent {name}")
+                    # For ADK 0.4.0, we need to properly register the agent in the tree
+                    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+                    from radbot.tools.adk_builtin.search_tool import create_search_agent
+                    
+                    # First create the search agent
+                    search_agent = create_search_agent(
+                        name="search_agent",
+                        model=model,
+                        config=config
+                    )
+                    
+                    # Use the proper ADK agent.add_sub_agent method to register it
+                    if hasattr(agent.root_agent, 'add_sub_agent'):
+                        agent.root_agent.add_sub_agent(search_agent)
+                        logger.info(f"Registered search_agent using add_sub_agent method for ADK 0.4.0 compatibility")
+                    elif hasattr(agent.root_agent, 'sub_agents'):
+                        # Fallback: add to sub_agents list manually
+                        if not any(sa.name == "search_agent" for sa in agent.root_agent.sub_agents if hasattr(sa, 'name')):
+                            agent.root_agent.sub_agents.append(search_agent)
+                            logger.info(f"Added search_agent to root_agent.sub_agents list")
+                    else:
+                        # Last resort: use the register function
+                        register_search_agent(agent.root_agent)
+                        logger.info(f"Registered Google Search agent with parent {name} using register function")
                 except Exception as e:
                     logger.warning(f"Failed to register search agent: {str(e)}")
             
             if include_code_execution:
                 try:
-                    register_code_execution_agent(agent.root_agent)
-                    logger.info(f"Registered Code Execution agent with parent {name}")
+                    # For ADK 0.4.0, we need to properly register the agent in the tree
+                    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+                    from radbot.tools.adk_builtin.code_execution_tool import create_code_execution_agent
+                    
+                    # First create the code execution agent
+                    code_agent = create_code_execution_agent(
+                        name="code_execution_agent",
+                        model=model,
+                        config=config
+                    )
+                    
+                    # Use the proper ADK agent.add_sub_agent method to register it
+                    if hasattr(agent.root_agent, 'add_sub_agent'):
+                        agent.root_agent.add_sub_agent(code_agent)
+                        logger.info(f"Registered code_execution_agent using add_sub_agent method for ADK 0.4.0 compatibility")
+                    elif hasattr(agent.root_agent, 'sub_agents'):
+                        # Fallback: add to sub_agents list manually
+                        if not any(sa.name == "code_execution_agent" for sa in agent.root_agent.sub_agents if hasattr(sa, 'name')):
+                            agent.root_agent.sub_agents.append(code_agent)
+                            logger.info(f"Added code_execution_agent to root_agent.sub_agents list")
+                    else:
+                        # Last resort: use the register function
+                        register_code_execution_agent(agent.root_agent)
+                        logger.info(f"Registered Code Execution agent with parent {name} using register function")
                 except Exception as e:
                     logger.warning(f"Failed to register code execution agent: {str(e)}")
         except Exception as e:
@@ -858,24 +902,132 @@ def create_core_agent_for_web(
 ) -> Agent:
     """
     Create an ADK Agent for web interface with all necessary configurations.
-    This is the function used by the root agent.py.
     
     Args:
         tools: Optional list of tools to include
-        name: Name for the agent
-        app_name: Application name for the agent, should match agent name for transfers
+        name: Name for the agent (must be "beto" for consistent transfers)
+        app_name: Application name (must match agent name for ADK 0.4.0+)
         include_google_search: If True, register a google_search sub-agent
         include_code_execution: If True, register a code_execution sub-agent
         
     Returns:
         Configured ADK Agent for web interface
     """
-    return create_agent(
-        tools=tools, 
-        name=name, 
-        for_web=True, 
-        register_tools=True,
-        include_google_search=include_google_search,
-        include_code_execution=include_code_execution,
-        app_name=app_name
+    # Ensure agent name is always "beto" for consistent transfers
+    if name != "beto":
+        logger.warning(f"Agent name '{name}' changed to 'beto' for consistent transfers")
+        name = "beto"
+        
+    # Ensure app_name matches agent name for ADK 0.4.0+
+    if app_name != name:
+        logger.warning(f"app_name '{app_name}' changed to '{name}' for ADK 0.4.0+ compatibility")
+        app_name = name
+        
+    # Create the base agent with proper name and app_name
+    agent = AgentFactory.create_web_agent(
+        name=name,
+        model=None,  # Will use config default
+        tools=tools,
+        instruction_name="main_agent",
+        config=None,  # Will use global config
+        register_tools=True
     )
+    
+    # Import required components for agent transfers
+    from google.adk.tools.transfer_to_agent_tool import transfer_to_agent
+    
+    # Ensure agent has transfer_to_agent tool
+    if hasattr(agent, 'tools'):
+        # Check if tool already exists
+        has_transfer_tool = False
+        for tool in agent.tools:
+            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+            if tool_name == 'transfer_to_agent':
+                has_transfer_tool = True
+                break
+                
+        if not has_transfer_tool:
+            agent.tools.append(transfer_to_agent)
+            logger.info("Added transfer_to_agent tool to root agent")
+    
+    # Create sub-agents if requested
+    sub_agents = []
+    
+    # Add built-in tool agents if requested
+    if include_google_search or include_code_execution:
+        try:
+            from radbot.tools.adk_builtin import create_search_agent, create_code_execution_agent
+            
+            if include_google_search:
+                try:
+                    search_agent = create_search_agent(name="search_agent")
+                    # Make sure search_agent has transfer_to_agent
+                    if hasattr(search_agent, 'tools'):
+                        has_transfer_tool = False
+                        for tool in search_agent.tools:
+                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+                            if tool_name == 'transfer_to_agent':
+                                has_transfer_tool = True
+                                break
+                                
+                        if not has_transfer_tool:
+                            search_agent.tools.append(transfer_to_agent)
+                            
+                    sub_agents.append(search_agent)
+                    logger.info("Created search_agent as sub-agent")
+                except Exception as e:
+                    logger.warning(f"Failed to create search agent: {str(e)}")
+            
+            if include_code_execution:
+                try:
+                    code_agent = create_code_execution_agent(name="code_execution_agent")
+                    # Make sure code_agent has transfer_to_agent
+                    if hasattr(code_agent, 'tools'):
+                        has_transfer_tool = False
+                        for tool in code_agent.tools:
+                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
+                            if tool_name == 'transfer_to_agent':
+                                has_transfer_tool = True
+                                break
+                                
+                        if not has_transfer_tool:
+                            code_agent.tools.append(transfer_to_agent)
+                            
+                    sub_agents.append(code_agent)
+                    logger.info("Created code_execution_agent as sub-agent")
+                except Exception as e:
+                    logger.warning(f"Failed to create code execution agent: {str(e)}")
+        except Exception as e:
+            logger.warning(f"Failed to import built-in tool factories: {str(e)}")
+    
+    # Create scout agent if needed
+    try:
+        from radbot.agent.research_agent import create_research_agent
+        
+        # Pass the same settings to create consistent behavior
+        scout_agent = create_research_agent(
+            name="scout",  # MUST be "scout" for consistent transfers
+            model=None,  # Will use config default
+            tools=tools,  # Pass the same tools as the root agent
+            as_subagent=False,  # Get the ADK agent directly
+            enable_google_search=include_google_search,
+            enable_code_execution=include_code_execution,
+            app_name=app_name  # Same app_name for consistency
+        )
+        
+        # Add to sub-agents
+        sub_agents.append(scout_agent)
+        logger.info("Added scout agent as sub-agent")
+    except Exception as e:
+        logger.warning(f"Failed to create scout agent: {str(e)}")
+    
+    # Set sub-agents list on the agent
+    if sub_agents:
+        agent.sub_agents = sub_agents
+        logger.info(f"Added {len(sub_agents)} sub-agents to root agent")
+        
+        # Log the agent tree for debugging
+        sub_agent_names = [sa.name for sa in agent.sub_agents if hasattr(sa, 'name')]
+        logger.info(f"Agent tree: root='{agent.name}', sub_agents={sub_agent_names}")
+    
+    return agent
