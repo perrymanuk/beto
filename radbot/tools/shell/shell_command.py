@@ -26,10 +26,38 @@ from typing import Dict, List, Any, Optional
 # CRITICAL: Define the *only* commands the agent is allowed to run in strict mode.
 # Keep this list as minimal as absolutely necessary for agent functionality.
 ALLOWED_COMMANDS = {
-    "ls", "echo", "pwd", "cat", "grep", "find", "head", "tail"
-}  # Example set - ADJUST BASED ON REQUIREMENTS
+    # File navigation and inspection
+    "ls", "pwd", "cd", "find", "locate", 
+    
+    # File content viewing
+    "cat", "head", "tail", "less", "more", "grep", "egrep", "fgrep", "zgrep",
+    
+    # File manipulation
+    "cp", "mv", "rm", "mkdir", "rmdir", "touch", "chmod", "chown",
+    
+    # System information
+    "ps", "top", "df", "du", "free", "uname", "whoami", "id", "uptime", "w",
+    
+    # Network utilities
+    "ping", "netstat", "ifconfig", "ip", "ss", "dig", "nslookup", "curl", "wget",
+    
+    # Text processing
+    "echo", "sort", "uniq", "wc", "cut", "awk", "sed", "tr", "diff", "comm",
+    
+    # Archive and compression
+    "tar", "gzip", "gunzip", "zip", "unzip", "bzip2", "bunzip2",
+    
+    # Code search and version control
+    "rg", "ripgrep", "git", "gh",
+    
+    # Python tooling
+    "uv", "pip",
+    
+    # Miscellaneous utilities
+    "date", "cal", "which", "whereis", "who", "history", "env", "printenv"
+}  # Expanded set of commands to provide more functionality
 
-DEFAULT_TIMEOUT = 60  # Default execution timeout in seconds
+DEFAULT_TIMEOUT = 120  # Default execution timeout in seconds (increased to 2 minutes)
 # --------------------------
 
 logger = logging.getLogger(__name__)
