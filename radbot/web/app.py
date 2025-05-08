@@ -22,6 +22,7 @@ from radbot.web.api.session import (
     SessionManager,
     get_session_manager,
     get_or_create_runner_for_session,
+    memory_router,
 )
 
 # Import API routers for registration
@@ -47,6 +48,7 @@ app = FastAPI(
 register_events_router(app)
 register_agent_info_router(app)
 register_sessions_router(app)
+app.include_router(memory_router)
 logger.info("API routers registered during app initialization")
 
 # Define a startup event to initialize MCP servers

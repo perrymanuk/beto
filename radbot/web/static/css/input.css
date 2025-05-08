@@ -55,6 +55,43 @@
   caret-color: var(--accent-blue);
 }
 
+/* Memory mode styling */
+#chat-input.memory-mode {
+  background-color: rgba(255, 200, 0, 0.1);
+  border-color: rgba(255, 200, 0, 0.5);
+  border-left: 3px solid rgba(255, 200, 0, 0.7);
+  caret-color: rgba(255, 200, 0, 0.9);
+}
+
+.memory-tooltip {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 10px;
+  background-color: rgba(255, 200, 0, 0.9);
+  color: var(--bg-primary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 100;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.memory-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 10px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: rgba(255, 200, 0, 0.9) transparent transparent transparent;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(5px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 .command-highlight {
   color: var(--accent-blue);
   font-weight: bold;

@@ -385,6 +385,25 @@ export function sendMessage() {
     
     if (!message) return;
     
+    // Handle # prefix for memory storage
+    if (message.startsWith('# ')) {
+        // Extract the memory content (remove the # prefix)
+        const memoryContent = message.substring(2).trim();
+        
+        if (memoryContent) {
+            // Store in memory via API
+            storeInMemory(memoryContent);
+            
+            // Clear input and update UI
+            chatInput.value = '';
+            resizeTextarea();
+            
+            // Add confirmation message
+            addMessage('system', `📝 Saved to memory: "${memoryContent}"`);
+            return;
+        }
+    }
+    
     // Special handler for "scout pls" or "scount pls" message - force agent switch
     if (message.toLowerCase() === 'scout pls' || message.toLowerCase() === 'scount pls') {
         console.log("SCOUT REQUEST DETECTED - Forcing agent switch");
@@ -457,6 +476,58 @@ export function sendMessage() {
     }
     
     scrollToBottom();
+}
+
+// Store text in memory using the memory API
+function storeInMemory(text) {
+    console.log(`Storing in memory: ${text}`);
+    
+    // Set status to indicate processing
+    window.statusUtils.setStatus('processing');
+    
+    // Make API call to store memory
+    fetch('/api/memory/store', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            text: text,
+            memory_type: 'important_fact',
+            session_id: window.state.sessionId
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Memory storage response:', data);
+        window.statusUtils.setStatus('ready');
+    })
+    .catch(error => {
+        console.error('Error storing memory:', error);
+        window.statusUtils.setStatus('error');
+        
+        // Try to extract more detailed error message if available
+        let errorMsg = 'Error: Could not store memory. Please try again.';
+        try {
+            if (error.response) {
+                return error.response.json().then(data => {
+                    if (data && data.detail) {
+                        errorMsg = `Error: ${data.detail}`;
+                    }
+                    addMessage('system', errorMsg);
+                });
+            }
+        } catch (e) {
+            console.log('Could not parse error details:', e);
+        }
+        
+        addMessage('system', errorMsg);
+    });
 }
 
 // Reset the conversation
