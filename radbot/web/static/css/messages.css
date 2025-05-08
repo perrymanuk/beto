@@ -116,7 +116,7 @@
 }
 
 .message-content pre {
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(0, 0, 0, 0.75);
   padding: 0.75rem;
   margin: 0.75rem 0;
   border: 1px solid var(--border-color);
@@ -124,7 +124,7 @@
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--accent-blue) rgba(0, 0, 0, 0.7);
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   border-radius: 0;
 }
 
@@ -144,16 +144,71 @@
   background-color: var(--accent-blue);
 }
 
+/* Language label for code blocks */
 .message-content pre::before {
-  content: "OUTPUT";
+  content: attr(data-language, "CODE");
   color: var(--term-amber);
   font-size: 0.7rem;
+  text-transform: uppercase;
   position: absolute;
   top: 0;
   right: 0;
   background-color: rgba(0, 0, 0, 0.7);
   padding: 0.2rem 0.4rem;
   letter-spacing: 1px;
+}
+
+/* Add language-specific labels */
+.message-content pre.language-python::before {
+  content: "PYTHON";
+}
+
+.message-content pre.language-javascript::before {
+  content: "JAVASCRIPT";
+}
+
+.message-content pre.language-js::before {
+  content: "JAVASCRIPT";
+}
+
+.message-content pre.language-typescript::before {
+  content: "TYPESCRIPT";
+}
+
+.message-content pre.language-ts::before {
+  content: "TYPESCRIPT";
+}
+
+.message-content pre.language-bash::before {
+  content: "BASH";
+}
+
+.message-content pre.language-sh::before {
+  content: "SHELL";
+}
+
+.message-content pre.language-json::before {
+  content: "JSON";
+}
+
+.message-content pre.language-yaml::before {
+  content: "YAML";
+}
+
+.message-content pre.language-css::before {
+  content: "CSS";
+}
+
+.message-content pre.language-html::before {
+  content: "HTML";
+}
+
+.message-content pre.language-jsx::before {
+  content: "JSX";
+}
+
+.message-content pre.language-tsx::before {
+  content: "TSX";
 }
 
 .message-content pre code {
@@ -164,4 +219,83 @@
   font-size: 0.9rem;
   display: block;
   line-height: 1.5;
+  font-family: "Source Code Pro", monospace;
+}
+
+/* Prism.js token styling enhancements */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #6a9955;
+}
+
+.token.punctuation {
+  color: #d4d4d4;
+}
+
+.token.property,
+.token.tag,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #f14c4c;
+}
+
+.token.boolean,
+.token.number {
+  color: #b5cea8;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #ce9178;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #d4d4d4;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #569cd6;
+}
+
+.token.function,
+.token.class-name {
+  color: #dcdcaa;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #d16969;
+}
+
+/* Line highlight for code */
+.code-line-highlight {
+  background-color: rgba(255, 255, 255, 0.07);
+  display: block;
+  margin: 0 -0.75rem;
+  padding: 0 0.75rem;
+}
+
+/* Additional styles for inline code */
+.message-content p code {
+  font-family: "Source Code Pro", monospace;
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0;
+  font-size: 0.9em;
+  color: #ce9178;
+  border-left: 1px solid var(--accent-blue);
 }

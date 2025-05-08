@@ -34,6 +34,25 @@ export function initChat() {
         return false;
     }
     
+    // Configure Marked.js with syntax highlighting using Prism
+    if (typeof marked !== 'undefined') {
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (Prism && lang && Prism.languages[lang]) {
+                    try {
+                        return Prism.highlight(code, Prism.languages[lang], lang);
+                    } catch (e) {
+                        console.warn('Error highlighting code:', e);
+                        return code;
+                    }
+                }
+                return code;
+            },
+            breaks: true,
+            gfm: true
+        });
+    }
+    
     // Add chat event listeners
     chatInput.addEventListener('keydown', handleInputKeydown);
     
@@ -139,6 +158,35 @@ export function addMessage(role, content, agentName) {
     
     // Append the message
     chatMessages.appendChild(messageDiv);
+    
+    // If Prism.js is available, highlight code blocks in the newly added message
+    if (typeof Prism !== 'undefined') {
+        // Allow DOM to update before highlighting
+        setTimeout(() => {
+            // Find all code blocks that need highlighting in this message
+            const codeBlocks = messageDiv.querySelectorAll('pre code');
+            if (codeBlocks.length > 0) {
+                codeBlocks.forEach(codeBlock => {
+                    // Get the language class if it exists
+                    const preElement = codeBlock.parentElement;
+                    const classes = preElement.className.split(' ');
+                    let languageClass = classes.find(cl => cl.startsWith('language-'));
+                    
+                    if (languageClass) {
+                        // Ensure Prism recognizes this language
+                        const language = languageClass.replace('language-', '');
+                        if (Prism.languages[language]) {
+                            // Apply highlighting
+                            Prism.highlightElement(codeBlock);
+                        }
+                    } else {
+                        // No language specified, try to detect the language
+                        Prism.highlightElement(codeBlock);
+                    }
+                });
+            }
+        }, 50);
+    }
     
     // Scroll to bottom with a slight delay to ensure DOM updates
     setTimeout(scrollToBottom, 10);
