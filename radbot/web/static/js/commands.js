@@ -4,6 +4,7 @@
 
 // Slash commands functionality
 const commands = [
+    { name: '/sessions', description: 'Toggle sessions panel' },
     { name: '/tasks', description: 'Toggle tasks panel' },
     { name: '/events', description: 'Toggle events panel' },
     { name: '/clear', description: 'Clear conversation history' },
@@ -47,6 +48,11 @@ export function executeCommand(commandText) {
     console.log(`Executing command: ${cmd} with args: ${args}`);
     
     switch (cmd) {
+        case 'sessions':
+            document.dispatchEvent(new CustomEvent('command:sessions'));
+            window.chatModule.addMessage('system', 'Sessions panel toggled');
+            break;
+            
         case 'tasks':
             document.dispatchEvent(new CustomEvent('command:tasks'));
             window.chatModule.addMessage('system', 'Tasks panel toggled');

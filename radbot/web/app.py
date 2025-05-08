@@ -27,6 +27,7 @@ from radbot.web.api.session import (
 # Import API routers for registration
 from radbot.web.api.events import register_events_router
 from radbot.web.api.agent_info import register_agent_info_router
+from radbot.web.api.sessions import register_sessions_router
 
 # Set up logging
 logging.basicConfig(
@@ -45,6 +46,7 @@ app = FastAPI(
 # Register API routers immediately after app creation
 register_events_router(app)
 register_agent_info_router(app)
+register_sessions_router(app)
 logger.info("API routers registered during app initialization")
 
 # Define a startup event to initialize MCP servers

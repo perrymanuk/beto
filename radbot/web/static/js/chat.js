@@ -185,6 +185,11 @@ export function addMessage(role, content, agentName) {
             // Save updated messages
             const saveResult = window.chatPersistence.saveMessages(window.state.sessionId, existingMessages);
             console.log(`Message saved successfully: ${saveResult}. Total messages: ${existingMessages.length}`);
+            
+            // Update session preview if session manager is available
+            if (window.sessionManager && role !== 'system') {
+                window.sessionManager.updateSessionPreview(window.state.sessionId, content, role);
+            }
         } catch (error) {
             console.error('Error saving message to persistence:', error);
         }

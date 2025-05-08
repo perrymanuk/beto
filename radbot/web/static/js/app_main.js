@@ -13,6 +13,7 @@ import * as statusUtils from './status.js';
 import * as selectsUtils from './selects.js';
 import * as socketClient from './socket.js';
 import { ChatPersistence, mergeMessages } from './chat_persistence.js';
+import { initSessionManager } from './sessions.js';
 
 // Global state
 const state = {
@@ -113,14 +114,32 @@ function init() {
         }
     }, 300);
     
+    // Initialize session manager
+    const sessionManager = initSessionManager();
+    
+    // Get the active session ID from session manager
+    state.sessionId = sessionManager.getActiveSessionId() || localStorage.getItem('radbot_session_id') || null;
+    
     // Create or retrieve persistent session ID
     if (!state.sessionId) {
         state.sessionId = crypto.randomUUID ? crypto.randomUUID() : generateUUID();
+        // Store in both places for consistency
         localStorage.setItem('radbot_session_id', state.sessionId);
+        localStorage.setItem('radbot_active_session_id', state.sessionId);
         console.log('Created new session ID:', state.sessionId);
     } else {
         console.log('Using existing session ID:', state.sessionId);
+        // Ensure active session is stored in both places
+        localStorage.setItem('radbot_session_id', state.sessionId);
+        localStorage.setItem('radbot_active_session_id', state.sessionId);
     }
+    
+    // Set chat persistence instance in session manager
+    sessionManager.setChatPersistence(chatPersistence);
+    
+    // Add to global window object for debugging
+    window.SESSION_ID = state.sessionId;
+    console.log(`Global SESSION_ID set to: ${window.SESSION_ID}`);
     
     // Set up event listener for chat data changes from other tabs
     window.addEventListener('chatDataChanged', (event) => {
@@ -133,6 +152,17 @@ function init() {
         }
     });
     
+    // Set up event listener for session changes
+    window.addEventListener('sessionChanged', (event) => {
+        console.log('Session changed event received:', event.detail);
+        
+        // Update the current session ID
+        state.sessionId = event.detail.sessionId;
+        
+        // Load and render chat messages from local storage
+        loadChatFromStorage();
+    });
+    
     // Set flag to prevent duplicate message storage during initial load
     window.initialLoadInProgress = true;
     
@@ -142,12 +172,28 @@ function init() {
     // Clear the flag after loading completes
     window.initialLoadInProgress = false;
     
-    // Connect to WebSocket immediately
-    window.socket = socketClient.initSocket(state.sessionId);
+    // Connect to WebSocket with a small delay to allow other initializations to complete first
+    console.log('Scheduling WebSocket connection with a delay');
+    setTimeout(() => {
+        console.log('Connecting to WebSocket now');
+        const result = socketClient.initSocket(state.sessionId);
+        
+        // Handle both promise and direct return cases
+        if (result && typeof result.then === 'function') {
+            result.then(connection => {
+                console.log('WebSocket connection established via promise');
+                window.socket = connection;
+            });
+        } else {
+            console.log('WebSocket connection established directly');
+            window.socket = result;
+        }
+    }, 500);
     
-    // Fetch tasks, projects, and events directly from API
-    fetchTasks();
-    fetchEvents();
+    // Fetch tasks, projects, and events directly from API with staggered timing
+    // to reduce server load
+    setTimeout(() => fetchTasks(), 1000);
+    setTimeout(() => fetchEvents(), 1500);
     
     // Get initial agent and model information
     fetchAgentInfo();
@@ -273,9 +319,22 @@ function initializeUI() {
     // Initialize event type filter
     initEventTypeFilter();
     
-    // Check if WebSocket needs to be initialized or reinitialized
+    // Initialize sessions UI with a retry mechanism
+    if (window.sessionManager) {
+        const sessionsInitialized = window.sessionManager.initSessionsUI();
+        
+        // If sessions UI initialization failed (e.g., container not found), 
+        // we'll rely on the advanced observer in sessions.js
+        if (!sessionsInitialized) {
+            console.log('Sessions UI initialization deferred to observer in sessions.js');
+        }
+    }
+    
+    // Check if WebSocket needs to be reinitialized (but don't create new ones unnecessarily)
     if (!window.socket) {
-        window.socket = socketClient.initSocket(state.sessionId);
+        console.log('No active WebSocket found during UI initialization');
+        // We won't initialize a new socket here to prevent multiple connections
+        // The main init() function already schedules a socket connection
     }
 }
 
@@ -379,8 +438,29 @@ function initVoiceWaveAnimation() {
 }
 
 // Fetch tasks from API
-async function fetchTasks() {
-    console.log("Fetching tasks data...");
+async function fetchTasks(retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+    
+    console.log(`Fetching tasks data (attempt ${retryCount + 1} of ${MAX_RETRIES + 1})...`);
+    
+    // Check if tasks panel is open before fetching
+    const tasksPanel = document.querySelector('[data-content="tasks"]');
+    if (!tasksPanel && retryCount === 0) {
+        console.log('Tasks panel not open, skipping fetch or deferring');
+        
+        // Listen for panel opening
+        const listener = function() {
+            console.log('Tasks panel opened, fetching tasks data now');
+            document.removeEventListener('command:tasks', listener);
+            // Give the panel time to fully render
+            setTimeout(() => fetchTasks(), 300);
+        };
+        
+        document.addEventListener('command:tasks', listener);
+        return;
+    }
+    
     try {
         // Try to fetch from the real API first
         try {
@@ -425,9 +505,18 @@ async function fetchTasks() {
             }
         } catch (apiError) {
             console.warn("Failed to connect to real API:", apiError);
+            
+            // Try to retry with backoff if we haven't exceeded max retries
+            if (retryCount < MAX_RETRIES) {
+                console.log(`Retrying tasks fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+                setTimeout(() => fetchTasks(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+                return;
+            }
+            
+            console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching tasks, using mock data`);
         }
         
-        // If we get here, the real API failed - use mock data
+        // If we get here, the real API failed and retries exhausted - use mock data
         console.log("Using mock task data");
         
         // Mock data for testing
@@ -455,8 +544,24 @@ async function fetchTasks() {
     } catch (error) {
         console.error('Unexpected error in fetchTasks:', error);
         
+        // Try to retry with backoff if we haven't exceeded max retries
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying tasks fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+            setTimeout(() => fetchTasks(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+            return;
+        }
+        
+        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for handling tasks error`);
+        
         // Fall back to simple mock data if everything else fails
-        tasks = [{ task_id: "error1", title: "Error fetching tasks", status: "backlog", priority: "high", project_id: "error" }];
+        tasks = [{ 
+            task_id: "error1", 
+            title: "Error fetching tasks", 
+            status: "backlog", 
+            priority: "high", 
+            project_id: "error",
+            description: `Error: ${error.message} (after ${retryCount} retries)`
+        }];
         projects = [{ project_id: "error", name: "Error" }];
         
         window.tasks = tasks;
@@ -466,11 +571,42 @@ async function fetchTasks() {
     }
 }
 
-// Render tasks in UI
+// Render tasks in UI with retry capability
 function renderTasks() {
-    const tasksContainer = document.getElementById('tasks-container');
-    if (!tasksContainer) return;
+    console.log('Rendering tasks panel');
     
+    const tasksContainer = document.getElementById('tasks-container');
+    if (!tasksContainer) {
+        console.log('Tasks container not found, checking panel state...');
+        
+        // Check if tasks panel is actually open
+        const tasksPanel = document.querySelector('[data-content="tasks"]');
+        
+        if (tasksPanel) {
+            console.log('Tasks panel exists but container not found, waiting for DOM update...');
+            
+            // Panel exists but container might not be fully rendered yet
+            setTimeout(() => {
+                const retryContainer = document.getElementById('tasks-container');
+                if (retryContainer) {
+                    console.log('Tasks container found after delay, rendering now');
+                    renderTasksContent(retryContainer);
+                } else {
+                    console.warn('Tasks container still not found after delay');
+                }
+            }, 300);
+        } else {
+            // Panel not open, so not finding the container is expected
+            console.log('Tasks panel not open, skipping rendering');
+        }
+        return;
+    }
+    
+    renderTasksContent(tasksContainer);
+}
+
+// Separate function to render the actual tasks content
+function renderTasksContent(tasksContainer) {
     // Clear existing tasks
     tasksContainer.innerHTML = '';
     
@@ -566,18 +702,42 @@ function renderTasks() {
 }
 
 // Fetch events from API
-async function fetchEvents() {
-    console.log("Fetching events data...");
+async function fetchEvents(retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+    
+    console.log(`Fetching events data (attempt ${retryCount + 1} of ${MAX_RETRIES + 1})...`);
+    
+    // Check if events panel is open before fetching
+    const eventsPanel = document.querySelector('[data-content="events"]');
+    if (!eventsPanel && retryCount === 0) {
+        console.log('Events panel not open, skipping fetch or deferring');
+        
+        // Listen for panel opening
+        const listener = function() {
+            console.log('Events panel opened, fetching events data now');
+            document.removeEventListener('command:events', listener);
+            // Give the panel time to fully render
+            setTimeout(() => fetchEvents(), 300);
+        };
+        
+        document.addEventListener('command:events', listener);
+        return;
+    }
+    
     try {
         // Determine the API base URL - use current origin
         const baseUrl = `${window.location.protocol}//${window.location.host}`;
         
-        // Get the current session ID - reuse the one from socket connection if available
-        const sessionId = state.sessionId || localStorage.getItem('radbot_session_id') || generateUUID();
+        // Get the current session ID with better fallbacks
+        const sessionId = window.SESSION_ID || state.sessionId || 
+                          localStorage.getItem('radbot_active_session_id') || 
+                          localStorage.getItem('radbot_session_id') || 
+                          generateUUID();
         
         // Based on custom_web_ui.md - we need to use the session API endpoint
         const apiUrl = `${baseUrl}/api/events/${sessionId}`;
-        console.log(`Attempting to fetch events data from ${apiUrl}`);
+        console.log(`Attempting to fetch events data from ${apiUrl} for session ${sessionId}`);
         
         try {
             // Make the API request
@@ -664,6 +824,16 @@ async function fetchEvents() {
             // Handle API connection errors (CORS, connection refused, etc.)
             console.error("API error fetching events:", apiError);
             
+            // Try to retry with backoff if we haven't exceeded max retries
+            if (retryCount < MAX_RETRIES) {
+                console.log(`Retrying events fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+                setTimeout(() => fetchEvents(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+                return;
+            }
+            
+            // If we've exhausted retries, show error
+            console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching events`);
+            
             // Create a connection error event
             events = [{
                 type: "other",
@@ -675,7 +845,8 @@ async function fetchEvents() {
                     service: "Events API",
                     endpoint: apiUrl,
                     error_type: apiError.name,
-                    error_stack: apiError.stack
+                    error_stack: apiError.stack,
+                    retries_attempted: retryCount
                 }
             }];
             
@@ -686,6 +857,16 @@ async function fetchEvents() {
         // Handle any unexpected errors
         console.error('Unexpected error in fetchEvents:', error);
         
+        // Try to retry with backoff if we haven't exceeded max retries
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying events fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+            setTimeout(() => fetchEvents(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+            return;
+        }
+        
+        // If we've exhausted retries, show error
+        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching events`);
+        
         events = [{
             type: "other",
             timestamp: new Date().toISOString(),
@@ -694,7 +875,8 @@ async function fetchEvents() {
             details: {
                 error_message: `An unexpected error occurred: ${error.message}`,
                 error_type: error.name,
-                error_stack: error.stack
+                error_stack: error.stack,
+                retries_attempted: retryCount
             }
         }];
         
@@ -703,16 +885,42 @@ async function fetchEvents() {
     }
 }
 
-// Render events in UI
+// Render events in UI with retry capability
 function renderEvents() {
     console.log('Rendering events panel');
     
     const eventsContainer = document.getElementById('events-container');
     if (!eventsContainer) {
-        console.warn('Events container not found, cannot render events');
+        console.log('Events container not found, checking panel state...');
+        
+        // Check if events panel is actually open
+        const eventsPanel = document.querySelector('[data-content="events"]');
+        
+        if (eventsPanel) {
+            console.log('Events panel exists but container not found, waiting for DOM update...');
+            
+            // Panel exists but container might not be fully rendered yet
+            setTimeout(() => {
+                const retryContainer = document.getElementById('events-container');
+                if (retryContainer) {
+                    console.log('Events container found after delay, rendering now');
+                    renderEventsContent(retryContainer);
+                } else {
+                    console.warn('Events container still not found after delay');
+                }
+            }, 300);
+        } else {
+            // Panel not open, so not finding the container is expected
+            console.log('Events panel not open, skipping rendering');
+        }
         return;
     }
     
+    renderEventsContent(eventsContainer);
+}
+
+// Separate function to render the actual events content
+function renderEventsContent(eventsContainer) {
     // Clear existing events - first remove event listeners to prevent memory leaks
     const oldEventItems = eventsContainer.querySelectorAll('.event-item');
     oldEventItems.forEach(item => {
@@ -947,9 +1155,10 @@ function formatEventType(type) {
     }
 }
 
-// Show event details
-function showEventDetails(event) {
-    console.log('Showing event details:', event);
+// Show event details with improved error handling
+function showEventDetails(event, retryCount = 0) {
+    const MAX_RETRIES = 3;
+    console.log(`Showing event details (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, event);
     
     // First, ensure the events tile is visible - this is using the tiling system
     let eventsPanel = document.querySelector('[data-content="events"]');
@@ -964,9 +1173,16 @@ function showEventDetails(event) {
             if (eventsPanel) {
                 console.log('Events panel now found, attempting to show details again');
                 // Try again after panel is opened
-                showEventDetails(event);
+                showEventDetails(event, retryCount);
             } else {
-                console.error('Could not find events panel after attempting to open it');
+                if (retryCount < MAX_RETRIES) {
+                    console.log(`Retrying panel check (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+                    setTimeout(() => {
+                        showEventDetails(event, retryCount + 1);
+                    }, 300 * (retryCount + 1));
+                } else {
+                    console.error('Could not find events panel after multiple attempts');
+                }
             }
         }, 300);
         return;
@@ -1001,11 +1217,18 @@ function showEventDetails(event) {
             console.log('Created event-details-content container');
             
             // Now try to use the newly created container
-            setTimeout(() => showEventDetails(event), 100);
+            setTimeout(() => showEventDetails(event, retryCount), 100);
             return;
         }
         
-        console.error('Could not find detail panel to add event details content');
+        // If detail panel not found, but retries available, try again
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Detail panel not found, retrying (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+            setTimeout(() => showEventDetails(event, retryCount + 1), 300 * (retryCount + 1));
+            return;
+        }
+        
+        console.error('Could not find detail panel to add event details content after multiple attempts');
         return;
     }
     
@@ -1390,18 +1613,30 @@ function formatJsonSyntax(json) {
     });
 }
 
-// Get initial agent and model information
-function fetchAgentInfo() {
-    console.log("Fetching agent and model information");
+// Get initial agent and model information with retry mechanism
+function fetchAgentInfo(retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+    
+    console.log(`Fetching agent and model information (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
     
     try {
-        // Make a request to get the agent info from the server
-        fetch('/api/agent-info')
+        // Make a request to get the agent info from the server with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        fetch('/api/agent-info', { signal: controller.signal })
             .then(response => {
+                clearTimeout(timeoutId);
                 if (response.ok) {
                     return response.json();
                 } else {
-                    console.warn("Agent info API returned error:", response.status);
+                    console.warn(`Agent info API returned error: ${response.status}`);
+                    // Retry if we haven't hit the maximum
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`Retrying agent info fetch in ${RETRY_DELAY}ms...`);
+                        setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+                    }
                     return null;
                 }
             })
@@ -1488,13 +1723,34 @@ function fetchAgentInfo() {
             .catch(error => {
                 console.warn("Failed to fetch agent info:", error);
                 
-                // If API fails, still update the displayed model based on current agent
+                // Check if this was an abort error (timeout)
+                if (error.name === 'AbortError') {
+                    console.warn("Agent info request timed out");
+                }
+                
+                // Retry if we haven't hit the maximum
+                if (retryCount < MAX_RETRIES) {
+                    console.log(`Retrying agent info fetch after error (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+                    setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+                    return;
+                }
+                
+                // If API fails and retries exhausted, still update the displayed model based on current agent
+                console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for agent info, using fallback`);
                 updateModelForCurrentAgent();
             });
     } catch (error) {
         console.warn("Error in fetchAgentInfo:", error);
         
-        // If API fails, still update the displayed model based on current agent
+        // Retry if we haven't hit the maximum
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying agent info fetch after error (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+            setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+            return;
+        }
+        
+        // If API fails and retries exhausted, still update the displayed model based on current agent
+        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for agent info, using fallback`);
         updateModelForCurrentAgent();
     }
 }

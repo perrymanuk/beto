@@ -11,6 +11,9 @@ export class ChatPersistence {
     this.messageCache = {}; // In-memory cache
     this.saveBatchTimeout = null;
     
+    // Session metadata - will be initialized by session manager
+    this.sessionsIndexKey = 'radbot_sessions_index';
+    
     // Listen for storage events from other tabs
     window.addEventListener('storage', this.handleStorageEvent.bind(this));
   }
@@ -290,6 +293,24 @@ export class ChatPersistence {
     }
     
     return chats;
+  }
+  
+  // Get the last message for a chat
+  getLastMessage(chatId) {
+    if (!chatId) return null;
+    
+    // Check cache first
+    if (this.messageCache[chatId] && this.messageCache[chatId].length > 0) {
+      return this.messageCache[chatId][this.messageCache[chatId].length - 1];
+    }
+    
+    // Try to get from storage
+    const messages = this.getMessages(chatId);
+    if (messages && messages.length > 0) {
+      return messages[messages.length - 1];
+    }
+    
+    return null;
   }
 }
 

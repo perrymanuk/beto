@@ -12,6 +12,9 @@ const INITIAL_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 let pendingMessages = [];
 
+// Map to keep track of all active WebSocket connections by session ID
+const sessionConnections = {};
+
 /**
  * WebSocketManager class for handling WebSocket connections with reconnection logic
  */
@@ -30,28 +33,66 @@ class WebSocketManager {
     this.pendingMessages = [];
     this.heartbeatInterval = null;
     this.missedHeartbeats = 0;
+    this.lastActivityTimestamp = Date.now();
     
     // Connect immediately
     this.connect();
   }
   
+  // Helper method to get readable WebSocket state
+  getReadyStateString() {
+    if (!this.socket) return 'NO_SOCKET';
+    
+    switch (this.socket.readyState) {
+      case WebSocket.CONNECTING:
+        return 'CONNECTING';
+      case WebSocket.OPEN:
+        return 'OPEN';
+      case WebSocket.CLOSING:
+        return 'CLOSING';
+      case WebSocket.CLOSED:
+        return 'CLOSED';
+      default:
+        return `UNKNOWN(${this.socket.readyState})`;
+    }
+  }
+  
   connect() {
+    // Properly close existing socket if needed
     if (this.socket) {
-      this.socket.close();
+      try {
+        // Only attempt to close if not already closed
+        if (this.socket.readyState !== WebSocket.CLOSED) {
+          console.log(`Closing existing socket for session ${this.sessionId} (state: ${this.getReadyStateString()})`);
+          this.socket.close();
+        }
+      } catch (e) {
+        console.warn(`Error closing existing socket for session ${this.sessionId}:`, e);
+      }
+      this.socket = null;
     }
     
     const wsUrl = `${this.baseUrl}/ws/${this.sessionId}`;
-    console.log(`Connecting to WebSocket at ${wsUrl}`);
+    console.log(`Connecting to WebSocket at ${wsUrl} (attempt #${this.reconnectAttempts + 1})`);
     
     try {
+      // Update activity timestamp
+      this.lastActivityTimestamp = Date.now();
+      
+      // Create new WebSocket
       this.socket = new WebSocket(wsUrl);
       
       this.socket.onopen = () => {
-        console.log('WebSocket connected');
+        console.log(`WebSocket connected for session ${this.sessionId}`);
         this.connected = true;
         this.reconnectAttempts = 0;
         socketConnected = true;
-        window.statusUtils.setStatus('ready');
+        this.lastActivityTimestamp = Date.now();
+        
+        // Update UI status
+        if (window.statusUtils) {
+          window.statusUtils.setStatus('ready');
+        }
         
         // Start heartbeat after successful connection
         this.startHeartbeat();
@@ -64,7 +105,7 @@ class WebSocketManager {
           const messages = window.chatPersistence.getMessages(this.sessionId);
           if (messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
-            console.log('Requesting sync with server since last message:', lastMessage.id);
+            console.log(`Requesting sync for session ${this.sessionId} since last message:`, lastMessage.id);
             
             this.send(JSON.stringify({
               type: 'sync_request',
@@ -73,7 +114,7 @@ class WebSocketManager {
             }));
           } else {
             // If no local messages, request limited history
-            console.log('No local messages, requesting recent history');
+            console.log(`No local messages for session ${this.sessionId}, requesting recent history`);
             this.send(JSON.stringify({
               type: 'history_request',
               limit: 50
@@ -83,46 +124,72 @@ class WebSocketManager {
       };
       
       this.socket.onmessage = (event) => {
+        // Update activity timestamp
+        this.lastActivityTimestamp = Date.now();
         this.handleMessage(event);
       };
       
-      this.socket.onclose = () => {
-        console.log('WebSocket disconnected');
+      this.socket.onclose = (event) => {
+        // Log detailed close info
+        const wasClean = event.wasClean ? 'clean' : 'unclean';
+        console.log(`WebSocket ${wasClean} disconnect for session ${this.sessionId}, code: ${event.code}, reason: ${event.reason || 'none'}`);
+        
         this.connected = false;
         socketConnected = false;
-        window.statusUtils.setStatus('disconnected');
+        
+        // Update UI status
+        if (window.statusUtils) {
+          window.statusUtils.setStatus('disconnected');
+        }
         
         // Stop heartbeat on disconnection
         this.stopHeartbeat();
         
+        // Check if we should reconnect
+        const timeSinceLastActivity = Date.now() - this.lastActivityTimestamp;
+        const inactiveTimeThreshold = 10 * 60 * 1000; // 10 minutes
+        
+        if (timeSinceLastActivity > inactiveTimeThreshold) {
+          console.log(`Session ${this.sessionId} has been inactive for ${Math.round(timeSinceLastActivity/1000/60)} minutes, not reconnecting`);
+          return;
+        }
+        
         // Attempt to reconnect with exponential backoff
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           const delay = this.calculateReconnectDelay();
-          console.log(`Connection closed. Reconnecting in ${delay}ms...`);
+          console.log(`Connection closed for session ${this.sessionId}. Reconnecting in ${delay}ms...`);
           
           setTimeout(() => {
             this.reconnectAttempts++;
             this.connect();
           }, delay);
         } else {
-          console.error('Max reconnection attempts reached');
+          console.error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached for session ${this.sessionId}`);
         }
       };
       
       this.socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error(`WebSocket error for session ${this.sessionId}:`, error);
         this.connected = false;
         socketConnected = false;
-        window.statusUtils.setStatus('error');
+        
+        // Update UI status
+        if (window.statusUtils) {
+          window.statusUtils.setStatus('error');
+        }
       };
     } catch (error) {
-      console.error('Failed to connect to WebSocket:', error);
-      window.statusUtils.setStatus('error');
+      console.error(`Failed to connect WebSocket for session ${this.sessionId}:`, error);
+      
+      // Update UI status
+      if (window.statusUtils) {
+        window.statusUtils.setStatus('error');
+      }
       
       // Try to reconnect after a delay
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         const delay = this.calculateReconnectDelay();
-        console.log(`Connection attempt failed. Retrying in ${delay}ms...`);
+        console.log(`Connection attempt failed for session ${this.sessionId}. Retrying in ${delay}ms...`);
         
         setTimeout(() => {
           this.reconnectAttempts++;
@@ -167,25 +234,33 @@ class WebSocketManager {
   startHeartbeat() {
     this.stopHeartbeat(); // Clear any existing interval
     
-    // Send heartbeat every 30 seconds
+    // Send heartbeat every 90 seconds
     this.heartbeatInterval = setInterval(() => {
       if (this.connected) {
-        // Send heartbeat message
-        this.send(JSON.stringify({ type: 'heartbeat' }));
-        
-        // Increment missed heartbeats counter
-        this.missedHeartbeats++;
-        
-        // If we've missed too many heartbeats, close the connection and reconnect
-        if (this.missedHeartbeats >= 3) {
-          console.warn('Too many missed heartbeats, closing connection');
-          this.stopHeartbeat();
-          if (this.socket) {
-            this.socket.close();
+        // Only send heartbeat if connection is still open
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+          console.log(`Sending heartbeat for session ${this.sessionId}`);
+          this.send(JSON.stringify({ type: 'heartbeat' }));
+          
+          // Increment missed heartbeats counter
+          this.missedHeartbeats++;
+          
+          // If we've missed too many heartbeats, close the connection and reconnect
+          if (this.missedHeartbeats >= 8) {
+            console.warn(`Too many missed heartbeats (${this.missedHeartbeats}) for session ${this.sessionId}, closing connection`);
+            this.stopHeartbeat();
+            if (this.socket) {
+              this.socket.close();
+            }
           }
+        } else {
+          // Socket isn't open, force reconnection
+          console.warn(`Socket not open during heartbeat for session ${this.sessionId}, reconnecting...`);
+          this.stopHeartbeat();
+          this.connect();
         }
       }
-    }, 30000);
+    }, 90000);  // Increased from 60s to 90s
   }
   
   stopHeartbeat() {
@@ -204,8 +279,13 @@ class WebSocketManager {
       this.missedHeartbeats = 0;
       
       if (data.type === 'heartbeat') {
-        // Just handle the heartbeat silently
-        console.log('Received heartbeat response');
+        // Handle heartbeat with session info for debugging
+        console.log(`Received heartbeat response for session ${this.sessionId}`);
+        
+        // Additional debug info for tracking connection status
+        if (this.socket) {
+          console.log(`WebSocket state for ${this.sessionId}: ${this.getReadyStateString()}`); 
+        }
         return;
       }
       
@@ -433,20 +513,99 @@ class WebSocketManager {
   }
 }
 
+// Cooldown for creating new connections (to prevent rapid reconnects)
+let lastConnectionTime = 0;
+const CONNECTION_COOLDOWN = 1000; // 1 second minimum between connections
+
 // Initialize WebSocket connection
 export function initSocket(sessionId) {
   console.log('Initializing WebSocket connection with session ID:', sessionId);
   
-  // Create a WebSocketManager instance
-  const manager = new WebSocketManager(`ws://${window.location.host}`, sessionId);
+  // Prevent excessive connection attempts in a short time
+  const now = Date.now();
+  const timeSinceLastConnection = now - lastConnectionTime;
+  
+  if (timeSinceLastConnection < CONNECTION_COOLDOWN) {
+    console.log(`Connection attempt too soon (${timeSinceLastConnection}ms since last connection)`);
+    console.log(`Delaying connection for ${CONNECTION_COOLDOWN - timeSinceLastConnection}ms`);
+    
+    // Create a promise that resolves after the cooldown period
+    return new Promise(resolve => {
+      setTimeout(() => {
+        console.log(`Cooldown complete, continuing with connection to ${sessionId}`);
+        const connection = _initSocketImplementation(sessionId);
+        resolve(connection);
+      }, CONNECTION_COOLDOWN - timeSinceLastConnection);
+    });
+  }
+  
+  // Update last connection time
+  lastConnectionTime = now;
+  
+  // Proceed with normal initialization
+  return _initSocketImplementation(sessionId);
+}
+
+// Actual implementation of socket initialization (to allow for delayed calls)
+function _initSocketImplementation(sessionId) {
+  // Check if we already have a connection for this session
+  if (sessionConnections[sessionId]) {
+    console.log(`Reusing existing WebSocket connection for session ${sessionId}`);
+    
+    // Get the existing manager
+    const manager = sessionConnections[sessionId];
+    
+    // If the connection was closed, reconnect
+    if (!manager.connected) {
+      // Get the current socket state for better logging
+      const socketState = manager.socket ? manager.getReadyStateString() : 'NO_SOCKET';
+      console.log(`Reconnecting existing WebSocket for session ${sessionId} (current state: ${socketState})`);
+      
+      // Check if we've attempted a reconnect recently
+      const timeSinceLastActivity = Date.now() - manager.lastActivityTimestamp;
+      if (timeSinceLastActivity < 2000) { // 2 seconds
+        console.log(`Recent activity detected (${timeSinceLastActivity}ms ago), delaying reconnect`);
+        // Don't attempt another reconnect if there was recent activity
+        // This helps prevent connection thrashing
+        
+        // Still return an interface that appears connected
+        return createSocketInterface(manager, sessionId);
+      }
+      
+      // Safe to reconnect
+      manager.connect();
+    }
+    
+    // Extract socket from manager
+    socket = manager.socket;
+    
+    // Return the existing interface
+    return createSocketInterface(manager, sessionId);
+  }
+  
+  // Create a new WebSocketManager instance with safe URL generation
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}`;
+  
+  console.log(`Creating new WebSocketManager for ${sessionId} at ${wsUrl}`);
+  const manager = new WebSocketManager(wsUrl, sessionId);
+  
+  // Store in our sessions map
+  sessionConnections[sessionId] = manager;
   
   // Extract socket from manager
   socket = manager.socket;
   
-  // Return a simplified interface for backward compatibility
+  // Return a simplified interface
+  return createSocketInterface(manager, sessionId);
+}
+
+// Create a standardized interface for socket interaction
+function createSocketInterface(manager, sessionId) {
   return {
-    socket,
-    socketConnected,
+    socket: manager.socket,
+    socketConnected: manager.connected,
+    sessionId: sessionId,
     send: (data) => {
       if (manager && typeof data === 'string') {
         manager.send(data);
@@ -457,8 +616,48 @@ export function initSocket(sessionId) {
       }
     },
     // Expose the manager for advanced usage
-    manager
+    manager: manager
   };
+}
+
+// Close a session's WebSocket connection
+export function closeSocket(sessionId) {
+  if (sessionConnections[sessionId]) {
+    console.log(`Closing WebSocket connection for session ${sessionId}`);
+    const manager = sessionConnections[sessionId];
+    
+    // Stop heartbeat to prevent reconnection attempts
+    manager.stopHeartbeat();
+    
+    try {
+      // Close the socket with clean code if it's open
+      if (manager.socket) {
+        const state = manager.getReadyStateString();
+        console.log(`WebSocket for session ${sessionId} is in state ${state} before close`);
+        
+        if (manager.socket.readyState === WebSocket.OPEN || 
+            manager.socket.readyState === WebSocket.CONNECTING) {
+          // Use clean close code 1000 (normal closure)
+          manager.socket.close(1000, "Session change");
+        }
+      }
+    } catch (e) {
+      console.warn(`Error during WebSocket clean close for session ${sessionId}:`, e);
+    }
+    
+    // Clean up all resources
+    manager.connected = false;
+    manager.socket = null;
+    
+    // Remove from our sessions map to prevent memory leaks
+    delete sessionConnections[sessionId];
+    
+    console.log(`WebSocket connection for session ${sessionId} successfully closed`);
+    return true;
+  }
+  
+  console.log(`No WebSocket connection found for session ${sessionId}`);
+  return false;
 }
 
 // Handle incoming tasks data
