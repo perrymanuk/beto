@@ -1,5 +1,22 @@
 ## 📋 Current Tasks
 
+### Web UI Enhancements
+
+#### Completed
+
+✅ Add `/claude` command feature for templated prompts
+✅ Create config schema for claude_templates
+✅ Implement variable substitution for template arguments
+✅ Create API endpoint for accessing claude_templates from config
+✅ Add documentation for `/claude` command usage
+✅ Add default behavior to send text directly to Claude when no template is specified
+
+#### To Do
+
+⏱️ Add TypeScript typing for claude_templates
+⏱️ Add UI interface for managing/creating templates
+⏱️ Add validation for template variables
+
 ### MCP Client Implementation Replacement with Standard SDK
 
 Based on the analysis and migration plan in `docs/implementation/mcp/library_based_clients.md`, we have replaced our custom MCP client with a standardized implementation based on the MCP Python SDK.

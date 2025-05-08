@@ -6,6 +6,14 @@
   "additionalProperties": false,
   "required": ["agent"],
   "properties": {
+    "claude_templates": {
+      "type": "object",
+      "description": "Templates for /claude command prompts",
+      "additionalProperties": {
+        "type": "string",
+        "description": "Template string with optional variables in the format $VARIABLE"
+      }
+    },
     "agent": {
       "type": "object",
       "additionalProperties": false,

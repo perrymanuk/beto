@@ -60,6 +60,12 @@ An AI agent designed with a unique '90s SoCal influence. Beto blends practical f
 *   **`search_past_conversations`**: Searches back through our previous chats to find relevant info. Helps me remember context.
 *   **`store_important_information`**: Allows me to save specific facts or preferences you tell me for future reference.
 
+### Web UI Commands
+
+*   **`/claude`**: Send text directly to Claude or use templated prompts from config.yaml. Examples:
+    - Direct: `/claude What's the capital of France?`
+    - Template: `/claude:pr-review PR_NUM="123" GH_REPO="https://github.com/org/repo"` (fills in variables in the template)
+
 ### System Operations (Requires Caution)
 
 *   **`execute_shell_command`**: **(Advanced - Use with Extreme Caution)** This tool can execute arbitrary shell commands. It bypasses normal safety checks and should only be used if you fully understand the security implications.

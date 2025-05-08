@@ -1,22 +1,28 @@
 """
 Agent info API endpoint for RadBot web interface.
 
-This module provides an API endpoint for retrieving agent and model information.
+This module provides API endpoints for retrieving agent and model information,
+as well as Claude templates from the configuration.
 """
 import logging
 from typing import Dict, Any
 from fastapi import APIRouter, Depends
 
-from radbot.config import config_manager
+from radbot.config import config_manager, get_claude_templates
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create router
+# Create routers
 router = APIRouter(
     prefix="/api/agent-info",
     tags=["agent-info"],
+)
+
+claude_router = APIRouter(
+    prefix="/api/claude-templates",
+    tags=["claude-templates"],
 )
 
 @router.get("")
@@ -56,12 +62,26 @@ async def get_agent_info() -> Dict[str, Any]:
     logger.info(f"Providing agent info: {info}")
     return info
 
-# Register agent_info router in the main FastAPI app
+@claude_router.get("")
+async def get_claude_templates() -> Dict[str, Any]:
+    """Get Claude templates from configuration.
+    
+    Returns:
+        Dict containing available Claude templates.
+    """
+    # Get the Claude templates from configuration
+    claude_templates = get_claude_templates()
+    
+    logger.info(f"Providing Claude templates: {list(claude_templates.keys())}")
+    return {"templates": claude_templates}
+
+# Register routers in the main FastAPI app
 def register_agent_info_router(app):
-    """Register agent_info router with the FastAPI app.
+    """Register agent_info and claude_templates routers with the FastAPI app.
     
     Args:
         app: FastAPI application
     """
     app.include_router(router)
-    logger.info("Registered agent_info router")
+    app.include_router(claude_router)
+    logger.info("Registered agent_info and claude_templates routers")
