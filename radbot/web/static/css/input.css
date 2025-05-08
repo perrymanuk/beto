@@ -63,6 +63,14 @@
   caret-color: rgba(255, 200, 0, 0.9);
 }
 
+/* History navigation mode styling */
+#chat-input.history-mode {
+  background-color: rgba(53, 132, 228, 0.05);
+  border-color: rgba(53, 132, 228, 0.4);
+  border-left: 3px solid var(--accent-blue);
+  caret-color: var(--accent-blue);
+}
+
 .memory-tooltip {
   position: absolute;
   bottom: calc(100% + 5px);

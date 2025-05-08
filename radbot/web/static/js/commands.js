@@ -150,6 +150,8 @@ function showHelp() {
     helpMessage += '\n**UI Controls:**\n';
     helpMessage += '- Enter - Send message\n';
     helpMessage += '- Shift+Enter - New line\n';
+    helpMessage += '- Up Arrow - Navigate to previous messages in history\n';
+    helpMessage += '- Down Arrow - Navigate to more recent messages in history\n';
     
     window.chatModule.addMessage('system', helpMessage);
 }

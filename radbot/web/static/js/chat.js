@@ -497,7 +497,10 @@ function navigateMessageHistory(direction) {
     // Move cursor to end of text
     chatInput.selectionStart = chatInput.selectionEnd = chatInput.value.length;
     
-    // Resize textarea to fit content
+    // Force input update event to ensure UI updates correctly
+    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    
+    // Resize textarea to fit content (though this should already happen from the input event)
     resizeTextarea();
 }
 
