@@ -504,6 +504,13 @@ class WebSocketManager {
                 }
                 
                 try {
+                  // Check if this is a recovered response from a malformed function call
+                  const isRecovered = event.details && event.details.recovered_from === 'malformed_function_call';
+                  
+                  if (isRecovered) {
+                    console.log("Displaying recovered response from malformed function call");
+                  }
+                  
                   // Display the model response from the event
                   window.chatModule.addMessage('assistant', event.text, agentName);
                   window.chatModule.scrollToBottom();

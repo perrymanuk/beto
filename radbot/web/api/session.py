@@ -8,11 +8,15 @@ import asyncio
 import logging
 import os
 import sys
+import json
 from typing import Dict, Optional, Any, Union
 from google.genai.types import Content, Part
 
 from fastapi import Depends, APIRouter, HTTPException, Body
 from pydantic import BaseModel
+
+# Import the malformed function handler
+from radbot.web.api.malformed_function_handler import extract_text_from_malformed_function
 
 # Set up logging
 logging.basicConfig(
@@ -178,6 +182,7 @@ class SessionRunner:
             # Initialize variables for collecting event data
             final_response = None
             processed_events = []
+            raw_response = None
             
             for event in events:
                 # Extract event type and create a base event object
@@ -199,9 +204,16 @@ class SessionRunner:
                     # Check if this is the final response
                     if hasattr(event, 'is_final_response') and event.is_final_response():
                         final_response = event_data.get("text", "")
+                        # Save raw response for later use if needed
+                        if hasattr(event, 'raw_response'):
+                            raw_response = event.raw_response
                 else:
                     # Generic event processing
                     event_data.update(self._process_generic_event(event))
+                    
+                    # Get raw response if available
+                    if hasattr(event, 'raw_response'):
+                        raw_response = event.raw_response
                 
                 processed_events.append(event_data)
                 
@@ -214,8 +226,48 @@ class SessionRunner:
                 if final_response is None:
                     final_response = self._extract_response_from_event(event)
             
+            # If we still don't have a response, check for malformed function calls
+            if not final_response and raw_response:
+                try:
+                    if isinstance(raw_response, str):
+                        # Try to parse the raw response as JSON
+                        try:
+                            raw_response_data = json.loads(raw_response)
+                        except json.JSONDecodeError:
+                            logger.warning("Could not parse raw response as JSON")
+                            raw_response_data = {"raw_text": raw_response}
+                    else:
+                        raw_response_data = raw_response
+                    
+                    # Extract text from malformed function call
+                    extracted_text = extract_text_from_malformed_function(raw_response_data)
+                    if extracted_text:
+                        logger.info(f"Recovered text from malformed function call: {extracted_text[:100]}...")
+                        final_response = extracted_text
+                        
+                        # Create a synthetic model response event
+                        model_event = {
+                            "type": "model_response",
+                            "category": "model_response",
+                            "timestamp": self._get_current_timestamp(),
+                            "summary": "Recovered Response from Malformed Function",
+                            "text": extracted_text,
+                            "is_final": True,
+                            "details": {
+                                "recovered_from": "malformed_function_call",
+                                "session_id": self.session_id
+                            }
+                        }
+                        processed_events.append(model_event)
+                        
+                        # Add this event to the event storage
+                        from radbot.web.api.events import add_event
+                        add_event(self.session_id, model_event)
+                except Exception as e:
+                    logger.error(f"Error processing malformed function call: {str(e)}", exc_info=True)
+            
             if not final_response:
-                logger.warning("No text response found in events")
+                logger.warning("No text response found in events, including malformed function handler")
                 final_response = "I apologize, but I couldn't generate a response."
             
             # Return both the text response and the processed events
@@ -602,6 +654,19 @@ class SessionRunner:
         else:
             event_data["is_final"] = False
             event_data["summary"] = "Intermediate Response"
+            
+        # Save raw response if available
+        if hasattr(event, 'raw_response'):
+            event_data["raw_response"] = event.raw_response
+            
+        # Try to extract raw response from event internals if not directly available
+        if not hasattr(event, 'raw_response'):
+            if hasattr(event, '_raw_response'):
+                event_data["raw_response"] = event._raw_response
+            elif hasattr(event, '_response'):
+                event_data["raw_response"] = event._response
+            elif hasattr(event, 'response'):
+                event_data["raw_response"] = event.response
         
         # Get the basic event details
         event_details = self._get_event_details(event)

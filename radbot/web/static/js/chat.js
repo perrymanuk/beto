@@ -60,6 +60,12 @@ export function initChat() {
     chatInput.addEventListener('input', function(event) {
         resizeTextarea();
         updateMemoryIndicator();
+        
+        // Remove history mode highlighting when user starts typing
+        if (messageHistoryIndex !== -1) {
+            messageHistoryIndex = -1;
+            chatInput.classList.remove('history-mode');
+        }
     });
     
     // Set initial compact height
@@ -402,7 +408,12 @@ function generateUUID() {
     });
 }
 
-// Handle input keydown (send on Enter, new line on Shift+Enter)
+// Message history navigation
+let messageHistory = [];
+let messageHistoryIndex = -1;
+let currentInputValue = '';
+
+// Handle input keydown (send on Enter, new line on Shift+Enter, navigate history with Up/Down)
 function handleInputKeydown(event) {
     // Check if command-suggestions element exists
     const commandSuggestionsElement = document.getElementById('command-suggestions');
@@ -414,6 +425,80 @@ function handleInputKeydown(event) {
         event.preventDefault();
         sendMessage();
     }
+    
+    // Message history navigation with arrow keys
+    if (event.key === 'ArrowUp' && !event.shiftKey) {
+        // If first time pressing up, save the current input value
+        if (messageHistoryIndex === -1) {
+            currentInputValue = chatInput.value;
+        }
+        // Navigate backward in history
+        navigateMessageHistory(-1);
+        event.preventDefault();
+    } else if (event.key === 'ArrowDown' && !event.shiftKey) {
+        // Navigate forward in history
+        navigateMessageHistory(1);
+        event.preventDefault();
+    }
+}
+
+// Navigate through message history
+function navigateMessageHistory(direction) {
+    // If no history, do nothing
+    if (!window.state || !window.state.sessionId || !window.chatPersistence) {
+        return;
+    }
+    
+    // Lazy load message history if not already loaded
+    if (messageHistory.length === 0) {
+        // Get all messages for the current session
+        const allMessages = window.chatPersistence.getMessages(window.state.sessionId);
+        
+        // Extract only user messages in reverse chronological order
+        messageHistory = allMessages
+            .filter(msg => msg.role === 'user')
+            .map(msg => msg.content)
+            .reverse();
+            
+        // Limit history size to prevent excessive memory usage
+        if (messageHistory.length > 50) {
+            messageHistory = messageHistory.slice(0, 50);
+        }
+    }
+    
+    // No history, nothing to navigate
+    if (messageHistory.length === 0) {
+        return;
+    }
+    
+    // Update index based on direction (-1 for up, 1 for down)
+    messageHistoryIndex += direction;
+    
+    // Ensure index stays within bounds
+    if (messageHistoryIndex >= messageHistory.length) {
+        // Past the most recent, return to current input
+        messageHistoryIndex = -1;
+        chatInput.value = currentInputValue;
+        chatInput.classList.remove('history-mode');
+    } else if (messageHistoryIndex < -1) {
+        // Past the oldest, stay at oldest
+        messageHistoryIndex = 0;
+        chatInput.classList.add('history-mode');
+    } else if (messageHistoryIndex === -1) {
+        // Return to current input
+        chatInput.value = currentInputValue;
+        chatInput.classList.remove('history-mode');
+    } else {
+        // Set input to the history item
+        chatInput.value = messageHistory[messageHistoryIndex];
+        chatInput.classList.add('history-mode');
+    }
+    
+    // Move cursor to end of text
+    chatInput.selectionStart = chatInput.selectionEnd = chatInput.value.length;
+    
+    // Resize textarea to fit content
+    resizeTextarea();
 }
 
 // Send message via WebSocket
@@ -440,6 +525,20 @@ export function sendMessage() {
             return;
         }
     }
+    
+    // Add to message history (internal history list for navigation)
+    // Only add to messageHistory if the message is unique or messageHistory is empty
+    if (message && (messageHistory.length === 0 || messageHistory[0] !== message)) {
+        messageHistory.unshift(message);
+        // Keep history to a reasonable size
+        if (messageHistory.length > 50) {
+            messageHistory = messageHistory.slice(0, 50);
+        }
+    }
+    
+    // Reset history navigation index and remove history mode class
+    messageHistoryIndex = -1;
+    chatInput.classList.remove('history-mode');
     
     // Special handler for "scout pls" or "scount pls" message - force agent switch
     if (message.toLowerCase() === 'scout pls' || message.toLowerCase() === 'scount pls') {
@@ -652,6 +751,13 @@ async function sendMessageREST(message, displayMessage) {
                 const agentName = lastResponse.agent_name || 
                                (lastResponse.details && lastResponse.details.agent_name) || 
                                window.state.currentAgentName;
+                
+                // Check if this is a recovered response from a malformed function call
+                const isRecovered = lastResponse.details && lastResponse.details.recovered_from === 'malformed_function_call';
+                
+                if (isRecovered) {
+                    console.log("Displaying recovered response from malformed function call in REST response");
+                }
                 
                 addMessage('assistant', lastResponse.text, agentName);
             } else {
