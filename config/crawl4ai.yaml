@@ -1,0 +1,15 @@
+# Crawl4AI MCP server configuration
+
+mcp_servers:
+  - id: crawl4ai
+    url: https://crawl4ai.demonsafe.com/mcp/sse
+    transport: sse
+    tools:
+      - md
+      - html
+      - screenshot
+      - pdf
+      - execute_js
+      - crawl
+      - ask
+    description: "Crawl4AI web research tools"

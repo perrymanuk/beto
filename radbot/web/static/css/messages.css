@@ -118,14 +118,45 @@
 .message-content pre {
   background-color: rgba(0, 0, 0, 0.75);
   padding: 0.75rem;
-  margin: 0.75rem 0;
+  margin: 0.75rem auto;
   border: 1px solid var(--border-color);
   position: relative;
+  width: 90%;
+  max-width: 90%;
   overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
   scrollbar-width: thin;
   scrollbar-color: var(--accent-blue) rgba(0, 0, 0, 0.7);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   border-radius: 0;
+}
+
+/* Content-type specific styles */
+.message-content pre[data-content-type="json-raw"] {
+  white-space: pre-wrap;
+  font-family: "Source Code Pro", monospace;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-x: visible;
+  width: 90%;
+  word-wrap: break-word;
+  color: var(--text-primary);
+  background-color: rgba(0, 0, 0, 0.85);
+  border-left: 2px solid var(--term-amber);
+}
+
+.message-content pre[data-content-type="json-formatted"] {
+  white-space: pre-wrap;
+  font-family: "Source Code Pro", monospace;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-x: visible;
+  width: 90%;
+  word-wrap: break-word;
+  color: var(--text-primary);
+  background-color: rgba(0, 0, 0, 0.75);
+  border-left: 2px solid var(--accent-blue);
 }
 
 /* Custom scrollbar for code blocks */
@@ -156,6 +187,28 @@
   background-color: rgba(0, 0, 0, 0.7);
   padding: 0.2rem 0.4rem;
   letter-spacing: 1px;
+}
+
+/* Language label for JSON content types */
+.message-content pre[data-content-type="json-raw"]::before,
+.message-content pre[data-content-type="json-formatted"]::before {
+  content: "JSON";
+  color: var(--term-amber);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 0.2rem 0.4rem;
+  letter-spacing: 1px;
+}
+
+/* Style specific to raw JSON */
+.message-content pre[data-content-type="json-raw"]::before {
+  content: "JSON RAW";
+  background-color: rgba(30, 30, 30, 0.9);
+  color: var(--term-amber);
 }
 
 /* Add language-specific labels */
@@ -220,6 +273,9 @@
   display: block;
   line-height: 1.5;
   font-family: "Source Code Pro", monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  width: 100%;
 }
 
 /* Prism.js token styling enhancements */

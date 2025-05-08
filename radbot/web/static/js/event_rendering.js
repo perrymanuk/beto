@@ -581,17 +581,147 @@ export function showEventDetails(event) {
 export function formatJsonSyntax(json) {
     if (!json) return '';
     
-    // Handle the case where json is already an object
-    if (typeof json !== 'string') {
-        json = JSON.stringify(json, null, 2);
+    // Check for special API responses that should be preserved raw
+    if (typeof json === 'string' && 
+        (json.includes('"call_search_agent_response"') ||
+         json.includes('"call_web_search_response"') ||
+         json.includes('"function_call_response"'))) {
+        
+        // Return with the raw JSON content type for consistent handling
+        return `<pre data-content-type="json-raw" class="content-json-raw">${escapeHtml(json)}</pre>`;
     }
     
-    // Replace potentially harmful characters
-    json = json.replace(/&/g, '&amp;')
-               .replace(/</g, '&lt;')
-               .replace(/>/g, '&gt;');
+    let formattedJson = '';
+    let originalWasString = typeof json === 'string';
+    let isValidJson = false;
     
-    // Format different parts of JSON with specific colors
+    try {
+        // Handle the case where json is already an object
+        if (typeof json !== 'string') {
+            formattedJson = JSON.stringify(json, null, 2);
+            isValidJson = true;
+        } else {
+            // Pre-process string to handle escaped sequences
+            let processedJson = json
+                .replace(/\\n/g, '\n')
+                .replace(/\\"/g, '"')
+                .replace(/\\\\/g, '\\');
+            
+            // Try to parse and reformat to ensure proper structure
+            try {
+                const parsedJson = JSON.parse(processedJson);
+                formattedJson = JSON.stringify(parsedJson, null, 2);
+                isValidJson = true;
+            } catch (innerError) {
+                // If we can't parse even with replacements, try the original
+                const parsedJson = JSON.parse(json);
+                formattedJson = JSON.stringify(parsedJson, null, 2);
+                isValidJson = true;
+            }
+        }
+    } catch (e) {
+        console.warn('Error parsing JSON in formatJsonSyntax:', e);
+        
+        // If parsing completely fails, use the original string with some cleanup
+        if (originalWasString) {
+            formattedJson = json;
+            
+            // Try to fix common escape sequence issues
+            formattedJson = formattedJson
+                .replace(/\\n/g, '\n')
+                .replace(/\\"/g, '"')
+                .replace(/\\\\/g, '\\')
+                .replace(/\\t/g, '    '); // Replace tabs with spaces
+                
+            // Try to add minimal indentation based on braces/brackets for readability
+            // This is a simple approach and won't perfectly format invalid JSON
+            let indent = 0;
+            let prettyJson = '';
+            let inString = false;
+            
+            for (let i = 0; i < formattedJson.length; i++) {
+                const char = formattedJson[i];
+                
+                // Handle string literals to avoid formatting inside them
+                if (char === '"' && (i === 0 || formattedJson[i-1] !== '\\')) {
+                    inString = !inString;
+                }
+                
+                if (!inString) {
+                    if (char === '{' || char === '[') {
+                        // Add the opening brace/bracket
+                        prettyJson += char;
+                        // Add a newline
+                        prettyJson += '\n';
+                        // Increase indentation for the next line
+                        indent++;
+                        // Add spaces based on indentation level
+                        prettyJson += ' '.repeat(indent * 2);
+                    } else if (char === '}' || char === ']') {
+                        // Decrease indentation before closing
+                        indent--;
+                        // Add a newline and spaces based on indentation level
+                        prettyJson += '\n' + ' '.repeat(indent * 2);
+                        // Add the closing brace/bracket
+                        prettyJson += char;
+                    } else if (char === ',') {
+                        // Add the comma
+                        prettyJson += char;
+                        // Add a newline and indentation
+                        prettyJson += '\n' + ' '.repeat(indent * 2);
+                    } else if (char === ':') {
+                        // Add the colon and a space after it
+                        prettyJson += ': ';
+                    } else {
+                        // Just add the character
+                        prettyJson += char;
+                    }
+                } else {
+                    // Inside a string, just add the character
+                    prettyJson += char;
+                }
+            }
+            
+            // If we managed to create something that looks better, use it
+            if (prettyJson && prettyJson.includes('\n')) {
+                formattedJson = prettyJson;
+            }
+        }
+    }
+    
+    // Escape HTML characters to prevent XSS
+    formattedJson = escapeHtml(formattedJson);
+    
+    // Decide which type of JSON display to use based on validity
+    if (isValidJson) {
+        // For valid JSON, use the formatted content type
+        if (typeof Prism !== 'undefined' && Prism.languages.json) {
+            // Use Prism.js for syntax highlighting
+            const highlighted = Prism.highlight(formattedJson, Prism.languages.json, 'json');
+            return `<pre data-content-type="json-formatted" class="content-json-formatted">${highlighted}</pre>`;
+        } else {
+            // If Prism is not available, use basic syntax highlighting
+            const basicHighlighted = basicJsonHighlight(formattedJson);
+            return `<pre data-content-type="json-formatted" class="content-json-formatted">${basicHighlighted}</pre>`;
+        }
+    } else {
+        // For invalid or special JSON, use the raw content type
+        return `<pre data-content-type="json-raw" class="content-json-raw">${formattedJson}</pre>`;
+    }
+}
+
+// Helper function for escaping HTML
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Basic JSON highlighting for fallback
+function basicJsonHighlight(json) {
     return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function(match) {
         let cls = 'json-number'; // default is number
         
@@ -625,19 +755,11 @@ function renderRawJsonSection(event, container) {
         const detailsContent = document.createElement('div');
         detailsContent.className = 'details-content';
         
-        // Format technical details as a single JSON object instead of individual fields
-        const technicalJsonContainer = document.createElement('div');
-        technicalJsonContainer.className = 'json-container';
-        technicalJsonContainer.style.maxHeight = '200px';
-        technicalJsonContainer.style.overflowY = 'auto';
+        // Format technical details using the new content-type approach
+        // Check if this contains special JSON that should be preserved as raw
+        const jsonHtml = formatJsonSyntax(event.details);
         
-        const technicalJson = document.createElement('pre');
-        technicalJson.className = 'detail-json';
-        technicalJson.innerHTML = formatJsonSyntax(event.details);
-        
-        technicalJsonContainer.appendChild(technicalJson);
-        detailsContent.appendChild(technicalJsonContainer);
-        
+        detailsContent.innerHTML = jsonHtml;
         detailsSection.appendChild(detailsContent);
         container.appendChild(detailsSection);
     }
@@ -656,18 +778,6 @@ function renderRawJsonSection(event, container) {
     rawContent.style.maxHeight = '300px';
     rawContent.style.overflow = 'hidden';
     
-    // Create a scrollable container for the JSON
-    const rawJsonContainer = document.createElement('div');
-    rawJsonContainer.className = 'raw-json-container';
-    rawJsonContainer.style.maxHeight = '300px';
-    rawJsonContainer.style.overflowY = 'auto';
-    
-    // Create a pretty-printed JSON display
-    const rawJson = document.createElement('pre');
-    rawJson.className = 'raw-json';
-    rawJson.style.maxHeight = 'none';
-    rawJson.style.overflow = 'visible';
-    
     // Remove circular references before stringifying
     const cleanedEvent = JSON.parse(JSON.stringify(event, (key, value) => {
         // Skip parent/circular references that can't be stringified
@@ -678,11 +788,14 @@ function renderRawJsonSection(event, container) {
     // Format the JSON with proper indentation and structure
     const formattedJson = JSON.stringify(cleanedEvent, null, 2);
     
-    // For better readability, we'll syntax highlight the JSON
-    rawJson.innerHTML = formatJsonSyntax(formattedJson);
+    // Use the new content-type approach with data attributes
+    const jsonHtml = `<pre data-content-type="json-formatted" class="content-json-formatted">${
+        typeof Prism !== 'undefined' && Prism.languages.json 
+            ? Prism.highlight(formattedJson, Prism.languages.json, 'json')
+            : basicJsonHighlight(escapeHtml(formattedJson))
+    }</pre>`;
     
-    rawJsonContainer.appendChild(rawJson);
-    rawContent.appendChild(rawJsonContainer);
+    rawContent.innerHTML = jsonHtml;
     rawSection.appendChild(rawContent);
     
     // Add toggle behavior

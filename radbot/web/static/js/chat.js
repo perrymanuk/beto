@@ -114,7 +114,82 @@ export function addMessage(role, content, agentName) {
     if (typeof marked !== 'undefined') {
         // Process content to reduce blank lines for compactness
         content = content.replace(/\n\s*\n/g, '\n');
+        
+        // Check if the content already contains HTML with data-content-type
+        // (which means it was processed by the backend)
+        const containsContentTypeElements = /<pre data-content-type=/i.test(content);
+        
+        if (!containsContentTypeElements) {
+            // If the backend didn't process it, handle JSON content in code blocks
+            const jsonCodeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/g;
+            content = content.replace(jsonCodeBlockRegex, function(match, jsonContent) {
+                // For regular JSON content (backend handles special responses now)
+                if (jsonContent.trim().startsWith('{') || jsonContent.trim().startsWith('[')) {
+                    try {
+                        // Handle escaped newlines by replacing them with actual newlines
+                        const processedContent = jsonContent
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\"/g, '"')
+                            .replace(/\\\\/g, '\\');
+                        
+                        // Try to parse the JSON
+                        const jsonObj = JSON.parse(processedContent);
+                        const formattedJson = JSON.stringify(jsonObj, null, 2);
+                        
+                        // Return with data-content-type for web standards approach
+                        return `<pre data-content-type="json-formatted" class="content-json-formatted">${formattedJson}</pre>`;
+                    } catch (e) {
+                        console.warn('Error parsing potential JSON in code block:', e);
+                        // If it looks like JSON but parsing failed, still add class for highlighting
+                        if (jsonContent.includes('{') || jsonContent.includes('[')) {
+                            // Clean up escaped sequences as much as possible
+                            const cleanedContent = jsonContent
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\"/g, '"')
+                                .replace(/\\\\/g, '\\');
+                            return `<pre data-content-type="json-raw" class="content-json-raw">${cleanedContent}</pre>`;
+                        }
+                        return match; // Keep original if not JSON-like
+                    }
+                }
+                return match; // Not JSON, return unchanged
+            });
+        }
+        
+        // Parse the content with marked (which handles the markdown parts)
         contentDiv.innerHTML = marked.parse(content);
+        
+        // Find all content-type elements that need highlighting
+        const jsonElements = contentDiv.querySelectorAll('pre[data-content-type^="json-"]');
+        
+        // Apply Prism.js highlighting to JSON content if available
+        if (typeof Prism !== 'undefined' && Prism.languages.json) {
+            jsonElements.forEach(element => {
+                try {
+                    // Get the content type
+                    const contentType = element.getAttribute('data-content-type');
+                    
+                    // For formatted JSON, ensure it's properly highlighted
+                    if (contentType === 'json-formatted') {
+                        // Apply Prism highlighting
+                        const code = element.textContent;
+                        element.innerHTML = Prism.highlight(code, Prism.languages.json, 'json');
+                    }
+                    // For raw JSON, apply minimal highlighting but preserve format exactly
+                    else if (contentType === 'json-raw') {
+                        // Add a language label
+                        if (!element.querySelector('.json-language-label')) {
+                            const label = document.createElement('div');
+                            label.className = 'json-language-label';
+                            label.textContent = 'JSON';
+                            element.appendChild(label);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error applying syntax highlighting:', e);
+                }
+            });
+        }
     } else {
         contentDiv.textContent = content;
     }
