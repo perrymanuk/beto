@@ -132,6 +132,29 @@
   border-radius: 0;
 }
 
+/* Scrollable code blocks (when over 20 lines) */
+.message-content pre.code-scrollable {
+  max-height: 450px; /* Approx 20 lines + padding */
+  overflow-y: auto;
+  white-space: pre;
+  position: relative;
+  padding-bottom: 1.5rem; /* Space for line count indicator */
+}
+
+/* Line count indicator for scrollable code */
+.message-content pre .code-line-count {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: var(--accent-blue);
+  font-size: 0.8em;
+  padding: 0.2rem 0.4rem;
+  border-top-left-radius: 4px;
+  z-index: 5;
+  font-family: "Source Code Pro", monospace;
+}
+
 /* Content-type specific styles */
 .message-content pre[data-content-type="json-raw"] {
   white-space: pre-wrap;
@@ -288,6 +311,12 @@
   white-space: pre-wrap;
   word-wrap: break-word;
   width: 100%;
+}
+
+/* Adjust code in scrollable blocks to preserve formatting */
+.message-content pre.code-scrollable code {
+  white-space: pre;
+  word-wrap: normal;
 }
 
 /* Prism.js token styling enhancements */

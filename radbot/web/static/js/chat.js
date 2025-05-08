@@ -108,13 +108,34 @@ export function addMessage(role, content, agentName) {
         messageDiv.dataset.agent = agent.toUpperCase();
     }
     
+    // Check content size and handle very large messages more efficiently
+    const contentSize = content ? content.length : 0;
+    
+    // Add size indicator for large messages
+    if (contentSize > 100000) {
+        console.warn(`Rendering large content: ${contentSize} chars`);
+        messageDiv.classList.add('large-message');
+        
+        // Add a size indicator for very large messages
+        const sizeIndicator = document.createElement('div');
+        sizeIndicator.className = 'message-size-indicator';
+        sizeIndicator.textContent = `Large message: ${Math.round(contentSize/1024)}KB`;
+        messageDiv.appendChild(sizeIndicator);
+    }
+    
     // First convert emoji shortcodes to Unicode emojis
     content = window.emojiUtils.convertEmoji(content);
     
     // Then use marked.js to render markdown with compact options
     if (typeof marked !== 'undefined') {
-        // Process content to reduce blank lines for compactness
-        content = content.replace(/\n\s*\n/g, '\n');
+        // For very large contents, simplify processing to improve performance
+        if (contentSize > 300000) {
+            // Skip some processing for extremely large content
+            console.warn(`Using simplified rendering for very large content: ${contentSize} chars`);
+        } else {
+            // Normal processing - reduce blank lines for compactness
+            content = content.replace(/\n\s*\n/g, '\n');
+        }
         
         // Important: Check if the content already contains HTML with our special content-type elements.
         // If so, we need to handle them specially to prevent marked from modifying them
@@ -332,6 +353,22 @@ export function addMessage(role, content, agentName) {
                     const preElement = codeBlock.parentElement;
                     const classes = preElement.className.split(' ');
                     let languageClass = classes.find(cl => cl.startsWith('language-'));
+                    
+                    // Check if code block exceeds max lines
+                    const maxLines = 20;
+                    const codeText = codeBlock.textContent || '';
+                    const lineCount = (codeText.match(/\n/g) || []).length + 1;
+                    
+                    if (lineCount > maxLines) {
+                        // Add scrollable class to pre element
+                        preElement.classList.add('code-scrollable');
+                        
+                        // Add line count indicator
+                        const lineCountIndicator = document.createElement('div');
+                        lineCountIndicator.className = 'code-line-count';
+                        lineCountIndicator.textContent = `${lineCount} lines`;
+                        preElement.appendChild(lineCountIndicator);
+                    }
                     
                     if (languageClass) {
                         // Ensure Prism recognizes this language
@@ -602,8 +639,40 @@ async function sendMessageREST(message, displayMessage) {
         
         const data = await response.json();
         
-        // Add assistant message to UI
-        addMessage('assistant', data.response);
+        // Process events from response (same approach as WebSocket)
+        if (data.events && Array.isArray(data.events)) {
+            // Process model_response events
+            const modelResponses = data.events.filter(
+                event => (event.type === 'model_response' || event.category === 'model_response') && event.text
+            );
+            
+            // Show the last model response in the UI
+            if (modelResponses.length > 0) {
+                const lastResponse = modelResponses[modelResponses.length - 1];
+                const agentName = lastResponse.agent_name || 
+                               (lastResponse.details && lastResponse.details.agent_name) || 
+                               window.state.currentAgentName;
+                
+                addMessage('assistant', lastResponse.text, agentName);
+            } else {
+                // Fallback to direct response if no model_response events
+                addMessage('assistant', data.response);
+            }
+            
+            // If events are globally accessible, update them
+            if (typeof window.events !== 'undefined') {
+                // Merge with existing events
+                window.events = [...(window.events || []), ...data.events];
+                
+                // If event rendering function exists, call it
+                if (typeof window.renderEvents === 'function') {
+                    window.renderEvents();
+                }
+            }
+        } else {
+            // Fallback to direct response if no events
+            addMessage('assistant', data.response);
+        }
         
         window.statusUtils.setStatus('ready');
     } catch (error) {

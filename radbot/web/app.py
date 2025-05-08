@@ -123,10 +123,48 @@ class ConnectionManager:
             
     async def send_events(self, session_id: str, events: list):
         if session_id in self.active_connections:
-            await self.active_connections[session_id].send_json({
-                "type": "events",
-                "content": events
-            })
+            # Check for excessively large messages
+            import json
+            events_json = json.dumps({"type": "events", "content": events})
+            max_size = 1024 * 1024  # 1MB limit
+            
+            if len(events_json) > max_size:
+                # Log the oversized message
+                logger.warning(f"Event payload too large: {len(events_json)} bytes. Splitting into chunks.")
+                
+                # Process events individually to find large ones
+                for event in events:
+                    single_event_json = json.dumps({"type": "events", "content": [event]})
+                    event_size = len(single_event_json)
+                    event_type = event.get('type', 'unknown')
+                    event_summary = event.get('summary', 'no summary')
+                    
+                    if event_size > max_size:
+                        # This event is too large - truncate any text content
+                        logger.warning(f"Oversized event: {event_type} - {event_summary}: {event_size} bytes")
+                        if 'text' in event and isinstance(event['text'], str) and len(event['text']) > 100000:
+                            # Truncate text and add indicator
+                            original_length = len(event['text'])
+                            event['text'] = event['text'][:100000] + f"\n\n[Message truncated due to size constraints. Original length: {original_length} characters]"
+                            logger.info(f"Truncated event text from {original_length} to {len(event['text'])} characters")
+                            
+                            # Send this single truncated event
+                            await self.active_connections[session_id].send_json({
+                                "type": "events",
+                                "content": [event]
+                            })
+                    else:
+                        # Send normal-sized events individually
+                        await self.active_connections[session_id].send_json({
+                            "type": "events",
+                            "content": [event]
+                        })
+            else:
+                # Send as normal if not oversized
+                await self.active_connections[session_id].send_json({
+                    "type": "events",
+                    "content": events
+                })
 
 # Create connection manager
 manager = ConnectionManager()
@@ -178,11 +216,26 @@ async def chat(
         response = result.get("response", "")
         events = result.get("events", [])
         
-        # Return the response with session information and events
+        # Process events for size constraints to match WebSocket behavior
+        max_size = 1024 * 1024  # 1MB limit
+        processed_events = []
+        
+        for event in events:
+            if 'text' in event and isinstance(event['text'], str) and len(event['text']) > 100000:
+                # Truncate large text events
+                event_copy = event.copy()  # Create a copy to avoid modifying the original
+                original_length = len(event_copy['text'])
+                event_copy['text'] = event_copy['text'][:100000] + f"\n\n[Message truncated due to size constraints. Original length: {original_length} characters]"
+                logger.info(f"Truncated REST API event text from {original_length} to {len(event_copy['text'])} characters")
+                processed_events.append(event_copy)
+            else:
+                processed_events.append(event)
+        
+        # Return the response with session information and processed events
         return {
             "session_id": session_id,
             "response": response,
-            "events": events
+            "events": processed_events
         }
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}", exc_info=True)
@@ -368,13 +421,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, session_mana
                 response = result.get("response", "")
                 events = result.get("events", [])
                 
-                # Send events first (if any)
+                # Log event sizes for debugging
+                if events:
+                    for idx, event in enumerate(events):
+                        if 'text' in event and isinstance(event['text'], str):
+                            text_size = len(event['text'])
+                            if text_size > 10000:  # Only log notably large events
+                                event_type = event.get('type', 'unknown')
+                                event_summary = event.get('summary', 'no summary')
+                                logger.info(f"Large event[{idx}] {event_type} - {event_summary}: text size = {text_size} bytes")
+                
+                # Send events only (events contain the model responses)
                 if events:
                     logger.info(f"Sending {len(events)} events to client")
                     await manager.send_events(session_id, events)
                 
-                # Send the text response
-                await manager.send_message(session_id, response)
+                # Update status to ready (no need to send the response separately)
                 await manager.send_status(session_id, "ready")
             except Exception as e:
                 logger.error(f"Error processing WebSocket message: {str(e)}", exc_info=True)

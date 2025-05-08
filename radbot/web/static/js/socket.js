@@ -126,7 +126,34 @@ class WebSocketManager {
       this.socket.onmessage = (event) => {
         // Update activity timestamp
         this.lastActivityTimestamp = Date.now();
-        this.handleMessage(event);
+        
+        // Add message size safety check for debugging
+        try {
+          const msgSize = event.data.length;
+          if (msgSize > 500000) { // Log large messages (500KB+)
+            console.warn(`Received very large message: ${msgSize} bytes`);
+          }
+          
+          // Try to parse as JSON to check early
+          if (msgSize > 0) {
+            // Use a separate try block for parsing to ensure we still handle the message
+            try {
+              JSON.parse(event.data);
+            } catch (parseError) {
+              console.error(`WebSocket message parse error (before handler): ${parseError.message}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`Error checking message size: ${e}`);
+        }
+        
+        // Handle the message with error recovery
+        try {
+          this.handleMessage(event);
+        } catch (error) {
+          console.error(`Error in message handler: ${error.message}`);
+          // Try to recover and not lose connection due to one bad message
+        }
       };
       
       this.socket.onclose = (event) => {
@@ -325,37 +352,11 @@ class WebSocketManager {
         return;
       }
       
-      if (data.type === 'message') {
-        // Check if the message includes agent information
-        let agentName = window.state.currentAgentName;
-        if (data.agent) {
-          agentName = data.agent;
-          // Update the global state if the agent has changed
-          if (agentName.toUpperCase() !== window.state.currentAgentName) {
-            console.log(`Agent changed in message: ${window.state.currentAgentName} → ${agentName.toUpperCase()}`);
-            
-            // First try to update the model based on the new agent
-            if (typeof window.updateModelForCurrentAgent === 'function') {
-              // Temporarily set current agent name for model lookup
-              const previousAgent = window.state.currentAgentName;
-              window.state.currentAgentName = agentName.toUpperCase();
-              
-              // Update model using the agent name
-              window.updateModelForCurrentAgent();
-              console.log(`Updated model for agent ${agentName} via updateModelForCurrentAgent`);
-              
-              // Restore previous agent name since updateAgentStatus will set it properly
-              window.state.currentAgentName = previousAgent;
-            }
-            
-            // Now update the agent name
-            window.statusUtils.updateAgentStatus(agentName);
-          }
-        }
-        
-        window.chatModule.addMessage('assistant', data.content, agentName);
-        window.chatModule.scrollToBottom();
-      } else if (data.type === 'status') {
+      // NOTE: We've removed message deduplication logic since we now only 
+      // process events and don't receive duplicates from the server
+      
+      // We no longer handle 'message' type as we only use events now
+      if (data.type === 'status') {
         window.statusUtils.handleStatusUpdate(data.content);
       } else if (data.type === 'events') {
         // Process incoming events
@@ -431,13 +432,14 @@ class WebSocketManager {
                 }
                 
                 // Add a system message to notify the user about the agent change
-                window.chatModule.addMessage('system', `Agent switched to: ${newAgent.toUpperCase()}`);
+                const transferMessage = `Agent switched to: ${newAgent.toUpperCase()}`;
+                window.chatModule.addMessage('system', transferMessage);
               }
             }
             
             // Process model_response events to display in chat
             if ((event.type === 'model_response' || event.category === 'model_response') && event.text) {
-              console.log('Model response event detected with text, adding to chat:', event);
+              console.log('Model response event detected with text, checking for duplicates:', event);
               
               // Check for model information in event details
               if (event.details && event.details.model) {
@@ -489,9 +491,40 @@ class WebSocketManager {
                 }
               }
               
-              // Add message to chat with the specific agent name
-              window.chatModule.addMessage('assistant', event.text, agentName);
-              window.chatModule.scrollToBottom();
+              // Check text size before display
+              const textSize = event.text ? event.text.length : 0;
+              if (textSize > 0) {
+                if (textSize > 200000) {
+                  console.warn(`Very large model response: ${textSize} chars`);
+                  // Show warning for extremely large messages
+                  if (textSize > 500000) {
+                    // Add notification before the message
+                    window.chatModule.addMessage('system', `Rendering large message (${Math.round(textSize/1024)}KB)...`);
+                  }
+                }
+                
+                try {
+                  // Display the model response from the event
+                  window.chatModule.addMessage('assistant', event.text, agentName);
+                  window.chatModule.scrollToBottom();
+                } catch (displayError) {
+                  console.error(`Error displaying message: ${displayError.message}`);
+                  // Fallback rendering for extremely large messages
+                  try {
+                    // Try to display a truncated version of the message
+                    const truncatedText = event.text.substring(0, 100000) + 
+                      `\n\n[Message truncated for display. Original size: ${Math.round(textSize/1024)}KB]`;
+                    window.chatModule.addMessage('assistant', truncatedText, agentName);
+                    window.chatModule.scrollToBottom();
+                  } catch (fallbackError) {
+                    console.error(`Fallback display also failed: ${fallbackError.message}`);
+                    // Last resort - just show an error message
+                    window.chatModule.addMessage('system', `Error: Could not display large message (${Math.round(textSize/1024)}KB). The response was too large to render.`);
+                  }
+                }
+              } else {
+                console.warn(`Empty model response received`);
+              }
             }
           });
         }
