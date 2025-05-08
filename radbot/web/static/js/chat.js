@@ -426,82 +426,220 @@ function handleInputKeydown(event) {
         sendMessage();
     }
     
-    // Message history navigation with arrow keys
+    // Message history navigation with arrow keys - add debug logs
     if (event.key === 'ArrowUp' && !event.shiftKey) {
+        console.log("UP ARROW - Before navigation: messageHistoryIndex =", messageHistoryIndex);
+        
         // If first time pressing up, save the current input value
         if (messageHistoryIndex === -1) {
             currentInputValue = chatInput.value;
+            console.log("Saved current input:", currentInputValue);
         }
+        
         // Navigate backward in history
         navigateMessageHistory(-1);
+        
+        console.log("UP ARROW - After navigation: messageHistoryIndex =", messageHistoryIndex);
         event.preventDefault();
     } else if (event.key === 'ArrowDown' && !event.shiftKey) {
+        console.log("DOWN ARROW - Before navigation: messageHistoryIndex =", messageHistoryIndex);
+        
         // Navigate forward in history
         navigateMessageHistory(1);
+        
+        console.log("DOWN ARROW - After navigation: messageHistoryIndex =", messageHistoryIndex);
         event.preventDefault();
     }
 }
 
 // Navigate through message history
 function navigateMessageHistory(direction) {
-    // If no history, do nothing
+    console.log(`========== HISTORY NAVIGATION (${direction}) ==========`);
+    
+    // For up arrow, use -1 to go back in history (higher indices)
+    // For down arrow, use +1 to go forward in history (lower indices)
+    
+    // If persistence isn't ready, we can't load history
     if (!window.state || !window.state.sessionId || !window.chatPersistence) {
+        console.log('Chat persistence not available');
         return;
     }
+
+    // ------------------------
+    // STEP 1: Load history data if needed
+    // ------------------------
     
-    // Lazy load message history if not already loaded
+    // Initialize hard-coded history array for debugging
     if (messageHistory.length === 0) {
-        // Get all messages for the current session
-        const allMessages = window.chatPersistence.getMessages(window.state.sessionId);
+        messageHistory = [
+            "Test message 1 (oldest)",
+            "Test message 2 (middle)",
+            "Test message 3 (newest)"
+        ];
+        console.log("DEBUG: Using hard-coded test messages:", messageHistory);
+    }
+    
+    /* Disabled for debugging
+    // If this is the first navigation, load history from persistence
+    if (messageHistory.length === 0) {
+        console.log('Loading message history from persistence');
         
-        // Extract only user messages in reverse chronological order
-        messageHistory = allMessages
-            .filter(msg => msg.role === 'user')
-            .map(msg => msg.content)
-            .reverse();
+        try {
+            // Get all saved messages
+            const allMessages = window.chatPersistence.getMessages(window.state.sessionId);
+            console.log(`Found ${allMessages.length} total messages in persistence`);
             
-        // Limit history size to prevent excessive memory usage
-        if (messageHistory.length > 50) {
-            messageHistory = messageHistory.slice(0, 50);
+            // Create temp array for history
+            let tempHistory = [];
+            
+            // Process user messages
+            for (const msg of allMessages) {
+                if (msg.role === 'user' && msg.content && msg.content.trim().length > 0) {
+                    tempHistory.push(msg.content);
+                }
+            }
+            
+            // Reverse for newest first
+            tempHistory.reverse();
+            
+            // Assign to the history array
+            messageHistory = tempHistory;
+            
+            console.log(`Prepared ${messageHistory.length} messages for history navigation`);
+            
+            // Debug log the history contents
+            if (messageHistory.length > 0) {
+                messageHistory.slice(0, Math.min(5, messageHistory.length)).forEach((msg, i) => {
+                    console.log(`History[${i}]: ${msg.substring(0, 30)}${msg.length > 30 ? '...' : ''}`);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading message history:', error);
+            messageHistory = []; // Reset to empty array on error
+        }
+    }
+    */
+    
+    // ------------------------
+    // STEP 2: Handle case with no history 
+    // ------------------------
+    if (messageHistory.length === 0) {
+        console.log('No message history available');
+        return;
+    }
+
+    // ------------------------
+    // STEP 3: Store current input if needed
+    // ------------------------
+    
+    // Save current input on first navigation up
+    if (direction < 0 && messageHistoryIndex === -1) {
+        currentInputValue = chatInput.value || '';
+        console.log(`Saved current input: "${currentInputValue}"`);
+    }
+    
+    // ------------------------
+    // STEP 4: Calculate new index based on direction
+    // ------------------------
+    
+    // Calculate new index with bounds checking
+    let newIndex;
+    
+    if (direction < 0) {
+        // UP arrow pressed - go back in history (increase index)
+        newIndex = (messageHistoryIndex === -1) ? 0 : messageHistoryIndex + 1;
+        console.log(`UP arrow: index ${messageHistoryIndex} -> ${newIndex}`);
+    } else {
+        // DOWN arrow pressed - go forward in history (decrease index)
+        newIndex = messageHistoryIndex - 1;
+        console.log(`DOWN arrow: index ${messageHistoryIndex} -> ${newIndex}`);
+    }
+    
+    // Apply bounds checking
+    if (newIndex >= messageHistory.length) {
+        // Can't go further back than oldest message
+        newIndex = messageHistory.length - 1;
+        console.log(`Limited to oldest message: index = ${newIndex}`);
+    }
+    
+    if (newIndex < -1) {
+        // Can't go further forward than current input
+        newIndex = -1;
+        console.log(`Limited to current input: index = ${newIndex}`);
+    }
+    
+    console.log(`Final index: ${newIndex} (valid range: -1 to ${messageHistory.length - 1})`);
+    
+    // ------------------------
+    // STEP 5: Update the input field based on index
+    // ------------------------
+    
+    if (newIndex === -1) {
+        // Show current input
+        console.log(`Using current input: "${currentInputValue}"`);
+        
+        try {
+            const valueBefore = chatInput.value;
+            chatInput.value = currentInputValue;
+            chatInput.classList.remove('history-mode');  
+            console.log(`Input value changed from "${valueBefore}" to "${chatInput.value}"`);
+        } catch (e) {
+            console.error("Error setting input value:", e);
+        }
+    } else {
+        // Show history item
+        const historyItem = messageHistory[newIndex];
+        console.log(`Using history[${newIndex}]: "${historyItem.substring(0, 30)}${historyItem.length > 30 ? '...' : ''}"`);
+        
+        try {
+            const valueBefore = chatInput.value;
+            chatInput.value = historyItem;
+            chatInput.classList.add('history-mode');
+            console.log(`Input value changed from "${valueBefore}" to "${chatInput.value}"`);
+        } catch (e) {
+            console.error("Error setting input value:", e);
         }
     }
     
-    // No history, nothing to navigate
-    if (messageHistory.length === 0) {
-        return;
-    }
+    // Update the index after successful change
+    messageHistoryIndex = newIndex;
     
-    // Update index based on direction (-1 for up, 1 for down)
-    messageHistoryIndex += direction;
+    // ------------------------
+    // STEP 6: Force UI update with both approaches
+    // ------------------------
     
-    // Ensure index stays within bounds
-    if (messageHistoryIndex >= messageHistory.length) {
-        // Past the most recent, return to current input
-        messageHistoryIndex = -1;
-        chatInput.value = currentInputValue;
-        chatInput.classList.remove('history-mode');
-    } else if (messageHistoryIndex < -1) {
-        // Past the oldest, stay at oldest
-        messageHistoryIndex = 0;
-        chatInput.classList.add('history-mode');
-    } else if (messageHistoryIndex === -1) {
-        // Return to current input
-        chatInput.value = currentInputValue;
-        chatInput.classList.remove('history-mode');
-    } else {
-        // Set input to the history item
-        chatInput.value = messageHistory[messageHistoryIndex];
-        chatInput.classList.add('history-mode');
-    }
-    
-    // Move cursor to end of text
+    // Update cursor position immediately
     chatInput.selectionStart = chatInput.selectionEnd = chatInput.value.length;
     
-    // Force input update event to ensure UI updates correctly
-    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    // Queue additional UI updates for next frame
+    requestAnimationFrame(() => {
+        try {
+            // Ensure cursor is at the end again (even more reliably)
+            chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+            
+            // Adjust input field height
+            chatInput.style.height = 'auto';
+            const newHeight = Math.min(Math.max(chatInput.scrollHeight, 30), 120);
+            chatInput.style.height = `${newHeight}px`;
+            
+            // Update memory indicator
+            updateMemoryIndicator();
+            
+            // Force redraw of input field
+            chatInput.style.borderColor = chatInput.style.borderColor;
+        } catch (e) {
+            console.error("Error in UI updates:", e);
+        }
+    });
     
-    // Resize textarea to fit content (though this should already happen from the input event)
-    resizeTextarea();
+    // Force focus on input
+    try {
+        chatInput.focus();
+    } catch (e) {
+        console.error("Error focusing input:", e);
+    }
+    
+    console.log(`========== END HISTORY NAVIGATION (${direction}) ==========`);
 }
 
 // Send message via WebSocket
