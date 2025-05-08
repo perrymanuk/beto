@@ -71,16 +71,74 @@ class MCPClientFactory:
             # Get required configuration values
             server_id = server_config.get("id")
             transport = server_config.get("transport", "sse")
-            url = server_config.get("url")
             
-            # Import the client module based on transport
-            if transport == "sse" or transport == "http":
+            # Handle different transport types
+            if transport == "stdio":
+                # Special handling for stdio transport (e.g., Claude CLI)
+                command = server_config.get("command")
+                if not command:
+                    raise MCPClientError(f"No command specified for stdio transport in server {server_id}")
+                
+                # Import the stdio client
+                from radbot.tools.mcp.mcp_stdio_client import MCPStdioClient
+                client_class = MCPStdioClient
+                logger.info(f"Using MCP stdio client for server: {server_id}")
+                
+                # Prepare client initialization arguments for stdio
+                client_args = {
+                    "command": command,
+                    "args": server_config.get("args"),
+                    "working_directory": server_config.get("working_directory")
+                }
+                
+                # Add timeout if specified
+                if server_config.get("timeout"):
+                    client_args["timeout"] = server_config.get("timeout")
+                
+                # Add environment variables if specified
+                if server_config.get("env"):
+                    client_args["env"] = server_config.get("env")
+                
+            elif transport in ["sse", "http"]:
                 # Our standard client supports both SSE and HTTP
+                url = server_config.get("url")
+                if not url:
+                    raise MCPClientError(f"No URL specified for {transport} transport in server {server_id}")
+                
                 from radbot.tools.mcp.client import MCPSSEClient
                 client_class = MCPSSEClient
                 logger.info(f"Using standard MCP client for server: {server_id} with transport: {transport}")
+                
+                # Prepare client initialization arguments for HTTP/SSE
+                client_args = {
+                    "url": url
+                }
+                
+                # Add message_endpoint if specified
+                if server_config.get("message_endpoint"):
+                    client_args["message_endpoint"] = server_config.get("message_endpoint")
+                
+                # Handle authentication
+                auth_type = server_config.get("auth_type", "token")
+                if auth_type == "token" and server_config.get("auth_token"):
+                    client_args["auth_token"] = server_config.get("auth_token")
+                elif auth_type == "basic":
+                    if server_config.get("username") and server_config.get("password"):
+                        client_args["username"] = server_config.get("username")
+                        client_args["password"] = server_config.get("password")
+                    else:
+                        logger.warning(f"Basic auth configured for {server_id} but username/password not provided")
+                
+                # Add custom headers if specified
+                if server_config.get("headers"):
+                    client_args["headers"] = server_config.get("headers")
+                
             elif transport == "websocket":
                 # WebSocket transport requires a different client
+                url = server_config.get("url")
+                if not url:
+                    raise MCPClientError(f"No URL specified for websocket transport in server {server_id}")
+                
                 try:
                     from mcp.client import WebSocketClient
                     client_class = WebSocketClient
@@ -90,36 +148,16 @@ class MCPClientFactory:
                     from radbot.tools.mcp.client import MCPSSEClient
                     client_class = MCPSSEClient
                     logger.warning(f"MCP SDK WebSocketClient not available, falling back to standard client for server: {server_id}")
+                
+                client_args = {
+                    "url": url
+                }
             else:
                 raise MCPClientError(f"Unsupported transport: {transport}")
             
-            # Prepare client initialization arguments
-            client_args = {
-                "url": url
-            }
-            
-            # Add message_endpoint if specified
-            if server_config.get("message_endpoint"):
-                client_args["message_endpoint"] = server_config.get("message_endpoint")
-            
-            # Handle authentication
-            auth_type = server_config.get("auth_type", "token")
-            if auth_type == "token" and server_config.get("auth_token"):
-                client_args["auth_token"] = server_config.get("auth_token")
-            elif auth_type == "basic":
-                if server_config.get("username") and server_config.get("password"):
-                    client_args["username"] = server_config.get("username")
-                    client_args["password"] = server_config.get("password")
-                else:
-                    logger.warning(f"Basic auth configured for {server_id} but username/password not provided")
-            
-            # Add timeout if specified
-            if server_config.get("timeout"):
+            # Add timeout if specified (common for all transports)
+            if server_config.get("timeout") and "timeout" not in client_args:
                 client_args["timeout"] = server_config.get("timeout")
-            
-            # Add custom headers if specified
-            if server_config.get("headers"):
-                client_args["headers"] = server_config.get("headers")
             
             # Create the client
             client = client_class(**client_args)
@@ -145,6 +183,14 @@ class MCPClientFactory:
         """
         Clear the client cache.
         """
+        # Stop each client before clearing the cache
+        for client_id, client in cls._client_cache.items():
+            try:
+                if hasattr(client, "stop") and callable(client.stop):
+                    client.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping client {client_id}: {e}")
+                
         cls._client_cache.clear()
     
     @classmethod

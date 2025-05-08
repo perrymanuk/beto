@@ -335,7 +335,7 @@
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["id", "name", "url"],
+                "required": ["id", "name"],
                 "properties": {
                   "id": {
                     "type": "string",
@@ -354,13 +354,32 @@
                   "transport": {
                     "type": "string",
                     "description": "Transport protocol for communication",
-                    "enum": ["sse", "websocket", "http"],
+                    "enum": ["sse", "websocket", "http", "stdio"],
                     "default": "sse"
                   },
                   "url": {
-                    "type": "string",
-                    "description": "Server endpoint URL",
-                    "pattern": "^(https?://|wss?://).*$"
+                    "type": ["string", "null"],
+                    "description": "Server endpoint URL (required for HTTP/SSE/WS transports)"
+                  },
+                  "command": {
+                    "type": ["string", "null"],
+                    "description": "Command to execute (for stdio transport)"
+                  },
+                  "args": {
+                    "type": "array",
+                    "description": "Command arguments (for stdio transport)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "working_directory": {
+                    "type": ["string", "null"],
+                    "description": "Working directory for the command (for stdio transport)"
+                  },
+                  "security": {
+                    "type": "object",
+                    "description": "Security configuration for the server",
+                    "additionalProperties": true
                   },
                   "message_endpoint": {
                     "type": ["string", "null"],

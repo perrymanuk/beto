@@ -23,6 +23,7 @@ def create_shell_agent(
     instruction_name: str = "main_agent",
     config: Optional[ConfigManager] = None,
     strict_mode: bool = True,
+    use_claude_cli: bool = False,
 ) -> RadBotAgent:
     """
     Create a RadBot agent with shell command execution capabilities.
@@ -37,6 +38,7 @@ def create_shell_agent(
         config: Optional ConfigManager instance
         strict_mode: When True, only allow-listed commands are permitted.
                     When False, any command can be executed (SECURITY RISK).
+        use_claude_cli: Whether to use Claude CLI for command execution (default: False)
         
     Returns:
         A RadBotAgent with shell command execution capabilities
@@ -45,20 +47,25 @@ def create_shell_agent(
     tools = list(base_tools or [])
     
     # Create the shell command tool (now returns ADK-compatible FunctionTool)
-    shell_tool = get_shell_tool(strict_mode=strict_mode)
+    shell_tool = get_shell_tool(strict_mode=strict_mode, use_claude_cli=use_claude_cli)
     
-    # Log security mode
+    # Log security mode and execution backend
+    if use_claude_cli:
+        backend_info = "using Claude CLI backend"
+    else:
+        backend_info = "using subprocess backend"
+        
     if strict_mode:
-        logger.info("Adding shell command execution tool in STRICT mode (only allow-listed commands)")
+        logger.info(f"Adding shell command execution tool in STRICT mode (only allow-listed commands) {backend_info}")
     else:
         logger.warning(
-            "Adding shell command execution tool in ALLOW ALL mode - SECURITY RISK! "
+            f"Adding shell command execution tool in ALLOW ALL mode - SECURITY RISK! {backend_info} "
             "Any command can be executed without restrictions."
         )
     
     # Add the shell tool to the tools list
     tools.append(shell_tool)
-    logger.info("Added shell command execution tool to agent tools")
+    logger.info(f"Added shell command execution tool to agent tools {backend_info}")
     
     # Create the agent with all the specified parameters and tools
     agent = create_agent(
@@ -91,6 +98,7 @@ def create_shell_enabled_root_agent(
     name: str = "shell_agent",
     config: Optional[ConfigManager] = None,
     strict_mode: bool = True,
+    use_claude_cli: bool = False,
 ) -> Agent:
     """
     Create a root agent with shell command execution capabilities.
@@ -106,6 +114,7 @@ def create_shell_enabled_root_agent(
         config: Optional ConfigManager instance
         strict_mode: When True, only allow-listed commands are permitted.
                     When False, any command can be executed (SECURITY RISK).
+        use_claude_cli: Whether to use Claude CLI for command execution (default: False)
         
     Returns:
         An Agent with shell command execution capabilities
@@ -114,20 +123,25 @@ def create_shell_enabled_root_agent(
     tools = list(base_tools or [])
     
     # Create the shell command tool (now returns ADK-compatible FunctionTool)
-    shell_tool = get_shell_tool(strict_mode=strict_mode)
+    shell_tool = get_shell_tool(strict_mode=strict_mode, use_claude_cli=use_claude_cli)
     
-    # Log security mode
+    # Log security mode and execution backend
+    if use_claude_cli:
+        backend_info = "using Claude CLI backend"
+    else:
+        backend_info = "using subprocess backend"
+        
     if strict_mode:
-        logger.info("Adding shell command execution tool in STRICT mode (only allow-listed commands)")
+        logger.info(f"Adding shell command execution tool in STRICT mode (only allow-listed commands) {backend_info}")
     else:
         logger.warning(
-            "Adding shell command execution tool in ALLOW ALL mode - SECURITY RISK! "
+            f"Adding shell command execution tool in ALLOW ALL mode - SECURITY RISK! {backend_info} "
             "Any command can be executed without restrictions."
         )
     
     # Add the shell tool to the tools list
     tools.append(shell_tool)
-    logger.info("Added shell command execution tool to agent tools")
+    logger.info(f"Added shell command execution tool to agent tools {backend_info}")
     
     # Create the root agent
     root_agent = AgentFactory.create_root_agent(

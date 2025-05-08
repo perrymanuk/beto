@@ -695,8 +695,9 @@ class SessionRunner:
                     url = server.get("url")
                     auth_token = server.get("auth_token")
                     
+                    # Handle different transport types
                     if transport == "sse":
-                        # Use our custom client implementation
+                        # Use our custom SSE client implementation
                         from radbot.tools.mcp.client import MCPSSEClient
                         client = MCPSSEClient(url=url, auth_token=auth_token)
                         
@@ -717,6 +718,83 @@ class SessionRunner:
                                         logger.info(f"Added tool: {tool_name} from {server_name}")
                         else:
                             logger.warning(f"Failed to initialize MCP client for {server_name}")
+                            
+                    elif transport == "stdio":
+                        # For Claude CLI, use direct approach instead of MCP client factory
+                        try:
+                            # First try the direct tool approach
+                            try:
+                                from radbot.tools.mcp.direct_claude_cli import create_direct_claude_cli_tools
+                                
+                                # Get the direct Claude CLI tools
+                                direct_tools = create_direct_claude_cli_tools()
+                                
+                                if direct_tools:
+                                    logger.info(f"Successfully loaded {len(direct_tools)} direct tools from Claude CLI")
+                                    
+                                    # Add unique tools
+                                    for tool in direct_tools:
+                                        tool_name = getattr(tool, "name", None) or getattr(tool, "__name__", str(tool))
+                                        if tool_name not in existing_tool_names:
+                                            tools_to_add.append(tool)
+                                            existing_tool_names.add(tool_name)
+                                            logger.info(f"Added tool: {tool_name} from {server_name}")
+                                    
+                                    # Successfully loaded direct tools, no need to try other methods
+                                    continue
+                                else:
+                                    logger.warning(f"No direct tools returned from Claude CLI module")
+                            except ImportError:
+                                logger.warning("Could not import direct Claude CLI module, trying regular module")
+                                
+                            # Try the regular Claude CLI tools module if direct approach didn't work
+                            try:
+                                from radbot.tools.mcp.claude_cli import create_claude_cli_tools
+                                
+                                # Get the Claude CLI tools
+                                claude_tools = create_claude_cli_tools()
+                                
+                                if claude_tools:
+                                    logger.info(f"Successfully loaded {len(claude_tools)} tools from Claude CLI")
+                                    
+                                    # Add unique tools
+                                    for tool in claude_tools:
+                                        tool_name = getattr(tool, "name", None) or getattr(tool, "__name__", str(tool))
+                                        if tool_name not in existing_tool_names:
+                                            tools_to_add.append(tool)
+                                            existing_tool_names.add(tool_name)
+                                            logger.info(f"Added tool: {tool_name} from {server_name}")
+                                else:
+                                    logger.warning(f"No tools returned from Claude CLI module")
+                                    
+                            except ImportError:
+                                # Fall back to client factory as last resort
+                                logger.warning("Could not import Claude CLI module, falling back to MCP client factory")
+                                
+                                # Create the client through the factory
+                                client = MCPClientFactory.get_client(server_id)
+                                
+                                # If client was created successfully
+                                if client and hasattr(client, "get_tools"):
+                                    # Get tools from the client
+                                    server_tools = client.get_tools()
+                                    
+                                    if server_tools:
+                                        logger.info(f"Successfully loaded {len(server_tools)} tools from {server_name}")
+                                        
+                                        # Add unique tools
+                                        for tool in server_tools:
+                                            tool_name = getattr(tool, "name", None) or getattr(tool, "__name__", str(tool))
+                                            if tool_name not in existing_tool_names:
+                                                tools_to_add.append(tool)
+                                                existing_tool_names.add(tool_name)
+                                                logger.info(f"Added tool: {tool_name} from {server_name}")
+                                    else:
+                                        logger.warning(f"No tools returned from {server_name}")
+                                else:
+                                    logger.warning(f"Failed to create or initialize MCP client for {server_name}")
+                        except Exception as e:
+                            logger.warning(f"Error loading tools from {server_name}: {e}")
                     else:
                         logger.warning(f"Unsupported transport '{transport}' for MCP server {server_name}")
                         

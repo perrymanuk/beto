@@ -1,0 +1,34 @@
+# Claude CLI MCP Server Configuration Example
+# Add this to your config.yaml to enable the Claude CLI MCP integration
+
+integrations:
+  mcp:
+    enabled: true
+    servers:
+      # Other MCP servers may be listed here...
+      
+      # Claude CLI MCP server configuration
+      - id: claude-cli
+        enabled: true
+        transport: stdio  # Claude CLI uses stdio transport
+        command: claude   # Path to the Claude CLI executable
+        args:
+          - mcp
+          - serve
+        working_directory: /path/to/working/dir  # Optional: Directory where Claude CLI will operate
+        timeout: 30  # Optional: Timeout in seconds (default: 30)
+        # Security configuration
+        security:
+          command_allowlist:
+            - ls
+            - git
+            - echo
+            - cat
+          command_denylist:
+            - rm -rf
+            - sudo
+            - chmod
+          # Working directory restrictions
+          restricted_paths:
+            - /tmp
+            - /var/tmp
