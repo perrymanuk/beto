@@ -17,7 +17,7 @@ import * as socketClient from './socket.js';
 const state = {
     sessionId: localStorage.getItem('radbot_session_id') || null,
     currentAgentName: "BETO", // Track current agent name - use uppercase to match status bar
-    currentModel: "gemini-2.5-flash", // Track current model name
+    currentModel: "gemini-2.5-pro", // Default model - will be updated with actual model info from events
     isDarkTheme: true, // Always use dark theme
     // Hardcode task API settings since settings dialog is removed
     taskApiSettings: {
@@ -81,12 +81,16 @@ function init() {
     // Fetch tasks, projects, and events directly from API
     fetchTasks();
     fetchEvents();
+    
+    // Get initial agent and model information
+    fetchAgentInfo();
 }
 
 // Make functions globally available for tiling manager
 window.initializeUI = initializeUI;
 window.renderTasks = renderTasks;
 window.renderEvents = renderEvents;
+window.updateModelForCurrentAgent = updateModelForCurrentAgent;
 
 // Fetch data immediately when panels are opened
 document.addEventListener('command:tasks', function() {
@@ -1252,6 +1256,172 @@ function formatJsonSyntax(json) {
         
         return '<span class="' + cls + '">' + match + '</span>';
     });
+}
+
+// Get initial agent and model information
+function fetchAgentInfo() {
+    console.log("Fetching agent and model information");
+    
+    try {
+        // Make a request to get the agent info from the server
+        fetch('/api/agent-info')
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    console.warn("Agent info API returned error:", response.status);
+                    return null;
+                }
+            })
+            .then(data => {
+                if (data) {
+                    console.log("Agent info loaded from API:", data);
+                    
+                    // Store the agent models in window.state for later reference
+                    window.state.agentModels = data.agent_models || {};
+                    
+                    // Add debug output of available models
+                    if (data.agent_models) {
+                        console.log("Available agent models:");
+                        for (const [agent, model] of Object.entries(data.agent_models)) {
+                            console.log(`  ${agent}: ${model}`);
+                        }
+                    }
+                    
+                    // Update agent name if available
+                    if (data.agent_name) {
+                        window.statusUtils.updateAgentStatus(data.agent_name);
+                    }
+                    
+                    // Get the appropriate model for the current agent
+                    const currentAgent = window.state.currentAgentName.toLowerCase();
+                    let modelToUse = data.model; // Default to main model
+                    
+                    // Try all possible ways to find the right model
+                    if (data.agent_models) {
+                        // Look for an exact match first
+                        if (data.agent_models[currentAgent]) {
+                            modelToUse = data.agent_models[currentAgent];
+                            console.log(`Found exact model match for ${currentAgent}: ${modelToUse}`);
+                        } 
+                        // Then try special case for scout
+                        else if (currentAgent === 'scout' && data.agent_models.scout_agent) {
+                            modelToUse = data.agent_models.scout_agent;
+                            console.log(`Using scout_agent model for ${currentAgent}: ${modelToUse}`);
+                        }
+                        // Try with _agent suffix
+                        else if (data.agent_models[currentAgent + '_agent']) {
+                            modelToUse = data.agent_models[currentAgent + '_agent'];
+                            console.log(`Using ${currentAgent}_agent model: ${modelToUse}`);
+                        }
+                        // Try without _agent suffix
+                        else if (currentAgent.endsWith('_agent') && data.agent_models[currentAgent.replace('_agent', '')]) {
+                            modelToUse = data.agent_models[currentAgent.replace('_agent', '')];
+                            console.log(`Using ${currentAgent.replace('_agent', '')} model: ${modelToUse}`);
+                        }
+                        // For any partial match (case insensitive)
+                        else {
+                            for (const [agentKey, modelValue] of Object.entries(data.agent_models)) {
+                                if (currentAgent.includes(agentKey.toLowerCase()) || 
+                                    agentKey.toLowerCase().includes(currentAgent)) {
+                                    modelToUse = modelValue;
+                                    console.log(`Using partial match ${agentKey} model for ${currentAgent}: ${modelToUse}`);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    console.log(`Selected model for ${currentAgent}: ${modelToUse}`);
+                    
+                    // Update model name
+                    if (modelToUse) {
+                        window.statusUtils.updateModelStatus(modelToUse);
+                    } else {
+                        // Fallback to updateModelForCurrentAgent
+                        updateModelForCurrentAgent();
+                    }
+                    
+                    // Force a visual refresh of the status bar
+                    if (typeof updateStatusBar === 'function') {
+                        updateStatusBar();
+                    } else if (window.statusUtils && window.statusUtils.updateStatusBar) {
+                        window.statusUtils.updateStatusBar();
+                    }
+                } else {
+                    // Fallback to updateModelForCurrentAgent
+                    updateModelForCurrentAgent();
+                }
+            })
+            .catch(error => {
+                console.warn("Failed to fetch agent info:", error);
+                
+                // If API fails, still update the displayed model based on current agent
+                updateModelForCurrentAgent();
+            });
+    } catch (error) {
+        console.warn("Error in fetchAgentInfo:", error);
+        
+        // If API fails, still update the displayed model based on current agent
+        updateModelForCurrentAgent();
+    }
+}
+
+// Update model display based on the current agent name
+function updateModelForCurrentAgent() {
+    const agentName = window.state.currentAgentName.toLowerCase();
+    let modelName;
+    
+    // Log the current agent for debugging
+    console.log(`Updating model for agent: ${agentName}`);
+    
+    // Try to find the model in agentModels first (from API)
+    if (window.state.agentModels) {
+        // Check all possible variations of the agent name
+        const possibleNames = [
+            agentName,
+            agentName + '_agent',
+            agentName.replace('_agent', '')
+        ];
+        
+        // Try each possible name
+        for (const name of possibleNames) {
+            if (window.state.agentModels[name]) {
+                modelName = window.state.agentModels[name];
+                console.log(`Found model in agentModels for "${name}": ${modelName}`);
+                break;
+            }
+        }
+    }
+    
+    // If we still don't have a model, use hardcoded values matching config.yaml
+    if (!modelName) {
+        console.log(`No model found in agentModels, using hardcoded values`);
+        
+        // Check the agent name with more flexibility - EXACTLY match config.yaml values
+        if (agentName.includes('scout')) {
+            modelName = "gemini-2.5-pro-preview-05-06";  // Match config.yaml scout_agent
+        } else if (agentName.includes('code') || agentName === "code_execution_agent") {
+            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml code_execution_agent
+        } else if (agentName.includes('search')) {
+            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml search_agent
+        } else if (agentName.includes('todo')) {
+            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml todo_agent
+        } else {
+            // Default for beto/main agent - match config.yaml main_model
+            modelName = "gemini-2.5-flash-preview-04-17";
+        }
+    }
+    
+    window.statusUtils.updateModelStatus(modelName);
+    console.log(`Updated model based on agent ${agentName}: ${modelName}`);
+    
+    // Force a visual refresh of the status bar
+    if (typeof updateStatusBar === 'function') {
+        updateStatusBar();
+    } else if (window.statusUtils && window.statusUtils.updateStatusBar) {
+        window.statusUtils.updateStatusBar();
+    }
 }
 
 // Generate a UUID for session ID

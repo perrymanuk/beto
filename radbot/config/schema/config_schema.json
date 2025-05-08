@@ -362,6 +362,10 @@
                     "description": "Server endpoint URL",
                     "pattern": "^(https?://|wss?://).*$"
                   },
+                  "message_endpoint": {
+                    "type": ["string", "null"],
+                    "description": "URL endpoint for sending tool invocation messages (used with SSE transport)"
+                  },
                   "auth_token": {
                     "type": ["string", "null"],
                     "description": "Authentication token for the MCP server"

@@ -23,8 +23,9 @@ from radbot.web.api.session import (
     get_or_create_runner_for_session,
 )
 
-# Import events router for registration
+# Import API routers for registration
 from radbot.web.api.events import register_events_router
+from radbot.web.api.agent_info import register_agent_info_router
 
 # Set up logging
 logging.basicConfig(
@@ -40,9 +41,34 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Register the events router immediately after app creation
+# Register API routers immediately after app creation
 register_events_router(app)
-logger.info("Events router registered during app initialization")
+register_agent_info_router(app)
+logger.info("API routers registered during app initialization")
+
+# Define a startup event to initialize MCP servers
+@app.on_event("startup")
+async def initialize_mcp_servers():
+    """Initialize MCP server tools on application startup."""
+    try:
+        logger.info("Initializing MCP servers at application startup...")
+        from radbot.tools.mcp.mcp_client_factory import MCPClientFactory
+        from radbot.config.config_loader import config_loader
+        
+        # Just check if servers are enabled and can connect
+        servers = config_loader.get_enabled_mcp_servers()
+        logger.info(f"Found {len(servers)} enabled MCP servers in configuration")
+        
+        for server in servers:
+            server_id = server.get("id", "unknown")
+            server_name = server.get("name", server_id)
+            logger.info(f"MCP server enabled: {server_name} (ID: {server_id})")
+            
+        # Don't attempt to create tools here - we'll do that in the session
+        # when a new client connects, which is safer and more reliable
+        
+    except Exception as e:
+        logger.error(f"Failed to check MCP servers: {str(e)}", exc_info=True)
 
 # Configure CORS
 app.add_middleware(

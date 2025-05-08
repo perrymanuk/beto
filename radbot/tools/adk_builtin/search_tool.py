@@ -44,7 +44,8 @@ def create_search_agent(
     cfg = config or config_manager
     
     # Get the model name (must be a Gemini 2 model)
-    model_name = model or cfg.get_main_model()
+    # First try to get agent-specific model, then fall back to provided model or defaults
+    model_name = model or cfg.get_agent_model("search_agent")
     if not any(name in model_name.lower() for name in ["gemini-2", "gemini-2.0", "gemini-2.5"]):
         logger.warning(
             f"Model {model_name} may not be compatible with google_search tool. "

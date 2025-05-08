@@ -62,12 +62,11 @@ def main():
     # Import our proper code execution agent from the tools module
     from radbot.tools.adk_builtin.code_execution_tool import create_code_execution_agent
     
-    # Create the agent using our standard factory function, disabling transfer_tool for standalone tests
+    # Create the agent using our standard factory function
     code_agent = create_code_execution_agent(
         name="code_execution_agent",
         model=MODEL_NAME,
-        instruction_name="code_execution_agent",  # Will load from config if exists
-        include_transfer_tool=False  # Disable transfer tool for standalone tests
+        instruction_name="code_execution_agent"  # Will load from config if exists
     )
     
     logger.info(f"Created agent without transfer_to_agent tool for standalone testing")

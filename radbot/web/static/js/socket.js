@@ -46,6 +46,23 @@ function connectWebSocket(sessionId) {
                     agentName = data.agent;
                     // Update the global state if the agent has changed
                     if (agentName.toUpperCase() !== window.state.currentAgentName) {
+                        console.log(`Agent changed in message: ${window.state.currentAgentName} → ${agentName.toUpperCase()}`);
+                        
+                        // First try to update the model based on the new agent
+                        if (typeof window.updateModelForCurrentAgent === 'function') {
+                            // Temporarily set current agent name for model lookup
+                            const previousAgent = window.state.currentAgentName;
+                            window.state.currentAgentName = agentName.toUpperCase();
+                            
+                            // Update model using the agent name
+                            window.updateModelForCurrentAgent();
+                            console.log(`Updated model for agent ${agentName} via updateModelForCurrentAgent`);
+                            
+                            // Restore previous agent name since updateAgentStatus will set it properly
+                            window.state.currentAgentName = previousAgent;
+                        }
+                        
+                        // Now update the agent name
                         window.statusUtils.updateAgentStatus(agentName);
                     }
                 }
@@ -70,8 +87,62 @@ function connectWebSocket(sessionId) {
                                 const newAgent = event.to_agent;
                                 console.log(`Agent transfer detected: ${window.state.currentAgentName} → ${newAgent}`);
                                 
-                                // Update the agent status using the dedicated function
+                                // IMPORTANT: First update the model before updating the agent status
+                                // This ensures the model update isn't overridden by updateAgentStatus
+                                
+                                // Get model from event details if available
+                                if (event.details && event.details.model) {
+                                    window.statusUtils.updateModelStatus(event.details.model);
+                                    console.log(`Updated model from event details: ${event.details.model}`);
+                                } 
+                                // Try to get model from agentModels if available
+                                else if (window.state.agentModels) {
+                                    // Convert to lowercase for case-insensitive lookup
+                                    const agentKey = newAgent.toLowerCase();
+                                    
+                                    // Handle 'scout' agent specially since it's stored as scout_agent in backend
+                                    if (agentKey === 'scout' && window.state.agentModels['scout_agent']) {
+                                        window.statusUtils.updateModelStatus(window.state.agentModels['scout_agent']);
+                                        console.log(`Updated model from agentModels for scout: ${window.state.agentModels['scout_agent']}`);
+                                    }
+                                    // Try exact match
+                                    else if (window.state.agentModels[agentKey]) {
+                                        window.statusUtils.updateModelStatus(window.state.agentModels[agentKey]);
+                                        console.log(`Updated model from agentModels: ${window.state.agentModels[agentKey]}`);
+                                    }
+                                    // Try agent_name format
+                                    else if (window.state.agentModels[agentKey + '_agent']) {
+                                        window.statusUtils.updateModelStatus(window.state.agentModels[agentKey + '_agent']);
+                                        console.log(`Updated model from agentModels with _agent suffix: ${window.state.agentModels[agentKey + '_agent']}`);
+                                    }
+                                    // Fallback to updateModelForCurrentAgent
+                                    else {
+                                        console.log(`Agent ${agentKey} not found in agentModels, using fallback lookup...`);
+                                        if (typeof window.updateModelForCurrentAgent === 'function') {
+                                            // Temporarily set the agent name so updateModelForCurrentAgent works
+                                            const savedAgent = window.state.currentAgentName;
+                                            window.state.currentAgentName = newAgent;
+                                            window.updateModelForCurrentAgent();
+                                            window.state.currentAgentName = savedAgent; // Restore
+                                        }
+                                    }
+                                }
+                                // Last resort fallback
+                                else if (typeof window.updateModelForCurrentAgent === 'function') {
+                                    // Temporarily set the agent name so updateModelForCurrentAgent works
+                                    const savedAgent = window.state.currentAgentName;
+                                    window.state.currentAgentName = newAgent;
+                                    window.updateModelForCurrentAgent();
+                                    window.state.currentAgentName = savedAgent; // Restore
+                                }
+                                
+                                // Now update the agent status
                                 window.statusUtils.updateAgentStatus(newAgent);
+                                
+                                // Force an update of the status bar
+                                if (window.statusUtils.updateStatusBar) {
+                                    window.statusUtils.updateStatusBar();
+                                }
                                 
                                 // Add a system message to notify the user about the agent change
                                 window.chatModule.addMessage('system', `Agent switched to: ${newAgent.toUpperCase()}`);
@@ -103,7 +174,33 @@ function connectWebSocket(sessionId) {
                             // Update the current agent if it has changed
                             if (agentName !== window.state.currentAgentName) {
                                 console.log(`Agent change detected from model_response: ${window.state.currentAgentName} → ${agentName}`);
+                                
+                                // If we have model info in the event, use it
+                                if (event.details && event.details.model) {
+                                    window.statusUtils.updateModelStatus(event.details.model);
+                                    console.log(`Updated model from event details: ${event.details.model}`);
+                                }
+                                // Otherwise try to update model based on the agent name
+                                else if (typeof window.updateModelForCurrentAgent === 'function') {
+                                    // Temporarily set current agent name for model lookup
+                                    const previousAgent = window.state.currentAgentName;
+                                    window.state.currentAgentName = agentName;
+                                    
+                                    // Update model using the agent name
+                                    window.updateModelForCurrentAgent();
+                                    console.log(`Updated model for ${agentName} via updateModelForCurrentAgent`);
+                                    
+                                    // Restore previous agent name since updateAgentStatus will set it properly
+                                    window.state.currentAgentName = previousAgent;
+                                }
+                                
+                                // Now update the agent name
                                 window.statusUtils.updateAgentStatus(agentName);
+                                
+                                // Force a visual refresh of the status bar
+                                if (window.statusUtils && window.statusUtils.updateStatusBar) {
+                                    window.statusUtils.updateStatusBar();
+                                }
                             }
                             
                             // Add message to chat with the specific agent name

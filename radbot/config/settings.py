@@ -47,6 +47,23 @@ class ConfigManager:
         # First try to get from YAML config
         agent_config = config_loader.get_agent_config()
         
+        # Get agent-specific models from config or use default values
+        agent_models = agent_config.get("agent_models", {})
+        
+        # Allow for environment variable overrides for specific agents
+        agent_models_from_env = {
+            "code_execution_agent": os.getenv("RADBOT_CODE_AGENT_MODEL", None),
+            "search_agent": os.getenv("RADBOT_SEARCH_AGENT_MODEL", None),
+            "scout_agent": os.getenv("RADBOT_SCOUT_AGENT_MODEL", None),
+            "todo_agent": os.getenv("RADBOT_TODO_AGENT_MODEL", None)
+        }
+        
+        # Filter out None values
+        agent_models_from_env = {k: v for k, v in agent_models_from_env.items() if v is not None}
+        
+        # Merge with config values, prioritizing environment variables
+        merged_agent_models = {**agent_models, **agent_models_from_env}
+        
         return {
             # Primary model for main agent
             "main_model": agent_config.get("main_model") or os.getenv("RADBOT_MAIN_MODEL", "gemini-2.5-pro"),
@@ -56,6 +73,9 @@ class ConfigManager:
             
             # Model for simpler sub-agents
             "sub_agent_model": agent_config.get("sub_agent_model") or os.getenv("RADBOT_SUB_MODEL", "gemini-2.0-flash"),
+            
+            # Agent-specific models
+            "agent_models": merged_agent_models,
             
             # Use Vertex AI flag
             "use_vertex_ai": agent_config.get("use_vertex_ai", False) if "use_vertex_ai" in agent_config else os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "FALSE").upper() == "TRUE",
@@ -175,6 +195,33 @@ class ConfigManager:
             The configured sub-agent model name
         """
         return self.model_config["sub_agent_model"]
+        
+    def get_agent_model(self, agent_name: str) -> str:
+        """
+        Get the model for a specific agent type.
+        
+        Args:
+            agent_name: The name of the agent (e.g., "code_execution_agent", "search_agent")
+            
+        Returns:
+            The configured model for the specified agent, or the default sub-agent model if not configured
+        """
+        agent_models = self.model_config.get("agent_models", {})
+        
+        # Return the agent-specific model if configured, otherwise fall back to appropriate default
+        if agent_name in agent_models and agent_models[agent_name]:
+            return agent_models[agent_name]
+        
+        # For scout (research) agent, use main model by default since it's complex
+        if agent_name == "scout_agent":
+            return self.get_main_model()
+            
+        # For specialized search and code execution agents, use main model too
+        if agent_name in ["search_agent", "code_execution_agent"]:
+            return self.get_main_model()
+            
+        # For all other agents, use the general sub_agent_model
+        return self.get_sub_agent_model()
     
     def is_using_vertex_ai(self) -> bool:
         """

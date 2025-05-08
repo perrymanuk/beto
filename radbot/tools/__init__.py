@@ -23,12 +23,11 @@ from radbot.tools.mcp import (
     get_available_mcp_tools,
     convert_to_adk_tool,
 )
-from radbot.tools.crawl4ai import (
+# NOTE: Direct Crawl4AI imports removed - now available via MCP server integration
+# Import compatibility layer for backward compatibility
+from radbot.tools.mcp.mcp_crawl4ai_client import (
     create_crawl4ai_toolset,
     test_crawl4ai_connection,
-    get_crawl4ai_vector_store,
-    Crawl4AIVectorStore,
-    crawl4ai_two_step,
 )
 from radbot.tools.shell import execute_shell_command, ALLOWED_COMMANDS, get_shell_tool
 from radbot.tools.web_search import (
@@ -66,12 +65,9 @@ __all__ = [
     "get_available_mcp_tools", 
     "convert_to_adk_tool",
     
-    # Crawl4AI tools
+    # Crawl4AI tools (now via MCP server compatibility layer)
     "create_crawl4ai_toolset",
     "test_crawl4ai_connection",
-    "get_crawl4ai_vector_store",
-    "Crawl4AIVectorStore",
-    "crawl4ai_two_step",
     
     # Shell tools
     "execute_shell_command",

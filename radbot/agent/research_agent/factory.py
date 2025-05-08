@@ -51,10 +51,10 @@ def create_research_agent(
         logger.warning(f"Agent name '{name}' changed to 'scout' for consistent transfers")
         name = "scout"
         
-    # Use default model from config if not specified
+    # Use agent-specific model or fall back to default
     if model is None:
-        model = config_manager.get_main_model()
-        logger.info(f"Using model from config: {model}")
+        model = config_manager.get_agent_model("scout_agent")
+        logger.info(f"Using model from config for scout_agent: {model}")
     
     # Create the research agent with explicit name and app_name
     research_agent = ResearchAgent(
@@ -97,19 +97,12 @@ def create_research_agent(
             
             if enable_google_search:
                 try:
+                    # Create search agent with agent-specific model (handled inside the function)
                     search_agent = create_search_agent(name="search_agent")
-                    # Make sure search_agent has transfer_to_agent
-                    if hasattr(search_agent, 'tools'):
-                        has_transfer_tool = False
-                        for tool in search_agent.tools:
-                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                            if tool_name == 'transfer_to_agent':
-                                has_transfer_tool = True
-                                break
-                                
-                        if not has_transfer_tool:
-                            search_agent.tools.append(transfer_to_agent)
-                            
+                    
+                    # No need to add transfer_to_agent for Vertex AI compatibility
+                    # The agent will use "TRANSFER_BACK_TO_BETO" phrase instead
+                    
                     sub_agents.append(search_agent)
                     logger.info("Created search_agent as sub-agent for scout")
                 except Exception as e:
@@ -117,19 +110,12 @@ def create_research_agent(
             
             if enable_code_execution:
                 try:
+                    # Create code execution agent with agent-specific model (handled inside the function)
                     code_agent = create_code_execution_agent(name="code_execution_agent")
-                    # Make sure code_agent has transfer_to_agent
-                    if hasattr(code_agent, 'tools'):
-                        has_transfer_tool = False
-                        for tool in code_agent.tools:
-                            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', None)
-                            if tool_name == 'transfer_to_agent':
-                                has_transfer_tool = True
-                                break
-                                
-                        if not has_transfer_tool:
-                            code_agent.tools.append(transfer_to_agent)
-                            
+                    
+                    # No need to add transfer_to_agent for Vertex AI compatibility
+                    # The agent will use "TRANSFER_BACK_TO_BETO" phrase instead
+                    
                     sub_agents.append(code_agent)
                     logger.info("Created code_execution_agent as sub-agent for scout")
                 except Exception as e:
@@ -143,12 +129,13 @@ def create_research_agent(
         from google.adk.agents import Agent
         
         # Create a proxy agent for beto (parent) to allow transfers back
+        # For Vertex AI compatibility, don't include any tools on the parent proxy
         beto_agent = Agent(
             name="beto",  # Must be exactly "beto" for transfers back
-            model=model or config_manager.get_main_model(),
+            model=config_manager.get_main_model(),  # Always use the main model for beto
             instruction="Main coordinating agent",  # Simple placeholder
             description="Main coordinating agent that handles user requests",
-            tools=[transfer_to_agent]  # Essential to have transfer_to_agent
+            tools=[]  # No tools for Vertex AI compatibility
         )
         
         # Add beto to the list of sub-agents even if we have other sub-agents

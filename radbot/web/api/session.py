@@ -52,6 +52,9 @@ class SessionRunner:
         self.artifact_service = InMemoryArtifactService()
         logger.info("Created InMemoryArtifactService for the session")
         
+        # Try to load MCP tools for this session
+        self._try_load_mcp_tools()
+        
         # Log agent tree structure
         self._log_agent_tree()
         
@@ -360,12 +363,15 @@ class SessionRunner:
         }
         
         # Extract to_agent
+        to_agent = None
         if hasattr(event, 'to_agent'):
-            event_data["to_agent"] = str(event.to_agent)
-            event_data["summary"] = f"Transfer to: {event.to_agent}"
+            to_agent = str(event.to_agent)
+            event_data["to_agent"] = to_agent
+            event_data["summary"] = f"Transfer to: {to_agent}"
         elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'toAgent' in event.payload:
-            event_data["to_agent"] = str(event.payload['toAgent'])
-            event_data["summary"] = f"Transfer to: {event.payload['toAgent']}"
+            to_agent = str(event.payload['toAgent'])
+            event_data["to_agent"] = to_agent
+            event_data["summary"] = f"Transfer to: {to_agent}"
         
         # Extract from_agent if available
         if hasattr(event, 'from_agent'):
@@ -373,8 +379,27 @@ class SessionRunner:
         elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'fromAgent' in event.payload:
             event_data["from_agent"] = str(event.payload['fromAgent'])
         
-        # Get the full event for details
-        event_data["details"] = self._get_event_details(event)
+        # Get the basic event details
+        event_details = self._get_event_details(event)
+        
+        # Add model information for the transferred-to agent
+        if to_agent:
+            # Import here to avoid circular imports
+            from radbot.config import config_manager
+            
+            # Convert agent name to the format expected by config_manager
+            agent_config_name = to_agent.lower()
+            if agent_config_name == "scout":
+                agent_config_name = "scout_agent"
+                event_details['model'] = config_manager.get_agent_model(agent_config_name)
+            elif agent_config_name in ["code_execution_agent", "search_agent", "todo_agent"]:
+                event_details['model'] = config_manager.get_agent_model(agent_config_name)
+            elif agent_config_name in ["beto", "radbot"]:
+                # Use main model for the root agent
+                event_details['model'] = config_manager.get_main_model()
+        
+        # Add the updated details to the event data
+        event_data["details"] = event_details
         
         return event_data
     
@@ -438,8 +463,37 @@ class SessionRunner:
             event_data["is_final"] = False
             event_data["summary"] = "Intermediate Response"
         
-        # Get the full event for details
-        event_data["details"] = self._get_event_details(event)
+        # Get the basic event details
+        event_details = self._get_event_details(event)
+        
+        # Add model information if not already present
+        if 'model' not in event_details:
+            # Check if this event is from a specific agent and add its model information
+            agent_name = None
+            if hasattr(event, 'agent_name'):
+                agent_name = event.agent_name
+            elif hasattr(event, 'agent'):
+                agent_name = event.agent
+            
+            # Set model information based on agent name
+            if agent_name:
+                # Import here to avoid circular imports
+                from radbot.config import config_manager
+                
+                # Convert agent name to the format expected by config_manager
+                agent_config_name = agent_name.lower()
+                if agent_config_name == "scout":
+                    agent_config_name = "scout_agent"
+                elif agent_config_name in ["beto", "radbot"]:
+                    # Use main model for the root agent
+                    event_details['model'] = config_manager.get_main_model()
+                
+                # For specialized agents, get their specific model
+                if agent_config_name in ["code_execution_agent", "search_agent", "scout_agent", "todo_agent"]:
+                    event_details['model'] = config_manager.get_agent_model(agent_config_name)
+        
+        # Add the updated details to the event data
+        event_data["details"] = event_details
         
         return event_data
     
@@ -486,6 +540,81 @@ class SessionRunner:
         # Fallback to string representation
         return str(event)
     
+    def _try_load_mcp_tools(self):
+        """Try to load and add MCP tools to the root agent."""
+        try:
+            # Import necessary modules
+            from radbot.config.config_loader import config_loader
+            from radbot.tools.mcp.mcp_client_factory import MCPClientFactory
+            from google.adk.tools import FunctionTool
+            
+            # Get enabled MCP servers
+            servers = config_loader.get_enabled_mcp_servers()
+            if not servers:
+                logger.info("No enabled MCP servers found in configuration")
+                return
+                
+            logger.info(f"Loading tools from {len(servers)} MCP servers")
+            
+            # Initialize clients and collect tools
+            tools_to_add = []
+            existing_tool_names = set()
+            
+            # Get existing tool names
+            if hasattr(root_agent, "tools"):
+                for tool in root_agent.tools:
+                    if hasattr(tool, "name"):
+                        existing_tool_names.add(tool.name)
+                    elif hasattr(tool, "__name__"):
+                        existing_tool_names.add(tool.__name__)
+            
+            # Go through each server and directly initialize the client
+            for server in servers:
+                server_id = server.get("id")
+                server_name = server.get("name", server_id)
+                
+                try:
+                    # Create a client directly instead of using factory
+                    transport = server.get("transport", "sse")
+                    url = server.get("url")
+                    auth_token = server.get("auth_token")
+                    
+                    if transport == "sse":
+                        # Use our custom client implementation
+                        from radbot.tools.mcp.client import MCPSSEClient
+                        client = MCPSSEClient(url=url, auth_token=auth_token)
+                        
+                        # Initialize the client (this is synchronous and safe)
+                        if client.initialize():
+                            # Get tools from the client
+                            server_tools = client.tools
+                            
+                            if server_tools:
+                                logger.info(f"Successfully loaded {len(server_tools)} tools from {server_name}")
+                                
+                                # Add unique tools
+                                for tool in server_tools:
+                                    tool_name = getattr(tool, "name", None) or getattr(tool, "__name__", str(tool))
+                                    if tool_name not in existing_tool_names:
+                                        tools_to_add.append(tool)
+                                        existing_tool_names.add(tool_name)
+                                        logger.info(f"Added tool: {tool_name} from {server_name}")
+                        else:
+                            logger.warning(f"Failed to initialize MCP client for {server_name}")
+                    else:
+                        logger.warning(f"Unsupported transport '{transport}' for MCP server {server_name}")
+                        
+                except Exception as e:
+                    logger.warning(f"Error loading tools from MCP server {server_name}: {str(e)}")
+            
+            # Add all collected tools to the agent
+            if tools_to_add and hasattr(root_agent, "tools"):
+                root_agent.tools = list(root_agent.tools) + tools_to_add
+                logger.info(f"Added {len(tools_to_add)} total MCP tools to agent")
+                
+        except Exception as e:
+            logger.warning(f"Error loading MCP tools: {str(e)}")
+
     def _safely_serialize(self, obj):
         """Safely serialize objects to JSON-compatible structures."""
         import json

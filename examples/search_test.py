@@ -60,12 +60,11 @@ def main():
     # Import our proper search agent from the tools module
     from radbot.tools.adk_builtin.search_tool import create_search_agent
     
-    # Create the agent using our standard factory function, disabling transfer_tool for standalone tests
+    # Create the agent using our standard factory function
     agent = create_search_agent(
         name="search_agent",
         model=MODEL_NAME,
-        instruction_name="search_agent",  # Will load from config if exists
-        include_transfer_tool=False  # Disable transfer tool for standalone tests
+        instruction_name="search_agent"  # Will load from config if exists
     )
     
     logger.info(f"Created agent without transfer_to_agent tool for standalone testing")

@@ -13,6 +13,17 @@ agent:
   # Model for simpler sub-agents
   sub_agent_model: "gemini-2.0-flash"
   
+  # Agent-specific model configuration
+  agent_models:
+    # Complex coding tasks need the most capable model
+    code_execution_agent: "gemini-2.5-pro"
+    # Web search can use a slightly faster model
+    search_agent: "gemini-2.5-pro"
+    # Research tasks need a very capable model
+    scout_agent: "gemini-2.5-pro"
+    # Todo management can use a simpler model
+    todo_agent: "gemini-2.0-flash"
+  
   # Whether to use Vertex AI for model API access
   use_vertex_ai: false
   

@@ -74,31 +74,50 @@ class MCPClientFactory:
             url = server_config.get("url")
             
             # Import the appropriate client module based on transport
-            if transport == "sse":
-                try:
-                    # Try to import MCP SSE client from MCP package
-                    from mcp.client import SSEClient
-                    client_class = SSEClient
-                except ImportError:
-                    # Fall back to a custom implementation if needed
-                    from radbot.tools.mcp.client import MCPSSEClient
-                    client_class = MCPSSEClient
-            elif transport == "websocket":
-                try:
-                    # Try to import MCP WebSocket client
-                    from mcp.client import WebSocketClient
-                    client_class = WebSocketClient
-                except ImportError:
-                    # Fall back to a custom implementation if needed
-                    from radbot.tools.mcp.client import MCPWebSocketClient
-                    client_class = MCPWebSocketClient
-            else:
-                raise MCPClientError(f"Unsupported transport: {transport}")
+            try:
+                # Try to use our custom implementation first for better compatibility
+                # Our client supports multiple transports
+                from radbot.tools.mcp.client import MCPSSEClient
+                client_class = MCPSSEClient
+                logger.info(f"Using custom MCP client implementation for server: {server_id} with transport: {transport}")
+            except ImportError:
+                # Fall back to MCP package if available
+                if transport == "sse":
+                    try:
+                        from mcp.client import SSEClient
+                        client_class = SSEClient
+                        logger.info(f"Using MCP package SSEClient for server: {server_id}")
+                    except ImportError:
+                        # No client implementation available
+                        raise MCPClientError(f"No SSE client implementation available for server: {server_id}")
+                elif transport == "websocket":
+                    try:
+                        # Try to import MCP WebSocket client
+                        from mcp.client import WebSocketClient
+                        client_class = WebSocketClient
+                    except ImportError:
+                        # Fall back to a custom implementation if needed
+                        logger.warning(f"No WebSocket client implementation available for server: {server_id}")
+                        raise MCPClientError(f"No WebSocket client implementation available for server: {server_id}")
+                elif transport == "http":
+                    try:
+                        # Use our custom client for HTTP transport as well
+                        from radbot.tools.mcp.client import MCPSSEClient
+                        client_class = MCPSSEClient
+                        logger.info(f"Using custom MCP client for HTTP transport: {server_id}")
+                    except ImportError:
+                        raise MCPClientError(f"No HTTP client implementation available for server: {server_id}")
+                else:
+                    raise MCPClientError(f"Unsupported transport: {transport}")
             
             # Prepare client initialization arguments
             client_args = {
                 "url": url
             }
+            
+            # Add message_endpoint if specified (used for SSE message exchange pattern)
+            if server_config.get("message_endpoint"):
+                client_args["message_endpoint"] = server_config.get("message_endpoint")
             
             # Handle authentication
             auth_type = server_config.get("auth_type", "token")
