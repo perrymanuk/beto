@@ -12,6 +12,7 @@ import * as commandUtils from './commands.js';
 import * as statusUtils from './status.js';
 import * as selectsUtils from './selects.js';
 import * as socketClient from './socket.js';
+import { ChatPersistence, mergeMessages } from './chat_persistence.js';
 
 // Global state
 const state = {
@@ -26,6 +27,15 @@ const state = {
         defaultProject: ''
     }
 };
+
+// Initialize chat persistence
+const chatPersistence = new ChatPersistence({
+    maxMessagesPerChat: 200,
+    storagePrefix: 'radbot_chat_'
+});
+
+// Log the expected storage key for the current session
+console.log('Expected localStorage key:', `radbot_chat_${state.sessionId || 'undefined'}`);
 
 // Global data
 let events = [];
@@ -44,10 +54,44 @@ window.state = state;
 window.events = events;
 window.tasks = tasks;
 window.projects = projects;
+window.chatPersistence = chatPersistence;
+
+// Make chat persistence utilities globally available
+window.mergeMessages = mergeMessages;
+
+// Test localStorage directly to ensure it's working
+function testLocalStorage() {
+    try {
+        const testKey = 'radbot_test_key';
+        const testValue = { test: true, timestamp: Date.now() };
+        const testString = JSON.stringify(testValue);
+        
+        // Save test value
+        localStorage.setItem(testKey, testString);
+        console.log('Test localStorage.setItem succeeded:', testKey, testString);
+        
+        // Retrieve test value
+        const retrieved = localStorage.getItem(testKey);
+        console.log('Test localStorage.getItem retrieved:', retrieved);
+        
+        // Cleanup
+        localStorage.removeItem(testKey);
+        console.log('Test localStorage.removeItem succeeded');
+        
+        return retrieved === testString;
+    } catch (error) {
+        console.error('localStorage test failed:', error);
+        return false;
+    }
+}
 
 // Initialize
 function init() {
     console.log('Initializing app_main.js');
+    
+    // Test localStorage
+    const localStorageWorking = testLocalStorage();
+    console.log('localStorage working:', localStorageWorking);
     
     // Listen for tiling manager ready event
     document.addEventListener('tiling:ready', () => {
@@ -69,11 +113,34 @@ function init() {
         }
     }, 300);
     
-    // Create session ID if not exists
+    // Create or retrieve persistent session ID
     if (!state.sessionId) {
-        state.sessionId = generateUUID();
+        state.sessionId = crypto.randomUUID ? crypto.randomUUID() : generateUUID();
         localStorage.setItem('radbot_session_id', state.sessionId);
+        console.log('Created new session ID:', state.sessionId);
+    } else {
+        console.log('Using existing session ID:', state.sessionId);
     }
+    
+    // Set up event listener for chat data changes from other tabs
+    window.addEventListener('chatDataChanged', (event) => {
+        console.log('Chat data changed event received:', event.detail);
+        
+        // Only reload if the change was for our current session
+        if (event.detail.chatId === state.sessionId) {
+            // Load and render chat messages from local storage
+            loadChatFromStorage();
+        }
+    });
+    
+    // Set flag to prevent duplicate message storage during initial load
+    window.initialLoadInProgress = true;
+    
+    // Load any existing chat messages from local storage
+    loadChatFromStorage();
+    
+    // Clear the flag after loading completes
+    window.initialLoadInProgress = false;
     
     // Connect to WebSocket immediately
     window.socket = socketClient.initSocket(state.sessionId);
@@ -84,6 +151,71 @@ function init() {
     
     // Get initial agent and model information
     fetchAgentInfo();
+}
+
+// Load chat messages from local storage
+function loadChatFromStorage() {
+    if (!state.sessionId) {
+        console.error('Cannot load chat: No session ID available');
+        return;
+    }
+    
+    console.log(`Attempting to load messages for session ${state.sessionId}`);
+    
+    try {
+        // Store original storage items for inspection
+        const storage = localStorage;
+        const allItems = {};
+        const relevantItems = {};
+        
+        // Log all localStorage keys for debugging
+        console.log('All localStorage keys:');
+        for (let i = 0; i < storage.length; i++) {
+            const key = storage.key(i);
+            allItems[key] = storage.getItem(key);
+            console.log(`${i}: ${key} = ${storage.getItem(key).substring(0, 50)}...`);
+            
+            if (key && (key.includes('radbot') || key.includes('chat_'))) {
+                relevantItems[key] = storage.getItem(key);
+            }
+        }
+        
+        console.log('Current localStorage items:', allItems);
+        console.log('Relevant chat items:', relevantItems);
+        
+        // Get messages from storage
+        const messages = chatPersistence.getMessages(state.sessionId);
+        
+        if (messages && messages.length > 0) {
+            console.log(`Loaded ${messages.length} messages from storage for session ${state.sessionId}`);
+            
+            // Clear existing messages from UI
+            if (chatModule.getChatElements().messages) {
+                chatModule.getChatElements().messages.innerHTML = '';
+            }
+            
+            // Add each message to the UI
+            let loadCount = 0;
+            messages.forEach(msg => {
+                // Only add messages with valid roles
+                if (msg.role && msg.content) {
+                    chatModule.addMessage(msg.role, msg.content, msg.agent);
+                    loadCount++;
+                } else {
+                    console.warn('Skipping invalid message:', msg);
+                }
+            });
+            
+            console.log(`Successfully rendered ${loadCount} messages`);
+            
+            // Scroll to the bottom after rendering all messages
+            chatModule.scrollToBottom();
+        } else {
+            console.log('No stored messages found for this session');
+        }
+    } catch (error) {
+        console.error('Error loading chat from storage:', error);
+    }
 }
 
 // Make functions globally available for tiling manager

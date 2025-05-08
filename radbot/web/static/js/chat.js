@@ -159,6 +159,37 @@ export function addMessage(role, content, agentName) {
     // Append the message
     chatMessages.appendChild(messageDiv);
     
+    // Store message in persistence layer if we have a session ID
+    // Check if this message is part of the initial load from localStorage
+    const isInitialLoad = window.initialLoadInProgress === true;
+    
+    if (window.state && window.state.sessionId && window.chatPersistence && !isInitialLoad) {
+        try {
+            console.log(`Storing message in localStorage for session ${window.state.sessionId}`);
+            
+            // Create a message object with a unique ID
+            const messageObj = {
+                id: crypto.randomUUID ? crypto.randomUUID() : generateUUID(),
+                role: role,
+                content: content,
+                timestamp: Date.now(),
+                agent: agentName || (window.state ? window.state.currentAgentName : null)
+            };
+            
+            // Get existing messages
+            const existingMessages = window.chatPersistence.getMessages(window.state.sessionId);
+            
+            // Add new message
+            existingMessages.push(messageObj);
+            
+            // Save updated messages
+            const saveResult = window.chatPersistence.saveMessages(window.state.sessionId, existingMessages);
+            console.log(`Message saved successfully: ${saveResult}. Total messages: ${existingMessages.length}`);
+        } catch (error) {
+            console.error('Error saving message to persistence:', error);
+        }
+    }
+    
     // If Prism.js is available, highlight code blocks in the newly added message
     if (typeof Prism !== 'undefined') {
         // Allow DOM to update before highlighting
@@ -193,6 +224,15 @@ export function addMessage(role, content, agentName) {
     
     // Also try scrolling after a longer delay just to be sure
     setTimeout(scrollToBottom, 300);
+}
+
+// Helper function to generate a UUID if not available in the browser
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 }
 
 // Handle input keydown (send on Enter, new line on Shift+Enter)
@@ -323,6 +363,12 @@ async function resetConversation() {
                     eventsContainer.innerHTML = '<div class="event-empty-state">No events recorded yet.</div>';
                 }
             }
+        }
+        
+        // Also clear persisted chat history
+        if (window.chatPersistence && window.state.sessionId) {
+            console.log('Clearing persisted chat history for session:', window.state.sessionId);
+            window.chatPersistence.clearChat(window.state.sessionId);
         }
         
         addMessage('system', 'Session cleared. New terminal started.');

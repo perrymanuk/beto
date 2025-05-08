@@ -7,6 +7,7 @@ import asyncio
 import logging
 import os
 import uuid
+import time
 from typing import Dict, List, Optional, Any
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Form, HTTPException, Depends
@@ -200,10 +201,151 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, session_mana
         # Send ready status
         await manager.send_status(session_id, "ready")
         
+        # Helper function to get events from a session
+        def get_events_from_session(session):
+            if not hasattr(session, 'events') or not session.events:
+                return []
+            
+            messages = []
+            for event in session.events:
+                if hasattr(event, 'content') and event.content:
+                    # Try to extract text content for different ADK versions
+                    text_content = ""
+                    if hasattr(event.content, 'parts') and event.content.parts:
+                        for part in event.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                text_content += part.text
+                    elif hasattr(event.content, 'text') and event.content.text:
+                        text_content = event.content.text
+                    
+                    # Determine the role/author
+                    role = getattr(event, 'author', 'assistant')
+                    
+                    # Create a message object if we have content
+                    if text_content:
+                        message = {
+                            "id": getattr(event, 'id', str(uuid.uuid4())),
+                            "role": role,
+                            "content": text_content,
+                            "timestamp": int(getattr(event, 'timestamp', time.time()) * 1000),  # Convert to JS timestamp
+                            "agent": getattr(event, 'agent_name', None) or getattr(event, 'agent', None)
+                        }
+                        messages.append(message)
+            
+            return messages
+        
+        # Process heartbeat messages
+        async def handle_heartbeat():
+            await websocket.send_json({
+                "type": "heartbeat"
+            })
+            logger.debug(f"Sent heartbeat response for session {session_id}")
+        
+        # Process sync_request messages
+        async def handle_sync_request(last_message_id, timestamp=None):
+            logger.info(f"Handling sync request for session {session_id} since message {last_message_id}")
+            
+            # Get app name for this session
+            app_name = runner.runner.app_name if hasattr(runner, 'runner') and hasattr(runner.runner, 'app_name') else "beto"
+            
+            # Retrieve the session from ADK
+            session = runner.session_service.get_session(
+                app_name=app_name,
+                user_id=runner.user_id,
+                session_id=session_id
+            )
+            
+            if not session:
+                logger.warning(f"No session found for sync request with ID {session_id}")
+                await websocket.send_json({
+                    "type": "sync_response",
+                    "messages": []
+                })
+                return
+            
+            # Get all messages from the session
+            all_messages = get_events_from_session(session)
+            
+            # Find the index of the last known message
+            last_index = -1
+            for i, msg in enumerate(all_messages):
+                if msg.get("id") == last_message_id:
+                    last_index = i
+                    break
+            
+            # Extract messages after the last known one
+            messages = []
+            if last_index >= 0 and last_index < len(all_messages) - 1:
+                messages = all_messages[last_index + 1:]
+            
+            # Send the sync response
+            await websocket.send_json({
+                "type": "sync_response",
+                "messages": messages
+            })
+            
+            logger.info(f"Sent sync response with {len(messages)} messages for session {session_id}")
+        
+        # Process history_request messages
+        async def handle_history_request(limit=50):
+            logger.info(f"Handling history request for session {session_id}, limit={limit}")
+            
+            # Get app name for this session
+            app_name = runner.runner.app_name if hasattr(runner, 'runner') and hasattr(runner.runner, 'app_name') else "beto"
+            
+            # Retrieve the session from ADK
+            session = runner.session_service.get_session(
+                app_name=app_name,
+                user_id=runner.user_id,
+                session_id=session_id
+            )
+            
+            if not session:
+                logger.warning(f"No session found for history request with ID {session_id}")
+                await websocket.send_json({
+                    "type": "history",
+                    "messages": []
+                })
+                return
+            
+            # Get all messages from the session
+            all_messages = get_events_from_session(session)
+            
+            # Limit the number of messages if needed
+            messages = all_messages[-limit:] if limit and len(all_messages) > limit else all_messages
+            
+            # Send the history response
+            await websocket.send_json({
+                "type": "history",
+                "messages": messages
+            })
+            
+            logger.info(f"Sent history response with {len(messages)} messages for session {session_id}")
+        
         while True:
             # Wait for a message from the client
             data = await websocket.receive_json()
             
+            # Handle different message types
+            if data.get("type") == "heartbeat":
+                await handle_heartbeat()
+                continue
+            
+            elif data.get("type") == "sync_request":
+                last_message_id = data.get("lastMessageId")
+                timestamp = data.get("timestamp")
+                if last_message_id:
+                    await handle_sync_request(last_message_id, timestamp)
+                else:
+                    await manager.send_status(session_id, "error: Missing lastMessageId in sync_request")
+                continue
+            
+            elif data.get("type") == "history_request":
+                limit = data.get("limit", 50)
+                await handle_history_request(limit)
+                continue
+            
+            # Handle regular chat messages
             if "message" not in data:
                 await manager.send_status(session_id, "error: Invalid message format")
                 continue
