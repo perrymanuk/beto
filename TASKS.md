@@ -1,5 +1,32 @@
 ## 📋 Current Tasks
 
+### MCP Client Implementation Replacement with Standard SDK
+
+Based on the analysis and migration plan in `docs/implementation/mcp/library_based_clients.md`, we have replaced our custom MCP client with a standardized implementation based on the MCP Python SDK.
+
+#### Completed
+
+✅ Add MCP SDK dependencies to pyproject.toml
+✅ Create test script to validate the new MCP client with Crawl4AI
+✅ Identify all code dependencies on the current MCP client
+✅ Replace MCPSSEClient in client.py with the new implementation
+✅ Update mcp_core.py for tool creation logic with new client
+✅ Test with Crawl4AI servers
+✅ Update documentation with detailed implementation notes
+✅ Fix SSE connection issues for Crawl4AI servers
+✅ Implement robust event handling for asynchronous tools
+✅ Add persistent background thread for SSE connection
+
+#### To Do
+
+⏱️ Update MCPClientFactory to work better with the new client implementation
+⏱️ Update/clean up server-specific implementations (e.g., Home Assistant)
+⏱️ Update unit tests for MCP tools and utilities
+⏱️ Test with Home Assistant and other MCP servers
+⏱️ Validate proper ADK integration with all agent types
+⏱️ Update examples that use MCP tools
+⏱️ Clean up deprecated code and ensure consistent style
+
 ### Improved MCP SSE Client Implementation
 
 The MCPSSEClient implementation has been improved to fix freezing issues during application startup and provide better reliability for MCP server connections.
