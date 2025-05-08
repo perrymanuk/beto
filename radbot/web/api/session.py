@@ -62,12 +62,29 @@ class SessionRunner:
         app_name = root_agent.name if hasattr(root_agent, 'name') else "beto"
         logger.info(f"Using app_name='{app_name}' for session management")
         
-        # Create the Runner with the artifact service
+        # Get memory service from root_agent if available
+        memory_service = None
+        if hasattr(root_agent, '_memory_service'):
+            memory_service = root_agent._memory_service
+            logger.info("Using memory service from root agent")
+        elif hasattr(root_agent, 'memory_service'):
+            memory_service = root_agent.memory_service
+            logger.info("Using memory service from root agent")
+        
+        # Store memory_service in the global ToolContext class so memory tools can find it
+        if memory_service:
+            from google.adk.tools.tool_context import ToolContext
+            # Set memory_service in the ToolContext class for tools to access
+            setattr(ToolContext, "memory_service", memory_service)
+            logger.info("Set memory_service in global ToolContext class")
+            
+        # Create the Runner with artifact service and memory service
         self.runner = Runner(
             agent=root_agent,
             app_name=app_name,
             session_service=self.session_service,
-            artifact_service=self.artifact_service  # Pass artifact service to Runner
+            artifact_service=self.artifact_service,  # Pass artifact service to Runner
+            memory_service=memory_service  # Pass memory service to Runner
         )
     
     def _log_agent_tree(self):
@@ -141,6 +158,12 @@ class SessionRunner:
             logger.info(f"SESSION_ID: '{self.session_id}'")
             logger.info(f"APP_NAME: '{app_name}'")
             
+            # Set user_id in ToolContext for memory tools
+            if hasattr(self.runner, 'memory_service') and self.runner.memory_service:
+                from google.adk.tools.tool_context import ToolContext
+                setattr(ToolContext, "user_id", self.user_id)
+                logger.info(f"Set user_id '{self.user_id}' in global ToolContext")
+                
             # Run with consistent parameters
             events = list(self.runner.run(
                 user_id=self.user_id,

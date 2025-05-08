@@ -5,6 +5,7 @@ This module provides the main agent creation and configuration functionality
 for the RadBot agent system, creating the root agent with all needed tools.
 """
 
+import os
 import logging
 from typing import Optional, Any, List
 from datetime import date
@@ -24,6 +25,11 @@ from radbot.agent.agent_tools_setup import (
     code_execution_agent,
     scout_agent
 )
+
+# Import memory tools and services
+from radbot.memory.qdrant_memory import QdrantMemoryService
+from radbot.tools.memory import search_past_conversations, store_important_information
+from radbot.config.config_loader import config_loader
 
 # Get the instruction from the config manager
 instruction = config_manager.get_instruction("main_agent")
@@ -46,6 +52,60 @@ You have access to specialized agents through these tools:
 Use these tools when you need specialized capabilities.
 """
 
+# Initialize memory service from vector_db configuration
+memory_service = None
+try:
+    # Get Qdrant settings from config_loader
+    vector_db_config = config_loader.get_config().get("vector_db", {})
+    url = vector_db_config.get("url")
+    api_key = vector_db_config.get("api_key")
+    host = vector_db_config.get("host", "localhost")
+    port = vector_db_config.get("port", 6333)
+    collection = vector_db_config.get("collection", "radbot_memories")
+    
+    # Fallback to environment variables for backward compatibility
+    if not url:
+        url = os.getenv("QDRANT_URL")
+    if not api_key:
+        api_key = os.getenv("QDRANT_API_KEY")
+    if not host or host == "localhost":
+        host = os.getenv("QDRANT_HOST", host)
+    if port == 6333:
+        port = os.getenv("QDRANT_PORT", port)
+    if collection == "radbot_memories":
+        collection = os.getenv("QDRANT_COLLECTION", collection)
+    
+    # Log memory service configuration
+    logger.info(f"Initializing QdrantMemoryService with host={host}, port={port}, collection={collection}")
+    if url:
+        logger.info(f"Using Qdrant URL: {url}")
+    
+    # Create memory service
+    memory_service = QdrantMemoryService(
+        collection_name=collection,
+        host=host,
+        port=int(port) if isinstance(port, str) else port,
+        url=url,
+        api_key=api_key
+    )
+    logger.info(f"Successfully initialized QdrantMemoryService with collection '{collection}'")
+    
+    # Add memory tools to the tools list if they're not already included
+    memory_tools = [search_past_conversations, store_important_information]
+    tool_names = [tool.__name__ if hasattr(tool, '__name__') else tool.name if hasattr(tool, 'name') else None for tool in tools]
+    
+    for memory_tool in memory_tools:
+        tool_name = memory_tool.__name__ if hasattr(memory_tool, '__name__') else None
+        if tool_name and tool_name not in tool_names:
+            tools.append(memory_tool)
+            logger.info(f"Added memory tool: {tool_name}")
+    
+except Exception as e:
+    logger.error(f"Failed to initialize QdrantMemoryService: {str(e)}")
+    logger.warning("Memory service will not be available for this session")
+    import traceback
+    logger.debug(f"Memory service initialization traceback: {traceback.format_exc()}")
+
 # Get the model name from config
 model_name = config_manager.get_main_model()
 logger.info(f"Using model: {model_name}")
@@ -67,6 +127,12 @@ root_agent = Agent(
     before_agent_callback=setup_before_agent_call,
     generate_content_config=types.GenerateContentConfig(temperature=0.2),
 )
+
+# Store memory_service as an attribute of the agent after creation
+# This attribute will be used by the Runner in web/api/session.py
+if memory_service:
+    root_agent._memory_service = memory_service
+    logger.info("Added memory_service to root_agent as _memory_service attribute")
 
 # Log agent creation
 logger.info(f"Created root agent 'beto' with {len(tools)} tools and {len(root_agent.sub_agents)} sub-agents")

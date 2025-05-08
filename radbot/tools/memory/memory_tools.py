@@ -85,17 +85,24 @@ def search_past_conversations(
                 else:
                     logger.info("Found memory_service in global ToolContext")
         
-        # Get user ID from the tool context
+        # Get user ID - first look in tool_context
         user_id = getattr(tool_context, "user_id", None)
-        if not user_id:
-            # Try getting it from the session
+        
+        # If not found in tool_context, try getting from session
+        if not user_id and hasattr(tool_context, "session"):
             session = getattr(tool_context, "session", None)
-            if session:
-                user_id = getattr(session, "user_id", None)
-            
-            if not user_id:
+            if session and hasattr(session, "user_id"):
+                user_id = session.user_id
+        
+        # If we still don't have a user_id, check if it's in global ToolContext
+        if not user_id:
+            global_user_id = getattr(ToolContext, "user_id", None)
+            if global_user_id:
+                user_id = global_user_id
+                logger.info(f"Using user_id '{user_id}' from global ToolContext")
+            else:
                 # In web UI context, use a default user ID for testing
-                logger.warning("No user ID found in tool context, using default 'web_user'")
+                logger.warning("No user ID found in any context, using default 'web_user'")
                 user_id = "web_user"
         
         # Create filter conditions
@@ -287,17 +294,24 @@ def store_important_information(
                 else:
                     logger.info("Found memory_service in global ToolContext")
         
-        # Get user ID
+        # Get user ID - first look in tool_context
         user_id = getattr(tool_context, "user_id", None)
-        if not user_id:
-            # Try getting it from the session
+        
+        # If not found in tool_context, try getting from session
+        if not user_id and hasattr(tool_context, "session"):
             session = getattr(tool_context, "session", None)
-            if session:
-                user_id = getattr(session, "user_id", None)
-            
-            if not user_id:
+            if session and hasattr(session, "user_id"):
+                user_id = session.user_id
+        
+        # If we still don't have a user_id, check if it's in global ToolContext
+        if not user_id:
+            global_user_id = getattr(ToolContext, "user_id", None)
+            if global_user_id:
+                user_id = global_user_id
+                logger.info(f"Using user_id '{user_id}' from global ToolContext")
+            else:
                 # In web UI context, use a default user ID for testing
-                logger.warning("No user ID found in tool context, using default 'web_user'")
+                logger.warning("No user ID found in any context, using default 'web_user'")
                 user_id = "web_user"
         
         # Create metadata if not provided

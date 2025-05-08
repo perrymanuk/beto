@@ -56,9 +56,10 @@ export function initChat() {
     // Add chat event listeners
     chatInput.addEventListener('keydown', handleInputKeydown);
     
-    // Auto-resize textarea as user types
+    // Auto-resize textarea as user types and check for memory indicator
     chatInput.addEventListener('input', function(event) {
         resizeTextarea();
+        updateMemoryIndicator();
     });
     
     // Set initial compact height
@@ -557,6 +558,41 @@ export function resizeTextarea() {
     newHeight = Math.max(newHeight, 30);
     
     chatInput.style.height = newHeight + 'px';
+    
+    // Check for # prefix to show memory indicator
+    updateMemoryIndicator();
+}
+
+// Update visual indicator for memory mode (# prefix)
+function updateMemoryIndicator() {
+    if (!chatInput) return;
+    
+    const text = chatInput.value;
+    const isMemoryCommand = /^#\s/.test(text);
+    
+    if (isMemoryCommand) {
+        chatInput.classList.add('memory-mode');
+        
+        // Add or update tooltip if not present
+        let tooltip = document.getElementById('memory-tooltip');
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.id = 'memory-tooltip';
+            tooltip.className = 'memory-tooltip';
+            tooltip.textContent = 'This will be saved to memory';
+            
+            // Insert tooltip after input
+            chatInput.parentNode.insertBefore(tooltip, chatInput.nextSibling);
+        }
+    } else {
+        chatInput.classList.remove('memory-mode');
+        
+        // Remove tooltip if present
+        const tooltip = document.getElementById('memory-tooltip');
+        if (tooltip) {
+            tooltip.remove();
+        }
+    }
 }
 
 // Scroll chat to bottom
