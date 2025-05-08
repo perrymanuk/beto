@@ -73,8 +73,7 @@ export function addMessage(role, content, agentName) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     
-    // Convert emoji shortcodes to actual emojis
-    content = window.emojiUtils.convertEmoji(content);
+    // Note: Emoji conversion now happens right before markdown rendering
     
     // Set custom prompt for assistant messages based on current agent
     if (role === 'assistant') {
@@ -89,7 +88,10 @@ export function addMessage(role, content, agentName) {
         messageDiv.dataset.agent = agent.toUpperCase();
     }
     
-    // Use marked.js to render markdown with compact options
+    // First convert emoji shortcodes to Unicode emojis
+    content = window.emojiUtils.convertEmoji(content);
+    
+    // Then use marked.js to render markdown with compact options
     if (typeof marked !== 'undefined') {
         // Process content to reduce blank lines for compactness
         content = content.replace(/\n\s*\n/g, '\n');
@@ -210,18 +212,18 @@ export function sendMessage() {
     // Convert emoji shortcodes to unicode emojis for display, but send original text to server
     const displayMessage = window.emojiUtils.convertEmoji(message);
     
+    // Add user message to UI
+    addMessage('user', displayMessage);
+    
+    // Clear input immediately after adding the message to UI
+    chatInput.value = '';
+    resizeTextarea();
+    
     if (window.socket && window.socket.socketConnected) {
         // Send via WebSocket
         window.socket.send(JSON.stringify({
             message: message
         }));
-        
-        // Add user message to UI
-        addMessage('user', displayMessage);
-        
-        // Clear input
-        chatInput.value = '';
-        resizeTextarea();
         
         // Set status to indicate processing
         window.statusUtils.setStatus('thinking');
@@ -286,8 +288,8 @@ async function resetConversation() {
 async function sendMessageREST(message, displayMessage) {
     window.statusUtils.setStatus('thinking');
     
-    // Add user message to UI (use displayMessage if provided, otherwise use original message)
-    addMessage('user', displayMessage || message);
+    // Note: User message is already added to UI by sendMessage function
+    // and input is already cleared before this function is called
     
     try {
         const formData = new FormData();
@@ -307,10 +309,6 @@ async function sendMessageREST(message, displayMessage) {
         
         // Add assistant message to UI
         addMessage('assistant', data.response);
-        
-        // Clear input
-        chatInput.value = '';
-        resizeTextarea();
         
         window.statusUtils.setStatus('ready');
     } catch (error) {

@@ -97,21 +97,28 @@ export function initEmoji() {
 
 // Convert emoji shortcodes to emoji characters
 export function convertEmoji(text) {
+    if (!text) return text;
+    
     if (typeof joypixels !== 'undefined') {
-        // Use joypixels library if available
-        return joypixels.shortnameToUnicode(text);
-    } else {
-        // Fallback with basic emoji mappings
-        const emojiMap = {};
-        commonEmojis.forEach(item => {
-            emojiMap[item.shortcode] = item.emoji;
-        });
-        
-        // Replace shortcodes with emojis
-        return text.replace(/:[a-z0-9_+-]+:/g, match => {
-            return emojiMap[match] || match;
-        });
+        try {
+            // Use joypixels library if available - this library handles more emoji codes
+            return joypixels.shortnameToUnicode(text);
+        } catch (error) {
+            console.warn("Error using joypixels to convert emoji:", error);
+            // Fall back to manual conversion
+        }
     }
+    
+    // Fallback with basic emoji mappings
+    const emojiMap = {};
+    commonEmojis.forEach(item => {
+        emojiMap[item.shortcode] = item.emoji;
+    });
+    
+    // Replace shortcodes with emojis
+    return text.replace(/:[a-z0-9_+-]+:/g, match => {
+        return emojiMap[match] || match;
+    });
 }
 
 // Handle emoji autocomplete
