@@ -115,15 +115,51 @@ export function addMessage(role, content, agentName) {
         // Process content to reduce blank lines for compactness
         content = content.replace(/\n\s*\n/g, '\n');
         
-        // Check if the content already contains HTML with data-content-type
-        // (which means it was processed by the backend)
+        // Important: Check if the content already contains HTML with our special content-type elements.
+        // If so, we need to handle them specially to prevent marked from modifying them
         const containsContentTypeElements = /<pre data-content-type=/i.test(content);
         
-        if (!containsContentTypeElements) {
-            // If the backend didn't process it, handle JSON content in code blocks
+        if (containsContentTypeElements) {
+            // Extract and preserve typed content blocks before markdown processing
+            const preservedBlocks = [];
+            const placeholders = [];
+            
+            // Extract content-type elements
+            const contentTypeRegex = /<pre data-content-type=["']([^"']+)["'][^>]*>([\s\S]*?)<\/pre>/gi;
+            let match;
+            let index = 0;
+            
+            // Use regex to find all content-typed blocks and replace with placeholders
+            let modifiedContent = content;
+            while ((match = contentTypeRegex.exec(content)) !== null) {
+                // Create a unique placeholder
+                const placeholder = `__CONTENT_TYPE_PLACEHOLDER_${index}__`;
+                placeholders.push(placeholder);
+                
+                // Save the original content
+                preservedBlocks.push(match[0]);
+                
+                // Replace with placeholder
+                modifiedContent = modifiedContent.replace(match[0], placeholder);
+                index++;
+            }
+            
+            // Process the content with placeholders using marked
+            const parsedContent = marked.parse(modifiedContent);
+            
+            // Restore preserved blocks
+            let finalContent = parsedContent;
+            for (let i = 0; i < placeholders.length; i++) {
+                finalContent = finalContent.replace(placeholders[i], preservedBlocks[i]);
+            }
+            
+            // Set the final content
+            contentDiv.innerHTML = finalContent;
+        } else {
+            // No special content blocks - now check for JSON code blocks
             const jsonCodeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/g;
             content = content.replace(jsonCodeBlockRegex, function(match, jsonContent) {
-                // For regular JSON content (backend handles special responses now)
+                // For regular JSON content
                 if (jsonContent.trim().startsWith('{') || jsonContent.trim().startsWith('[')) {
                     try {
                         // Handle escaped newlines by replacing them with actual newlines
@@ -134,10 +170,19 @@ export function addMessage(role, content, agentName) {
                         
                         // Try to parse the JSON
                         const jsonObj = JSON.parse(processedContent);
-                        const formattedJson = JSON.stringify(jsonObj, null, 2);
                         
-                        // Return with data-content-type for web standards approach
-                        return `<pre data-content-type="json-formatted" class="content-json-formatted">${formattedJson}</pre>`;
+                        // Check if this is a special response type
+                        const jsonString = JSON.stringify(jsonObj);
+                        if (jsonString.includes('call_search_agent_response') || 
+                            jsonString.includes('call_web_search_response') || 
+                            jsonString.includes('function_call_response')) {
+                            // This is a special response - preserve original formatting 
+                            return `<pre data-content-type="json-raw" class="content-json-raw">${processedContent}</pre>`;
+                        } else {
+                            // Regular JSON - format nicely 
+                            const formattedJson = JSON.stringify(jsonObj, null, 2);
+                            return `<pre data-content-type="json-formatted" class="content-json-formatted">${formattedJson}</pre>`;
+                        }
                     } catch (e) {
                         console.warn('Error parsing potential JSON in code block:', e);
                         // If it looks like JSON but parsing failed, still add class for highlighting
@@ -154,36 +199,40 @@ export function addMessage(role, content, agentName) {
                 }
                 return match; // Not JSON, return unchanged
             });
+            
+            // Process the content with marked
+            contentDiv.innerHTML = marked.parse(content);
         }
-        
-        // Parse the content with marked (which handles the markdown parts)
-        contentDiv.innerHTML = marked.parse(content);
         
         // Find all content-type elements that need highlighting
         const jsonElements = contentDiv.querySelectorAll('pre[data-content-type^="json-"]');
         
         // Apply Prism.js highlighting to JSON content if available
-        if (typeof Prism !== 'undefined' && Prism.languages.json) {
+        if (typeof Prism !== 'undefined' && Prism.languages.json && jsonElements.length > 0) {
             jsonElements.forEach(element => {
                 try {
                     // Get the content type
                     const contentType = element.getAttribute('data-content-type');
                     
-                    // For formatted JSON, ensure it's properly highlighted
-                    if (contentType === 'json-formatted') {
-                        // Apply Prism highlighting
-                        const code = element.textContent;
-                        element.innerHTML = Prism.highlight(code, Prism.languages.json, 'json');
-                    }
-                    // For raw JSON, apply minimal highlighting but preserve format exactly
-                    else if (contentType === 'json-raw') {
-                        // Add a language label
-                        if (!element.querySelector('.json-language-label')) {
-                            const label = document.createElement('div');
-                            label.className = 'json-language-label';
-                            label.textContent = 'JSON';
-                            element.appendChild(label);
+                    // Check if content is actually JSON-like (has { or [)
+                    const elementText = element.textContent.trim();
+                    if (elementText.startsWith('{') || elementText.startsWith('[')) {
+                        // For formatted JSON, ensure it's properly highlighted
+                        if (contentType === 'json-formatted') {
+                            // Apply Prism highlighting
+                            const code = element.textContent;
+                            element.innerHTML = Prism.highlight(code, Prism.languages.json, 'json');
                         }
+                        // For raw JSON, apply minimal highlighting but preserve format exactly
+                        else if (contentType === 'json-raw') {
+                            // Do not apply Prism highlighting to raw JSON
+                            // Instead, just ensure it has the RAW indicator
+                            element.classList.add('raw-json-content');
+                        }
+                    } else {
+                        // This isn't actually JSON syntax; remove the JSON type to avoid confusion
+                        element.removeAttribute('data-content-type');
+                        element.className = '';
                     }
                 } catch (e) {
                     console.warn('Error applying syntax highlighting:', e);

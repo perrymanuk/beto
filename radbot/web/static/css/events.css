@@ -388,6 +388,8 @@
   font-size: 0.8rem;
   line-height: 1.4;
   overflow-x: visible;
+  overflow-y: auto;
+  max-height: 400px; /* Add max-height with scrolling */
   width: auto;
   padding: 0.5rem;
   margin: 0.5rem 0;
@@ -395,6 +397,22 @@
   border-radius: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-blue) var(--bg-secondary);
+}
+
+/* Webkit scrollbar styles for JSON content types */
+.event-details-content pre[data-content-type="json-raw"]::-webkit-scrollbar,
+.event-details-content pre[data-content-type="json-formatted"]::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background-color: var(--bg-secondary);
+}
+
+.event-details-content pre[data-content-type="json-raw"]::-webkit-scrollbar-thumb,
+.event-details-content pre[data-content-type="json-formatted"]::-webkit-scrollbar-thumb {
+  background-color: var(--accent-blue);
+  border-radius: 0;
 }
 
 .event-details-content pre[data-content-type="json-raw"] {
@@ -418,6 +436,7 @@
   background-color: rgba(0, 0, 0, 0.7);
   padding: 0.2rem 0.4rem;
   letter-spacing: 1px;
+  z-index: 10;
 }
 
 /* Raw JSON specifically has a different label */

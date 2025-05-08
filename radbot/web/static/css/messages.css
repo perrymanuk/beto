@@ -139,6 +139,8 @@
   font-size: 0.9rem;
   line-height: 1.4;
   overflow-x: visible;
+  overflow-y: auto;
+  max-height: 500px; /* Add max-height with scrolling */
   width: 90%;
   word-wrap: break-word;
   color: var(--text-primary);
@@ -152,6 +154,8 @@
   font-size: 0.9rem;
   line-height: 1.4;
   overflow-x: visible;
+  overflow-y: auto;
+  max-height: 500px; /* Add max-height with scrolling */
   width: 90%;
   word-wrap: break-word;
   color: var(--text-primary);
@@ -161,7 +165,8 @@
 
 /* Custom scrollbar for code blocks */
 .message-content pre::-webkit-scrollbar {
-  height: 6px;
+  width: 6px;  /* For vertical scrollbar */
+  height: 6px;  /* For horizontal scrollbar */
   background-color: rgba(0, 0, 0, 0.7);
 }
 
@@ -173,6 +178,12 @@
 
 .message-content pre::-webkit-scrollbar-thumb:hover {
   background-color: var(--accent-blue);
+}
+
+/* Firefox scrollbar styles */
+.message-content pre {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-blue) rgba(0, 0, 0, 0.7);
 }
 
 /* Language label for code blocks */
@@ -202,6 +213,7 @@
   background-color: rgba(0, 0, 0, 0.7);
   padding: 0.2rem 0.4rem;
   letter-spacing: 1px;
+  z-index: 10;
 }
 
 /* Style specific to raw JSON */
