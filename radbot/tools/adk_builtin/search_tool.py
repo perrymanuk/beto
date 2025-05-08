@@ -103,26 +103,24 @@ def create_search_agent(
                         def __init__(self):
                             pass
             
-            # Check if the agent has a config attribute already
-            if not hasattr(search_agent, "config"):
-                # For LlmAgent type in ADK 0.4.0+
-                if hasattr(search_agent, "set_config"):
-                    # Use set_config method if available
-                    config = types.GenerateContentConfig()
-                    config.tools = [types.Tool(google_search=ToolGoogleSearch())]
-                    search_agent.set_config(config)
-                    logger.info("Set Google Search config via set_config method for Vertex AI")
-                else:
-                    # Try to add config attribute directly
-                    search_agent.config = types.GenerateContentConfig()
-                    search_agent.config.tools = [types.Tool(google_search=ToolGoogleSearch())]
-                    logger.info("Added config attribute directly for Google Search with Vertex AI")
+            # In ADK 0.4.0+, we should always use set_config method
+            # The "config" attribute no longer exists directly on Agent class
+            
+            # Initialize a Google Search tool config with Vertex AI
+            google_search_config = types.GenerateContentConfig()
+            google_search_config.tools = [types.Tool(google_search=ToolGoogleSearch())]
+            
+            # Use set_config if available (ADK 0.4.0+)
+            if hasattr(search_agent, "set_config"):
+                search_agent.set_config(google_search_config)
+                logger.info("Set Google Search config via set_config method for Vertex AI")
             else:
-                # Update existing config
-                if not hasattr(search_agent.config, "tools"):
-                    search_agent.config.tools = []
-                search_agent.config.tools.append(types.Tool(google_search=ToolGoogleSearch()))
-                logger.info("Updated existing config with Google Search tool for Vertex AI")
+                # Fall back to direct attribute setting as a last resort
+                try:
+                    search_agent.config = google_search_config
+                    logger.info("Added config attribute directly for Google Search with Vertex AI")
+                except Exception as e:
+                    logger.warning(f"Unable to set Google Search config: {str(e)}")
         except Exception as e:
             logger.warning(f"Failed to configure Google Search for Vertex AI: {str(e)}")
     

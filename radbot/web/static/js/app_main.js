@@ -197,6 +197,17 @@ function init() {
     
     // Get initial agent and model information
     fetchAgentInfo();
+    
+    // Schedule periodic server sync (every 60 seconds)
+    if (window.chatPersistence && window.chatPersistence.serverSyncEnabled) {
+        setInterval(() => {
+            if (window.state && window.state.sessionId && window.navigator.onLine) {
+                console.log("Running scheduled server sync...");
+                window.chatPersistence.syncWithServer(window.state.sessionId)
+                    .catch(error => console.error("Error during server sync:", error));
+            }
+        }, 60000); // Every minute
+    }
 }
 
 // Load chat messages from local storage

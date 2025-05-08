@@ -29,6 +29,7 @@ from radbot.web.api.session import (
 from radbot.web.api.events import register_events_router
 from radbot.web.api.agent_info import register_agent_info_router
 from radbot.web.api.sessions import register_sessions_router
+from radbot.web.api.messages import register_messages_router
 
 # Set up logging
 logging.basicConfig(
@@ -48,14 +49,29 @@ app = FastAPI(
 register_events_router(app)
 register_agent_info_router(app)
 register_sessions_router(app)
+register_messages_router(app)
 app.include_router(memory_router)
 logger.info("API routers registered during app initialization")
 
-# Define a startup event to initialize MCP servers
+# Define a startup event to initialize database schema and MCP servers
 @app.on_event("startup")
-async def initialize_mcp_servers():
-    """Initialize MCP server tools on application startup."""
+async def initialize_app_startup():
+    """Initialize database schema and MCP server tools on application startup."""
     try:
+        # First initialize the chat history database schema
+        logger.info("Initializing chat history database schema...")
+        try:
+            from radbot.web.db import chat_operations
+            success = chat_operations.create_schema_if_not_exists()
+            if success:
+                logger.info("Chat history database schema initialized successfully")
+            else:
+                logger.warning("Failed to initialize chat history database schema")
+        except Exception as db_error:
+            logger.error(f"Error initializing chat history database: {str(db_error)}", exc_info=True)
+            # Continue app startup even if database initialization fails
+            
+        # Then initialize MCP servers
         logger.info("Initializing MCP servers at application startup...")
         from radbot.tools.mcp.mcp_client_factory import MCPClientFactory
         from radbot.config.config_loader import config_loader
@@ -73,7 +89,7 @@ async def initialize_mcp_servers():
         # when a new client connects, which is safer and more reliable
         
     except Exception as e:
-        logger.error(f"Failed to check MCP servers: {str(e)}", exc_info=True)
+        logger.error(f"Failed during application startup: {str(e)}", exc_info=True)
 
 # Configure CORS
 app.add_middleware(

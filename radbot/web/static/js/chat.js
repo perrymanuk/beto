@@ -317,7 +317,7 @@ export function addMessage(role, content, agentName) {
     
     if (window.state && window.state.sessionId && window.chatPersistence && !isInitialLoad) {
         try {
-            console.log(`Storing message in localStorage for session ${window.state.sessionId}`);
+            console.log(`Storing message for session ${window.state.sessionId}`);
             
             // Create a message object with a unique ID
             const messageObj = {
@@ -328,15 +328,8 @@ export function addMessage(role, content, agentName) {
                 agent: agentName || (window.state ? window.state.currentAgentName : null)
             };
             
-            // Get existing messages
-            const existingMessages = window.chatPersistence.getMessages(window.state.sessionId);
-            
-            // Add new message
-            existingMessages.push(messageObj);
-            
-            // Save updated messages
-            const saveResult = window.chatPersistence.saveMessages(window.state.sessionId, existingMessages);
-            console.log(`Message saved successfully: ${saveResult}. Total messages: ${existingMessages.length}`);
+            // Use the addMessage method to handle storage and server sync
+            window.chatPersistence.addMessage(window.state.sessionId, messageObj);
             
             // Update session preview if session manager is available
             if (window.sessionManager && role !== 'system') {

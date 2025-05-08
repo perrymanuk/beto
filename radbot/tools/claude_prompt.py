@@ -345,22 +345,16 @@ def create_claude_prompt_tool() -> FunctionTool:
         }
     }
     
-    # Create FunctionTool
+    # Create FunctionTool - use ADK 0.4.0+ style since that's what we're using
     try:
-        # Try with function_schema (ADK 0.4.0+)
         prompt_tool = FunctionTool(
             function=prompt_claude,
             function_schema=prompt_claude_schema
         )
         logger.info("Created Claude prompt tool with function_schema")
-    except TypeError:
-        try:
-            # Try with schema (older ADK)
-            prompt_tool = FunctionTool(prompt_claude, schema=prompt_claude_schema)
-            logger.info("Created Claude prompt tool with schema")
-        except Exception as e:
-            # Fallback to simple FunctionTool
-            logger.warning(f"Error creating tool with schema: {e}, using basic tool")
-            prompt_tool = FunctionTool(prompt_claude)
+    except Exception as e:
+        # Fallback to simple FunctionTool if there's an error
+        logger.warning(f"Error creating tool with function_schema: {e}, using basic tool")
+        prompt_tool = FunctionTool(function=prompt_claude)
     
     return prompt_tool
