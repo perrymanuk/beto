@@ -89,9 +89,9 @@ def _check_claude_cli_support() -> Dict[str, bool]:
         logger.warning(f"Error checking Claude CLI support: {e}, using defaults")
         return support
 
-def prompt_claude_directly(prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> Dict[str, Any]:
+def prompt_claude(prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> Dict[str, Any]:
     """
-    Send a prompt directly to Claude CLI.
+    Send a prompt to Claude CLI.
     
     Args:
         prompt: The prompt to send to Claude
@@ -169,7 +169,7 @@ def prompt_claude_directly(prompt: str, system_prompt: Optional[str] = None, tem
                     if result_content == "(no content)" or not result_content:
                         # Claude CLI returned empty content, try again without JSON
                         logger.warning("Claude CLI returned empty content in JSON mode, retrying without JSON")
-                        return prompt_claude_directly_raw(prompt, system_prompt, temperature)
+                        return prompt_claude_raw(prompt, system_prompt, temperature)
                     
                     return {
                         "success": True,
@@ -212,9 +212,9 @@ def prompt_claude_directly(prompt: str, system_prompt: Optional[str] = None, tem
             "response": ""
         }
 
-def prompt_claude_directly_raw(prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> Dict[str, Any]:
+def prompt_claude_raw(prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> Dict[str, Any]:
     """
-    Send a prompt directly to Claude CLI without JSON formatting.
+    Send a prompt to Claude CLI without JSON formatting.
     This is a fallback for when JSON mode returns empty content.
     
     Args:
@@ -303,7 +303,7 @@ def prompt_claude_directly_raw(prompt: str, system_prompt: Optional[str] = None,
 
 def create_claude_prompt_tool() -> FunctionTool:
     """
-    Create a FunctionTool for the prompt_claude_directly function.
+    Create a FunctionTool for the prompt_claude function.
     
     Returns:
         FunctionTool instance for the prompt function
@@ -311,7 +311,7 @@ def create_claude_prompt_tool() -> FunctionTool:
     # Create tool schema
     prompt_claude_schema = {
         "name": "prompt_claude",
-        "description": "Send a prompt directly to Claude CLI and receive a response",
+        "description": "Send a prompt to Claude CLI and receive a response",
         "parameters": {
             "type": "object",
             "properties": {
@@ -349,18 +349,18 @@ def create_claude_prompt_tool() -> FunctionTool:
     try:
         # Try with function_schema (ADK 0.4.0+)
         prompt_tool = FunctionTool(
-            function=prompt_claude_directly,
+            function=prompt_claude,
             function_schema=prompt_claude_schema
         )
         logger.info("Created Claude prompt tool with function_schema")
     except TypeError:
         try:
             # Try with schema (older ADK)
-            prompt_tool = FunctionTool(prompt_claude_directly, schema=prompt_claude_schema)
+            prompt_tool = FunctionTool(prompt_claude, schema=prompt_claude_schema)
             logger.info("Created Claude prompt tool with schema")
         except Exception as e:
             # Fallback to simple FunctionTool
             logger.warning(f"Error creating tool with schema: {e}, using basic tool")
-            prompt_tool = FunctionTool(prompt_claude_directly)
+            prompt_tool = FunctionTool(prompt_claude)
     
     return prompt_tool

@@ -22,20 +22,20 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 def test_claude_prompt():
-    """Test the simplified Claude CLI direct prompting functionality."""
+    """Test the simplified Claude CLI prompting functionality."""
     try:
-        # Import the direct prompting function
-        from radbot.tools.claude_prompt import prompt_claude_directly, create_claude_prompt_tool
+        # Import the prompting function
+        from radbot.tools.claude_prompt import prompt_claude, create_claude_prompt_tool
         
         # Define a simple prompt
         prompt = "What is the capital of France? Give a short answer."
         
         # Test 1: Direct function call
-        print(f"Test 1: Sending prompt to Claude CLI directly: {prompt}")
-        result = prompt_claude_directly(prompt)
+        print(f"Test 1: Sending prompt to Claude CLI: {prompt}")
+        result = prompt_claude(prompt)
         
         if result.get("success", False):
-            print("\n=== CLAUDE DIRECT RESPONSE ===")
+            print("\n=== CLAUDE RESPONSE ===")
             response = result.get("response", "")
             if isinstance(response, dict):
                 print(json.dumps(response, indent=2))

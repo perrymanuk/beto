@@ -52,17 +52,17 @@ Note that despite the MCP server configuration, this implementation does not use
 ### Direct Prompting
 
 ```python
-from radbot.tools.claude_prompt import prompt_claude_directly
+from radbot.tools.claude_prompt import prompt_claude
 
 # Basic usage
-result = prompt_claude_directly("What is the capital of France?")
+result = prompt_claude("What is the capital of France?")
 if result["success"]:
     print(f"Claude says: {result['response']}")
 else:
     print(f"Error: {result['error']}")
 
 # With optional parameters (if supported by your Claude CLI version)
-result = prompt_claude_directly(
+result = prompt_claude(
     prompt="Write a haiku about programming",
     system_prompt="You are a creative writing assistant specialized in poetry",
     temperature=0.7
