@@ -9,8 +9,7 @@ const commands = [
     { name: '/events', description: 'Toggle events panel' },
     { name: '/clear', description: 'Clear conversation history' },
     { name: '/help', description: 'Show available commands' },
-    { name: '/details', description: 'Show details for an item by ID', requiresArg: true },
-    { name: '/matrix', description: 'Control matrix background - toggle, opacity, speed', requiresArg: true }
+    { name: '/details', description: 'Show details for an item by ID', requiresArg: true }
 ];
 
 let activeCommandIndex = -1;
@@ -79,13 +78,17 @@ export function executeCommand(commandText) {
             }
             break;
             
-        case 'matrix':
-            handleMatrixCommand(args);
-            break;
-            
         default:
             window.chatModule.addMessage('system', `Unknown command: ${cmd}. Type /help for available commands.`);
     }
+    
+    // Ensure chat input retains focus after command execution
+    setTimeout(() => {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }, 0);
 }
 
 // Show help message
@@ -151,61 +154,6 @@ function showItemDetails(itemId) {
     
     // If not found
     window.chatModule.addMessage('system', `No item found with ID: ${itemId}`);
-}
-
-// Handle matrix background commands
-function handleMatrixCommand(args) {
-    if (!args) {
-        window.chatModule.addMessage('system', 'Matrix background toggled');
-        document.dispatchEvent(new CustomEvent('matrix:toggle'));
-        return;
-    }
-    
-    const parts = args.split(' ');
-    const subCmd = parts[0].toLowerCase();
-    const value = parts[1];
-    
-    switch (subCmd) {
-        case 'opacity':
-            if (!value) {
-                window.chatModule.addMessage('system', 'Please provide an opacity value between 0 and 1. Example: /matrix opacity 0.3');
-                return;
-            }
-            
-            const opacity = parseFloat(value);
-            if (isNaN(opacity) || opacity < 0 || opacity > 1) {
-                window.chatModule.addMessage('system', 'Opacity must be a number between 0 and 1');
-                return;
-            }
-            
-            document.dispatchEvent(new CustomEvent('matrix:opacity', { detail: { opacity } }));
-            window.chatModule.addMessage('system', `Matrix opacity set to ${opacity}`);
-            break;
-            
-        case 'speed':
-            if (!value) {
-                window.chatModule.addMessage('system', 'Please provide a speed value between 0.1 and 5. Example: /matrix speed 1.5');
-                return;
-            }
-            
-            const speed = parseFloat(value);
-            if (isNaN(speed) || speed < 0.1 || speed > 5) {
-                window.chatModule.addMessage('system', 'Speed must be a number between 0.1 and 5');
-                return;
-            }
-            
-            document.dispatchEvent(new CustomEvent('matrix:speed', { detail: { speed } }));
-            window.chatModule.addMessage('system', `Matrix speed set to ${speed}`);
-            break;
-            
-        case 'toggle':
-            document.dispatchEvent(new CustomEvent('matrix:toggle'));
-            window.chatModule.addMessage('system', 'Matrix background toggled');
-            break;
-            
-        default:
-            window.chatModule.addMessage('system', 'Unknown matrix command. Available: opacity, speed, toggle');
-    }
 }
 
 // Handle command autocomplete
