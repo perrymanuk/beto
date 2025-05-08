@@ -79,10 +79,17 @@ class MCPClientFactory:
                 if not command:
                     raise MCPClientError(f"No command specified for stdio transport in server {server_id}")
                 
-                # Import the stdio client
-                from radbot.tools.mcp.mcp_stdio_client import MCPStdioClient
-                client_class = MCPStdioClient
-                logger.info(f"Using MCP stdio client for server: {server_id}")
+                # Use direct Claude CLI client instead of stdio client
+                try:
+                    # First try to import our direct implementation
+                    from radbot.tools.mcp.direct_claude_cli import DirectClaudeCLIClient
+                    client_class = DirectClaudeCLIClient
+                    logger.info(f"Using DirectClaudeCLIClient for server: {server_id}")
+                except ImportError:
+                    # Fall back to the stdio client
+                    from radbot.tools.mcp.mcp_stdio_client import MCPStdioClient
+                    client_class = MCPStdioClient
+                    logger.warning(f"DirectClaudeCLIClient not available, falling back to MCPStdioClient for server: {server_id}")
                 
                 # Prepare client initialization arguments for stdio
                 client_args = {

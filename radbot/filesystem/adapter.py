@@ -18,16 +18,32 @@ logger = logging.getLogger(__name__)
 
 def get_filesystem_config() -> tuple[str, bool, bool]:
     """
-    Get the filesystem configuration from environment variables.
+    Get the filesystem configuration from YAML config.
     
-    Compatible with previous MCP fileserver environment variable names.
+    Reads filesystem configuration directly from the YAML config file.
 
     Returns:
         Tuple of (root_dir, allow_write, allow_delete)
     """
-    root_dir = os.environ.get("MCP_FS_ROOT_DIR", os.path.expanduser("~"))
-    allow_write = os.environ.get("MCP_FS_ALLOW_WRITE", "false").lower() == "true"
-    allow_delete = os.environ.get("MCP_FS_ALLOW_DELETE", "false").lower() == "true"
+    try:
+        from radbot.config.config_loader import config_loader
+        fs_config = config_loader.get_integrations_config().get("filesystem", {})
+        
+        # Read settings from config
+        root_dir = fs_config.get("root_dir", os.path.expanduser("~"))
+        allow_write = fs_config.get("allow_write", False)
+        allow_delete = fs_config.get("allow_delete", False)
+        
+        # Set environment variables for compatibility with components that might still use them
+        os.environ["MCP_FS_ROOT_DIR"] = root_dir
+        os.environ["MCP_FS_ALLOW_WRITE"] = "true" if allow_write else "false"
+        os.environ["MCP_FS_ALLOW_DELETE"] = "true" if allow_delete else "false"
+    except Exception as e:
+        # If config loading fails, use reasonable defaults
+        logger.error(f"Error loading filesystem config: {e}")
+        root_dir = os.path.expanduser("~")
+        allow_write = False
+        allow_delete = False
     
     logger.info(
         f"Filesystem Config: root_dir={root_dir}, allow_write={allow_write}, allow_delete={allow_delete}"

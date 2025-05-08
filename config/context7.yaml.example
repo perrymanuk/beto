@@ -1,0 +1,23 @@
+# Context7 MCP Server Configuration Example
+# Add this to your config.yaml to enable the Context7 MCP integration
+
+integrations:
+  mcp:
+    enabled: true
+    servers:
+      # Other MCP servers may be listed here...
+      
+      # Context7 MCP server configuration
+      - id: context7
+        enabled: true
+        transport: stdio  # Context7 uses stdio transport
+        command: npx
+        args:
+          - -y
+          - "@upstash/context7-mcp@latest"
+        working_directory: /path/to/working/dir  # Optional: Directory where Context7 will operate
+        timeout: 30  # Optional: Timeout in seconds (default: 30)
+        # Optional environment variables
+        env:
+          # Controls minimum number of tokens for documentation retrieval
+          DEFAULT_MINIMUM_TOKENS: "10000"

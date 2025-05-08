@@ -53,7 +53,11 @@ from radbot.agent.agent_initializer import (
     turn_off_ha_entity,
     toggle_ha_entity,
     search_ha_entities,
-    get_ha_client
+    get_ha_client,
+    
+    # Import dynamic MCP tools loader
+    load_dynamic_mcp_tools,
+    load_specific_mcp_tools
 )
 
 def setup_before_agent_call(callback_context: CallbackContext):
@@ -164,6 +168,15 @@ try:
     logger.info("Crawl4AI direct integration is deprecated - use MCP server instead")
 except Exception as e:
     logger.warning(f"Failed to create Crawl4AI tools: {e}")
+
+# Add dynamic MCP tools from all enabled servers
+try:
+    mcp_tools = load_dynamic_mcp_tools()
+    if mcp_tools:
+        tools.extend(mcp_tools)
+        logger.info(f"Added {len(mcp_tools)} tools from enabled MCP servers")
+except Exception as e:
+    logger.warning(f"Failed to load dynamic MCP tools: {e}")
 
 # Add Shell Command Execution tool
 try:

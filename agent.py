@@ -31,7 +31,7 @@ from radbot.agent.agent_core import (
 
 # Log startup
 logger.info("ROOT agent.py loaded - this is the main implementation loaded by ADK web")
-print(f"SPECIAL DEBUG: agent.py loaded with MCP_FS_ROOT_DIR={os.environ.get('MCP_FS_ROOT_DIR', 'Not set')}")
+# Removed debug message for MCP_FS_ROOT_DIR
 
 # Export create_agent function for ADK web interface
 __all__ = ["create_agent"]

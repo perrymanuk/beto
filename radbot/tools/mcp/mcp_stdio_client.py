@@ -255,32 +255,77 @@ class MCPStdioClient:
             # Create the session using the stdio client from the MCP SDK
             # We need to create StdioServerParameters for existing stdin/stdout
             try:
-                # Import StdioServerParameters
-                from mcp import StdioServerParameters
+                # We'll use a direct asyncio-based approach that doesn't depend on external libraries
+                logger.info("Using direct asyncio-based MCP client")
                 
-                # Create parameters for the stdio client
-                # Note: We're not using the parameters to launch a new process
-                # Instead, we'll use our own process that's already running
-                params = StdioServerParameters(
-                    command=self.command,  # This value won't be used directly
-                    args=self.args or []   # This value won't be used directly
-                )
+                # Create a direct MCP client using asyncio
+                class DirectMCPClient:
+                    """Direct implementation of MCP client using asyncio and subprocess."""
+                    
+                    def __init__(self, process):
+                        self.process = process
+                        self.initialized = False
+                        self.message_id = 0
+                        
+                    async def send_request(self, method, params=None):
+                        """Send a JSON-RPC request and get a response using subprocess pipes directly."""
+                        self.message_id += 1
+                        request = {
+                            "jsonrpc": "2.0",
+                            "id": self.message_id,
+                            "method": method,
+                            "params": params or {}
+                        }
+                        
+                        # Convert request to JSON
+                        request_json = json.dumps(request) + "\n"
+                        
+                        # Send to stdin
+                        self.process.stdin.write(request_json.encode("utf-8"))
+                        self.process.stdin.flush()
+                        
+                        # Read response from stdout
+                        response_line = self.process.stdout.readline().decode("utf-8").strip()
+                        
+                        if not response_line:
+                            raise Exception(f"No response received for method {method}")
+                            
+                        # Parse the response
+                        try:
+                            response = json.loads(response_line)
+                            if "error" in response:
+                                error_info = response.get("error", {})
+                                raise Exception(f"Error in MCP response: {error_info}")
+                            return response.get("result")
+                        except json.JSONDecodeError as e:
+                            raise Exception(f"Invalid JSON response: {str(e)}")
+                            
+                    async def initialize(self, protocol_version, capabilities, client_info):
+                        """Initialize the MCP session."""
+                        params = {
+                            "protocolVersion": protocol_version,
+                            "capabilities": capabilities,
+                            "clientInfo": client_info
+                        }
+                        
+                        result = await self.send_request("initialize", params)
+                        self.initialized = True
+                        return result
+                        
+                    async def list_tools(self):
+                        """List available tools."""
+                        return await self.send_request("tools/list", {})
+                        
+                    async def call_tool(self, tool_name, args):
+                        """Call a tool on the server."""
+                        params = {
+                            "name": tool_name,
+                            "inputs": args
+                        }
+                        return await self.send_request("tools/call", params)
                 
-                # Create a client using the SDK's stdio_client with our process's std streams
-                from anyio import wrap_file
-                import json_rpc
-                from mcp._json_rpc import JsonRpcBase
-                
-                # Wrap the file objects for use with async I/O
-                stdin_stream = wrap_file(self.process.stdin, mode="wb")
-                stdout_stream = wrap_file(self.process.stdout, mode="rb")
-                
-                # Create JSON-RPC client for communication
-                json_rpc_client = JsonRpcBase(stdin_stream, stdout_stream)
-                
-                # Create a client session directly
-                from mcp import ClientSession
-                self.session = ClientSession(json_rpc_client)
+                # Create and use our direct MCP client
+                self.session = DirectMCPClient(self.process)
                 
                 # Configure client capabilities
                 capabilities = {

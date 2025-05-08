@@ -27,15 +27,6 @@ from google.adk.agents.callback_context import CallbackContext
 from google.genai import types
 from radbot.config import config_manager
 
-# Import calendar tools
-from radbot.tools.calendar.calendar_tools import (
-    list_calendar_events_tool,
-    create_calendar_event_tool,
-    update_calendar_event_tool,
-    delete_calendar_event_tool,
-    check_calendar_availability_tool
-)
-
 # Log basic info
 logger.info(f"Config manager loaded. Model config: {config_manager.model_config}")
 logger.info(f"Main model from config: '{config_manager.get_main_model()}'")
@@ -49,6 +40,15 @@ from radbot.tools.mcp import create_fileserver_toolset
 from radbot.tools.mcp.mcp_crawl4ai_client import create_crawl4ai_toolset
 from radbot.tools.shell import get_shell_tool
 from radbot.tools.todo import ALL_TOOLS, init_database
+
+# Import calendar tools
+from radbot.tools.calendar.calendar_tools import (
+    list_calendar_events_tool,
+    create_calendar_event_tool,
+    update_calendar_event_tool,
+    delete_calendar_event_tool,
+    check_calendar_availability_tool
+)
 
 # Import Home Assistant tools
 from radbot.tools.homeassistant import (
@@ -73,6 +73,9 @@ from radbot.tools.agent_tools import (
     call_scout_agent
 )
 
+# Import dynamic MCP tools loader
+from radbot.tools.mcp.dynamic_tools_loader import load_dynamic_mcp_tools, load_specific_mcp_tools
+
 # Log startup
 logger.info("agent_initializer.py loaded - initialization module for root agent.py")
-print(f"SPECIAL DEBUG: agent_initializer.py loaded with MCP_FS_ROOT_DIR={os.environ.get('MCP_FS_ROOT_DIR', 'Not set')}")
+# Removed debug message for MCP_FS_ROOT_DIR

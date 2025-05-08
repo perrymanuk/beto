@@ -1,5 +1,24 @@
 ## 📋 Current Tasks
 
+### MCP-Proxy Integration
+
+#### Completed
+
+✅ Research MCP-Proxy architecture and endpoints from documentation
+✅ Design integration approach for MCP-Proxy similar to crawl4ai and claude-cli
+✅ Create configuration template for MCP-Proxy integration in config.yaml
+✅ Determine that existing MCPSSEClient supports the proxy connection pattern without modifications
+✅ Verify that MCPClientFactory can properly handle these connections
+✅ Create comprehensive documentation in docs/implementation/integrations/mcp_proxy.md
+✅ Create test script to verify connections to all proxy endpoints
+✅ Update config.yaml with all MCP-Proxy endpoints
+
+#### To Do
+
+⏱️ Test integration with each proxy endpoint (firecrawl-proxy, tavily-proxy, context7-proxy, webresearch-proxy, nomad-proxy)
+⏱️ Create example agent that uses multiple proxy tools together
+⏱️ Document common use cases and examples for the proxy integration
+
 ### Web UI Enhancements
 
 #### Completed
