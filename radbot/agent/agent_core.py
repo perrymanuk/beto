@@ -26,6 +26,9 @@ from radbot.agent.agent_tools_setup import (
     scout_agent
 )
 
+# Import specialized agents factory
+from radbot.agent.specialized_agent_factory import create_specialized_agents
+
 # Import memory tools and services
 from radbot.memory.qdrant_memory import QdrantMemoryService
 from radbot.tools.memory import search_past_conversations, store_important_information
@@ -34,23 +37,24 @@ from radbot.config.config_loader import config_loader
 # Get the instruction from the config manager
 instruction = config_manager.get_instruction("main_agent")
 
-# Add AgentTool instructions
-instruction += """
-## Specialized Agent Tools
-
-You have access to specialized agents through these tools:
-
-1. `call_search_agent(query, max_results=5)` - Perform web searches using Google Search.
-   Example: call_search_agent(query="latest news on quantum computing")
-
-2. `call_code_execution_agent(code, description="")` - Execute Python code.
-   Example: call_code_execution_agent(code="print('Hello world')", description="Simple test")
-
-3. `call_scout_agent(research_topic)` - Research a topic using a specialized agent.
-   Example: call_scout_agent(research_topic="environmental impact of electric vehicles")
-
-Use these tools when you need specialized capabilities.
-"""
+# The specialized agent tools are now included directly in the main_agent.md file
+# to reduce duplication and token usage, so we don't need to add them here
+# instruction += """
+# ## Specialized Agent Tools
+# 
+# You have access to specialized agents through these tools:
+# 
+# 1. `call_search_agent(query, max_results=5)` - Perform web searches using Google Search.
+#    Example: call_search_agent(query="latest news on quantum computing")
+# 
+# 2. `call_code_execution_agent(code, description="")` - Execute Python code.
+#    Example: call_code_execution_agent(code="print('Hello world')", description="Simple test")
+# 
+# 3. `call_scout_agent(research_topic)` - Research a topic using a specialized agent.
+#    Example: call_scout_agent(research_topic="environmental impact of electric vehicles")
+# 
+# Use these tools when you need specialized capabilities.
+# """
 
 # Initialize memory service from vector_db configuration
 memory_service = None
@@ -118,15 +122,16 @@ root_agent = Agent(
     model=model_name,
     name="beto",
     instruction=instruction,
-    global_instruction=f"""
-    You are an intelligent agent for handling various tasks.
-    Today's date: {today}
-    """,
+    global_instruction=f"""Today's date: {today}""",
     sub_agents=[search_agent, code_execution_agent, scout_agent],
     tools=tools,
     before_agent_callback=setup_before_agent_call,
     generate_content_config=types.GenerateContentConfig(temperature=0.2),
 )
+
+# Create specialized agents (including Axel)
+specialized_agents = create_specialized_agents(root_agent)
+logger.info(f"Created {len(specialized_agents)} specialized agents (including Axel)")
 
 # Store memory_service as an attribute of the agent after creation
 # This attribute will be used by the Runner in web/api/session.py

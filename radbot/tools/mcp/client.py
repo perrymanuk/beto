@@ -43,7 +43,8 @@ class MCPSSEClient:
     
     def __init__(self, url: str, auth_token: Optional[str] = None,
                  timeout: int = 30, headers: Optional[Dict[str, str]] = None,
-                 message_endpoint: Optional[str] = None):
+                 message_endpoint: Optional[str] = None, 
+                 initialization_delay: Optional[int] = None):
         """
         Initialize the MCP SSE client.
         
@@ -54,6 +55,8 @@ class MCPSSEClient:
             headers: Optional additional headers
             message_endpoint: Optional URL for sending tool invocation messages
                             (used with SSE transport)
+            initialization_delay: Optional delay in milliseconds to wait after
+                                connecting before sending the first request
         """
         # Normalize the URL
         self.url = self._normalize_url(url)
@@ -61,6 +64,7 @@ class MCPSSEClient:
         self.timeout = timeout
         self.headers = headers or {}
         self.message_endpoint = message_endpoint
+        self.initialization_delay = initialization_delay
         
         # Add authorization header if token is provided
         if auth_token:
@@ -209,6 +213,12 @@ class MCPSSEClient:
                 client_info=client_info
             )
             logger.info("Session initialized")
+            
+            # Add delay after initialization if configured
+            if self.initialization_delay:
+                delay_seconds = self.initialization_delay / 1000.0
+                logger.info(f"Waiting {delay_seconds}s before continuing (initialization delay)")
+                await asyncio.sleep(delay_seconds)
             
             # Get list of tools
             tools_info = await self.session.list_tools()
@@ -441,6 +451,12 @@ class MCPSSEClient:
                 self.message_endpoint = self.message_endpoint or f"{base_url}/mcp/messages/?session_id={self.session_id}"
                 logger.info(f"Using fallback session ID: {self.session_id}")
                 logger.info(f"Using fallback message endpoint: {self.message_endpoint}")
+            
+            # Apply initialization delay if configured
+            if self.initialization_delay:
+                delay_seconds = self.initialization_delay / 1000.0
+                logger.info(f"Waiting {delay_seconds}s before continuing (initialization delay)")
+                time.sleep(delay_seconds)
             
             # Send initialization request to establish the session properly
             # This is crucial for MCP protocol compliance

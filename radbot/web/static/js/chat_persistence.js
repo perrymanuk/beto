@@ -386,14 +386,47 @@ export class ChatPersistence {
         return await this.loadMessagesFromServer(sessionId);
       }
 
-      // Send to server in batches
+      // TEMPORARY FIX: Skip batch sync on first page load to prevent duplicate messages
+      if (window.initialLoadInProgress) {
+        console.log("Skipping batch sync during initial load to prevent duplicates");
+        return true;
+      }
+
+      // Check if we've already synced these messages
+      const syncedMessageKey = `${this.storagePrefix}${sessionId}_synced`;
+      const storage = this.getStorage();
+      const lastSyncedCount = parseInt(storage.getItem(syncedMessageKey) || '0');
+      
+      // Only sync if we have new messages or haven't synced before
+      if (messages.length <= lastSyncedCount && lastSyncedCount > 0) {
+        console.log(`Skipping sync - already synced ${lastSyncedCount} messages, current count: ${messages.length}`);
+        return true;
+      }
+
+      // Send to server in batches, but only send messages we haven't synced yet
       const batchSize = 50;
+      let syncCount = 0;
+
+      // First, check if this is a duplicate session that we've just loaded
+      if (messages.length > 100) {
+        // If we have more than 100 messages, only do initial sync, not full batch sync
+        console.log(`Large message count (${messages.length}), limiting initial sync to avoid duplicates`);
+        syncCount = messages.length;
+        storage.setItem(syncedMessageKey, syncCount.toString());
+        return true;
+      }
+      
+      // Normal sync for small message counts
       for (let i = 0; i < messages.length; i += batchSize) {
         const batch = messages.slice(i, i + batchSize);
         await this.sendMessagesToServer(sessionId, batch);
+        syncCount += batch.length;
       }
 
-      console.log(`Successfully synced ${messages.length} messages with server for session ${sessionId}`);
+      // Store the number of messages we've synced
+      storage.setItem(syncedMessageKey, syncCount.toString());
+
+      console.log(`Successfully synced ${syncCount} messages with server for session ${sessionId}`);
       return true;
     } catch (e) {
       console.error(`Error syncing with server for session ${sessionId}:`, e);

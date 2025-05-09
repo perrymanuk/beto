@@ -125,6 +125,10 @@ class MCPClientFactory:
                 if server_config.get("message_endpoint"):
                     client_args["message_endpoint"] = server_config.get("message_endpoint")
                 
+                # Add initialization_delay if specified
+                if server_config.get("initialization_delay"):
+                    client_args["initialization_delay"] = server_config.get("initialization_delay")
+                
                 # Handle authentication
                 auth_type = server_config.get("auth_type", "token")
                 if auth_type == "token" and server_config.get("auth_token"):
@@ -139,6 +143,18 @@ class MCPClientFactory:
                 # Add custom headers if specified
                 if server_config.get("headers"):
                     client_args["headers"] = server_config.get("headers")
+                    
+                # Special handling for Crawl4AI - use our async client if this is Crawl4AI
+                if "crawl4ai" in server_id.lower() or "crawl4ai" in url.lower():
+                    try:
+                        from radbot.tools.mcp.async_crawl4ai_client import AsyncCrawl4AIClient
+                        client_class = AsyncCrawl4AIClient
+                        logger.info(f"Using AsyncCrawl4AIClient for server: {server_id}")
+
+                        # Flag to indicate this is an async client that needs special handling
+                        client_args["is_async_client"] = True
+                    except ImportError:
+                        logger.warning(f"AsyncCrawl4AIClient not available, falling back to standard client for {server_id}")
                 
             elif transport == "websocket":
                 # WebSocket transport requires a different client
@@ -166,18 +182,29 @@ class MCPClientFactory:
             if server_config.get("timeout") and "timeout" not in client_args:
                 client_args["timeout"] = server_config.get("timeout")
             
+            # Handle special flags for specific client types
+            is_async_client = client_args.pop("is_async_client", False)
+
             # Create the client
             client = client_class(**client_args)
             logger.info(f"Created MCP client for server: {server_id}")
-            
+
             # Initialize the client if it has an initialize method
             if hasattr(client, "initialize") and callable(client.initialize):
-                success = client.initialize()
-                if success:
-                    logger.info(f"Initialized MCP client for server: {server_id}")
+                if is_async_client:
+                    # For async clients, we won't call initialize() here
+                    # Instead we'll return an "uninitialized" client that will be initialized on first use
+                    logger.info(f"Async client for server {server_id} will be initialized on first use")
+                    # Mark the client as uninitialized so consumers know to initialize it
+                    client._initialized = False
                 else:
-                    logger.warning(f"Failed to initialize MCP client for server: {server_id}")
-            
+                    # For standard clients, initialize normally
+                    success = client.initialize()
+                    if success:
+                        logger.info(f"Initialized MCP client for server: {server_id}")
+                    else:
+                        logger.warning(f"Failed to initialize MCP client for server: {server_id}")
+
             return client
             
         except Exception as e:

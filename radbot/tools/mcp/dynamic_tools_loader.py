@@ -8,7 +8,10 @@ agent initialization code when adding new MCP servers.
 """
 
 import logging
+import asyncio
+import threading
 from typing import List, Dict, Any, Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from radbot.config.config_loader import config_loader
 from radbot.tools.mcp.mcp_client_factory import MCPClientFactory, MCPClientError
@@ -58,6 +61,42 @@ def load_dynamic_mcp_tools() -> List[Any]:
                     logger.warning(f"Failed to get client for MCP server {server_id}")
                     continue
                     
+                # Check if this is an async client that needs initialization
+                if hasattr(client, "check_initialization") and callable(client.check_initialization):
+                    # This is an async client that needs special handling
+                    try:
+                        # Use a background thread to run the async operation
+                        init_result = {"success": False, "error": None}
+
+                        def init_async_client():
+                            nonlocal init_result
+                            try:
+                                # This thread will have its own event loop
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                try:
+                                    # Run the initialization
+                                    success = loop.run_until_complete(client.check_initialization())
+                                    init_result["success"] = success
+                                finally:
+                                    loop.close()
+                            except Exception as e:
+                                init_result["error"] = str(e)
+
+                        # Start a separate thread for async initialization
+                        init_thread = threading.Thread(target=init_async_client)
+                        init_thread.start()
+                        init_thread.join()  # Wait for it to complete
+
+                        # Check the result
+                        if not init_result["success"]:
+                            error_msg = init_result.get("error", "Unknown error")
+                            logger.warning(f"Failed to initialize async client for MCP server {server_id}: {error_msg}")
+                            continue
+                    except Exception as e:
+                        logger.error(f"Error initializing async client for MCP server {server_id}: {e}")
+                        continue
+
                 # Get tools from this client
                 if hasattr(client, "get_tools") and callable(client.get_tools):
                     tools = client.get_tools()
@@ -111,6 +150,42 @@ def load_specific_mcp_tools(server_id: str) -> List[Any]:
             logger.warning(f"Failed to get client for MCP server {server_id}")
             return []
             
+        # Check if this is an async client that needs initialization
+        if hasattr(client, "check_initialization") and callable(client.check_initialization):
+            # This is an async client that needs special handling
+            try:
+                # Use a background thread to run the async operation
+                init_result = {"success": False, "error": None}
+
+                def init_async_client():
+                    nonlocal init_result
+                    try:
+                        # This thread will have its own event loop
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            # Run the initialization
+                            success = loop.run_until_complete(client.check_initialization())
+                            init_result["success"] = success
+                        finally:
+                            loop.close()
+                    except Exception as e:
+                        init_result["error"] = str(e)
+
+                # Start a separate thread for async initialization
+                init_thread = threading.Thread(target=init_async_client)
+                init_thread.start()
+                init_thread.join()  # Wait for it to complete
+
+                # Check the result
+                if not init_result["success"]:
+                    error_msg = init_result.get("error", "Unknown error")
+                    logger.warning(f"Failed to initialize async client for MCP server {server_id}: {error_msg}")
+                    return []
+            except Exception as e:
+                logger.error(f"Error initializing async client for MCP server {server_id}: {e}")
+                return []
+
         # Get tools from this client
         if hasattr(client, "get_tools") and callable(client.get_tools):
             tools = client.get_tools()

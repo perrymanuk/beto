@@ -19,8 +19,10 @@ import { initSessionManager } from './sessions.js';
 const state = {
     sessionId: localStorage.getItem('radbot_session_id') || null,
     currentAgentName: "BETO", // Track current agent name - use uppercase to match status bar
+    initialAgentName: "BETO", // Store initial agent to revert when needed
     currentModel: "gemini-2.5-pro", // Default model - will be updated with actual model info from events
     isDarkTheme: true, // Always use dark theme
+    agentModels: {}, // Will be populated with agent models
     // Hardcode task API settings since settings dialog is removed
     taskApiSettings: {
         endpoint: 'http://localhost:8001',
@@ -172,21 +174,31 @@ function init() {
     // Clear the flag after loading completes
     window.initialLoadInProgress = false;
     
+    // Reset agent to BETO
+    console.log('Ensuring agent is set to BETO for initialization');
+    resetAgentToBeto();
+
     // Connect to WebSocket with a small delay to allow other initializations to complete first
     console.log('Scheduling WebSocket connection with a delay');
     setTimeout(() => {
         console.log('Connecting to WebSocket now');
         const result = socketClient.initSocket(state.sessionId);
-        
+
         // Handle both promise and direct return cases
         if (result && typeof result.then === 'function') {
             result.then(connection => {
                 console.log('WebSocket connection established via promise');
                 window.socket = connection;
+
+                // Reset agent to BETO again after WebSocket connection is established
+                resetAgentToBeto();
             });
         } else {
             console.log('WebSocket connection established directly');
             window.socket = result;
+
+            // Reset agent to BETO again after WebSocket connection is established
+            resetAgentToBeto();
         }
     }, 500);
     
@@ -198,15 +210,28 @@ function init() {
     // Get initial agent and model information
     fetchAgentInfo();
     
-    // Schedule periodic server sync (every 60 seconds)
+    // Schedule periodic server sync (every 5 minutes instead of every 60 seconds)
+    // This significantly reduces the number of database operations
     if (window.chatPersistence && window.chatPersistence.serverSyncEnabled) {
+        let syncCounter = 0;
+        const MAX_SYNCS = 3; // Limit to 3 syncs per session to prevent excessive operations
+        
         setInterval(() => {
             if (window.state && window.state.sessionId && window.navigator.onLine) {
-                console.log("Running scheduled server sync...");
-                window.chatPersistence.syncWithServer(window.state.sessionId)
-                    .catch(error => console.error("Error during server sync:", error));
+                // Only sync if we haven't hit the maximum
+                if (syncCounter < MAX_SYNCS) {
+                    console.log(`Running scheduled server sync (${syncCounter + 1}/${MAX_SYNCS})...`);
+                    window.chatPersistence.syncWithServer(window.state.sessionId)
+                        .then(() => {
+                            syncCounter++; // Increment counter after successful sync
+                            console.log(`Sync completed. Remaining syncs: ${MAX_SYNCS - syncCounter}`);
+                        })
+                        .catch(error => console.error("Error during server sync:", error));
+                } else {
+                    console.log("Maximum syncs reached, skipping scheduled sync");
+                }
             }
-        }, 60000); // Every minute
+        }, 300000); // Every 5 minutes instead of every minute
     }
 }
 
@@ -1830,6 +1855,41 @@ function generateUUID() {
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
     });
+}
+
+// Reset agent to BETO to fix any agent mismatch issues
+function resetAgentToBeto() {
+    console.log(`Resetting agent from ${state.currentAgentName} to BETO`);
+
+    // Reset the state
+    state.currentAgentName = "BETO";
+
+    // Update CSS and status
+    document.documentElement.style.setProperty('--agent-name', `"${state.currentAgentName}"`);
+
+    // Direct update of status bar element
+    const agentStatus = document.getElementById('agent-status');
+    if (agentStatus) {
+        agentStatus.textContent = `AGENT: ${state.currentAgentName}`;
+
+        // Visual feedback for the change
+        agentStatus.style.color = 'var(--term-blue)';
+        setTimeout(() => {
+            agentStatus.style.color = '';
+        }, 500);
+    } else {
+        console.warn("Cannot find agent-status element in DOM");
+    }
+
+    // Update other UI elements
+    if (window.statusUtils) {
+        window.statusUtils.updateAgentStatus("BETO");
+        window.statusUtils.updateClock();
+        window.statusUtils.setStatus('ready');
+    }
+
+    // Make this function globally available
+    window.resetAgentToBeto = resetAgentToBeto;
 }
 
 // Initialize on page load

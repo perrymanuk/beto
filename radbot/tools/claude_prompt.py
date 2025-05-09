@@ -347,14 +347,20 @@ def create_claude_prompt_tool() -> FunctionTool:
     
     # Create FunctionTool - use ADK 0.4.0+ style since that's what we're using
     try:
+        # In ADK 0.4.0, FunctionTool uses 'func' parameter instead of 'function'
         prompt_tool = FunctionTool(
-            function=prompt_claude,
-            function_schema=prompt_claude_schema
+            func=prompt_claude
         )
-        logger.info("Created Claude prompt tool with function_schema")
+        logger.info("Created Claude prompt tool with proper ADK 0.4.0 parameters")
     except Exception as e:
-        # Fallback to simple FunctionTool if there's an error
-        logger.warning(f"Error creating tool with function_schema: {e}, using basic tool")
-        prompt_tool = FunctionTool(function=prompt_claude)
+        # Log the error and fallback to a basic configuration
+        logger.warning(f"Error creating tool with FunctionTool: {e}, trying fallback approach")
+        # Last resort fallback - this should not normally be needed
+        try:
+            prompt_tool = FunctionTool(prompt_claude)
+            logger.info("Created Claude prompt tool using positional parameter")
+        except Exception as e2:
+            logger.error(f"Could not create FunctionTool at all: {e2}")
+            raise
     
     return prompt_tool

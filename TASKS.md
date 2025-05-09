@@ -1,5 +1,44 @@
 ## 📋 Current Tasks
 
+### Agent Specialization and Multi-Agent System Implementation
+
+This project aims to restructure our agent architecture into specialized agents with focused toolsets, reducing token usage and improving performance. It includes the implementation of Axel, a specialized execution agent that complements Scout's research capabilities, along with a dynamic worker system for parallel task execution.
+
+#### Completed (Planning & Design Phase)
+✅ Analyze current tools and their functions
+✅ Group tools into logical categories based on functionality
+✅ Define specialized agent roles based on tool categories
+✅ Document agent specialization structure and configuration approach
+✅ Add Agentic Coder agent type for prompt_claude and similar tools
+✅ Design and document Axel agent for execution of Scout's design specs
+✅ Research and document multi-agent transfer patterns for ADK with Vertex AI constraints
+✅ Design and document Axel's dynamic worker system for parallel task execution
+✅ Organize specialized agent documentation in a shared folder (`docs/implementation/specialized_agents/`)
+
+#### Implementation Phase 1: Core Architecture
+✅ Create specialized tool modules for each agent category
+✅ Update AgentFactory to support specialized agent creation
+✅ Implement "Modified Hub-and-Spoke Pattern with Directed Transfers" architecture
+✅ Create custom transfer method for agents that need specific transfer targets
+✅ Update configuration system to support specialized agents
+✅ Create specialized instructions for each agent type
+
+#### Implementation Phase 2: Axel Agent System
+✅ Create Axel execution agent module structure
+✅ Implement Axel agent with specialized execution capabilities
+✅ Implement Axel's dynamic worker system with ParallelAgent
+✅ Implement structured communication using Pydantic models
+✅ Create domain-specific task division (code/docs/testing)
+✅ Implement worker agent creation and management
+
+#### Implementation Phase 3: Testing & Integration
+✅ Modify main agent to detect specialization needs and perform transfers
+✅ Test individual specialized agents with their specific toolsets
+✅ Test Scout-to-Axel workflow for design-to-implementation tasks
+✅ Test Axel's parallel worker system with various task types
+⏱️ Optimize token usage and performance metrics
+✅ Document final implementation details and usage examples
+
 ### MCP-Proxy Integration
 
 #### Completed
@@ -29,12 +68,24 @@
 ✅ Create API endpoint for accessing claude_templates from config
 ✅ Add documentation for `/claude` command usage
 ✅ Add default behavior to send text directly to Claude when no template is specified
+✅ Fix chat persistence message duplication issue
+✅ Implement message sync tracking to prevent database bloat
+✅ Reduce automatic sync frequency to improve performance 
+✅ Implement context size limiting to reduce LLM token usage
+✅ Implement dynamic context sizing based on message length
+✅ Optimize token usage for simple queries like "hi"
+✅ Document web chat persistence fix implementation
+✅ Optimize system prompts to reduce token usage by ~80%
+✅ Document prompt optimization implementation
+✅ Split session.py into smaller modules for better maintainability
 
 #### To Do
 
 ⏱️ Add TypeScript typing for claude_templates
 ⏱️ Add UI interface for managing/creating templates
 ⏱️ Add validation for template variables
+⏱️ Implement full two-way sync for chat messages
+⏱️ Add database cleanup for duplicate messages
 
 ### MCP Client Implementation Replacement with Standard SDK
 
@@ -114,6 +165,38 @@ radbot/tools/crawl4ai/utils.py
 After removing this directory, you may need to update examples and test files that import directly from these modules.
 
 See the migration doc at `docs/implementation/fixes/crawl4ai_mcp_migration.md` for more details.
+
+### ADK 0.4.0 FunctionTool Parameter Fix
+
+#### Completed
+
+✅ Identified the issue with FunctionTool parameter mismatch in ADK 0.4.0 
+✅ Created test script to verify correct parameters for FunctionTool
+✅ Fixed claude_prompt.py to use the correct 'func' parameter instead of 'function'
+✅ Updated web/api/session.py to handle FunctionTool name resolution more robustly
+✅ Added documentation in docs/implementation/fixes/adk_functiontool_parameter_fix.md
+✅ Tested the fix by verifying Claude prompt tool creation works correctly
+
+### Async Crawl4AI Client Fix
+
+#### Completed
+
+✅ Identified syntax error in async_crawl4ai_client.py causing high token usage
+✅ Fixed function indentation to properly nest functions within async context manager
+✅ Added proper cleanup in finally blocks for async methods
+✅ Created documentation in docs/implementation/fixes/async_crawl4ai_client_fix.md
+✅ Verified the fix corrected the "expected 'except' or 'finally' block" error
+✅ Fixed indentation issues with nested functions in the implementation
+✅ Fixed "coroutine 'AsyncCrawl4AIClient.initialize' was never awaited" warning
+✅ Implemented proper async client handling in dynamic_tools_loader.py
+✅ Added proper event loop management for async clients
+✅ Fixed "Cannot run the event loop while another loop is running" error
+✅ Implemented thread-based approach for isolating async operations
+
+#### To Do
+
+⏱️ Add test for the async client to validate correct functionality
+⏱️ Update imports in related modules to use the fixed implementation
 
 ## 📋 Previously Completed Tasks
 

@@ -139,13 +139,18 @@ class MCPStdioClient:
             logger.info(f"Starting MCP server process: {' '.join(cmd)}")
             
             # Start the process with pipes
+            # Merge the process environment with any custom environment variables
+            process_env = os.environ.copy()
+            if self.env:
+                process_env.update(self.env)
+                
             self.process = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=self.working_directory,
-                env=self.env,
+                env=process_env,
                 universal_newlines=False,  # Use binary mode for proper asyncio compatibility
                 bufsize=0  # Unbuffered
             )
@@ -389,8 +394,11 @@ class MCPStdioClient:
             tools_list = tools_info.tools
         elif isinstance(tools_info, list):
             tools_list = tools_info
+        elif isinstance(tools_info, dict) and 'tools' in tools_info:
+            tools_list = tools_info['tools']
         else:
             logger.warning(f"Unexpected tools_info format: {type(tools_info)}")
+            logger.debug(f"Tools info content: {tools_info}")
             return
             
         logger.info(f"Processing {len(tools_list)} tools from server")

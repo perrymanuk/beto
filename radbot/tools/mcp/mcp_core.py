@@ -19,18 +19,35 @@ from radbot.tools.mcp.mcp_client_factory import MCPClientFactory, MCPClientError
 
 logger = logging.getLogger(__name__)
 
-# Flag to track if we have Tavily dependencies
+# Flag to track if we have Tavily search capabilities
 HAVE_TAVILY = False
 
-# Try to import tavily and langchain tools
+# Check for either environment variable method or MCP server method
+tavily_mcp_configured = False
 try:
-    from langchain_community.tools import TavilySearchResults
-    from google.adk.tools.langchain import LangchainTool
-    HAVE_TAVILY = True
-    logger.info("Tavily and Langchain tools imported successfully")
-except ImportError:
-    logger.warning("Tavily or Langchain tools not found. Web search capabilities will be limited.")
-    logger.warning("Try installing with: uv pip install langchain-community tavily-python")
+    # First check if TAVILY_API_KEY is in the environment
+    tavily_api_key = os.environ.get("TAVILY_API_KEY")
+    if tavily_api_key:
+        logger.info("TAVILY_API_KEY found in environment, web search will be available")
+        HAVE_TAVILY = True
+        tavily_mcp_configured = True
+    else:
+        # Check for MCP Tavily server configuration
+        mcp_config = config_loader.get_config().get("integrations", {}).get("mcp", {})
+        if mcp_config:
+            servers = mcp_config.get("servers", [])
+            for server in servers:
+                if server.get("enabled", False) and ("tavily" in server.get("id", "") or "tavily" in server.get("description", "")):
+                    tavily_mcp_configured = True
+                    HAVE_TAVILY = True
+                    logger.info(f"Tavily MCP server configured: {server.get('id')}")
+                    break
+    
+    if not tavily_mcp_configured:
+        logger.warning("No Tavily MCP server configured. Add it to your config.yaml to enable web search.")
+        logger.warning("See config/mcp_proxy.yaml.example for examples and https://docs.tavily.com/documentation/mcp for setup instructions")
+except Exception as e:
+    logger.warning(f"Error checking for Tavily MCP configuration: {e}")
 
 def get_available_mcp_tools() -> List[Any]:
     """

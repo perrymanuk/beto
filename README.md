@@ -88,13 +88,14 @@ The RadBot web interface features an i3-inspired tiling layout, allowing you to 
     - Direct: `/claude What's the capital of France?`
     - Template: `/claude:pr-review PR_NUM="123" GH_REPO="https://github.com/org/repo"` (fills in variables in the template)
 
-### Specialized Agents
+### Specialized Agents Architecture
 
-RadBot can delegate complex tasks to specialized sub-agents:
+RadBot features a multi-agent architecture with specialized agents that have focused toolsets, reducing token usage and improving performance:
 
-*   **`call_search_agent`**: (See Web & Search Tools)
+*   **`call_search_agent`**: (See Web & Search Tools) - Specialized for web search tasks
 *   **`call_code_execution_agent`**: Executes Python code securely. Like having a mini-IDE built-in.
 *   **`call_scout_agent`**: Researches technical topics using various sources (web, docs, code repos). Your personal research assistant.
+*   **`call_axel_agent`**: Implements code and technical solutions based on specifications from Scout. Features a dynamic worker system that can distribute implementation tasks across specialized "thing" agents for parallel execution of code implementation, documentation, and testing.
 
 ### System Operations (Requires Caution)
 

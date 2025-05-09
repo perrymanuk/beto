@@ -54,6 +54,46 @@
               "type": "string",
               "description": "Model for todo agent",
               "default": "gemini-2.0-flash"
+            },
+            "filesystem_agent_model": {
+              "type": "string",
+              "description": "Model for filesystem specialized agent",
+              "default": "gemini-2.0-flash"
+            },
+            "web_research_agent_model": {
+              "type": "string",
+              "description": "Model for web research specialized agent",
+              "default": "gemini-2.5-pro"
+            },
+            "memory_agent_model": {
+              "type": "string",
+              "description": "Model for memory specialized agent",
+              "default": "gemini-2.0-flash"
+            },
+            "calendar_agent_model": {
+              "type": "string",
+              "description": "Model for calendar specialized agent",
+              "default": "gemini-2.0-flash"
+            },
+            "homeassistant_agent_model": {
+              "type": "string",
+              "description": "Model for home assistant specialized agent",
+              "default": "gemini-2.0-flash"
+            },
+            "agentic_coder_agent_model": {
+              "type": "string",
+              "description": "Model for agentic coder specialized agent",
+              "default": "gemini-2.5-pro"
+            },
+            "utility_agent_model": {
+              "type": "string",
+              "description": "Model for utility specialized agent",
+              "default": "gemini-2.0-flash"
+            },
+            "axel_agent_model": {
+              "type": "string",
+              "description": "Model for Axel execution specialized agent",
+              "default": "gemini-2.5-pro"
             }
           }
         },
@@ -94,6 +134,206 @@
           "type": "string",
           "description": "Directory containing JSON schemas",
           "default": "./config/schemas"
+        },
+        "specialized_agents": {
+          "type": "object",
+          "description": "Configuration for specialized agent architecture",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Master switch for specialized agent architecture",
+              "default": false
+            },
+            "filesystem": {
+              "type": "object",
+              "description": "Filesystem specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable filesystem specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for filesystem agent"
+                }
+              }
+            },
+            "web_research": {
+              "type": "object",
+              "description": "Web research specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable web research specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for web research agent"
+                }
+              }
+            },
+            "memory": {
+              "type": "object",
+              "description": "Memory specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable memory specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for memory agent"
+                }
+              }
+            },
+            "todo": {
+              "type": "object",
+              "description": "Todo specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable todo specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for todo agent"
+                }
+              }
+            },
+            "calendar": {
+              "type": "object",
+              "description": "Calendar specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable calendar specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for calendar agent"
+                }
+              }
+            },
+            "homeassistant": {
+              "type": "object",
+              "description": "Home Assistant specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable Home Assistant specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for Home Assistant agent"
+                }
+              }
+            },
+            "code_execution": {
+              "type": "object",
+              "description": "Code execution specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable code execution specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for code execution agent"
+                }
+              }
+            },
+            "agentic_coder": {
+              "type": "object",
+              "description": "Agentic coder specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable agentic coder specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for agentic coder agent"
+                }
+              }
+            },
+            "utility": {
+              "type": "object",
+              "description": "Utility specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable utility specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for utility agent"
+                }
+              }
+            },
+            "scout": {
+              "type": "object",
+              "description": "Scout specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable Scout specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for Scout agent"
+                }
+              }
+            },
+            "axel": {
+              "type": "object",
+              "description": "Axel execution specialized agent configuration",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable Axel specialized agent",
+                  "default": true
+                },
+                "model": {
+                  "type": ["string", "null"],
+                  "description": "Model override for Axel agent"
+                },
+                "dynamic_workers": {
+                  "type": "boolean",
+                  "description": "Enable/disable Axel's dynamic worker system",
+                  "default": true
+                },
+                "max_workers": {
+                  "type": "integer",
+                  "description": "Maximum number of dynamic workers",
+                  "default": 5,
+                  "minimum": 1,
+                  "maximum": 10
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -383,6 +623,13 @@
                   "working_directory": {
                     "type": ["string", "null"],
                     "description": "Working directory for the command (for stdio transport)"
+                  },
+                  "env": {
+                    "type": "object",
+                    "description": "Environment variables for the command (for stdio transport)",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   },
                   "security": {
                     "type": "object",

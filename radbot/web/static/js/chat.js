@@ -726,16 +726,73 @@ export function sendMessage() {
     chatInput.value = '';
     resizeTextarea();
     
-    if (window.socket && window.socket.socketConnected) {
-        // Send via WebSocket
-        window.socket.send(JSON.stringify({
-            message: message
-        }));
-        
-        // Set status to indicate processing
-        window.statusUtils.setStatus('thinking');
+    // Ensure WebSocket is connected or retry connecting if it's not
+    if (window.socket) {
+        if (window.socket.socketConnected) {
+            // Send via WebSocket directly
+            console.log("Sending message via connected WebSocket");
+            window.socket.send(JSON.stringify({
+                message: message
+            }));
+
+            // Set status to indicate processing
+            window.statusUtils.setStatus('thinking');
+        } else {
+            // Socket exists but not connected, retry connection and queue message
+            console.log("WebSocket not connected, forcing reconnection and queueing message");
+
+            // Force WebSocket to reconnect
+            if (window.socket.manager && typeof window.socket.manager.connect === 'function') {
+                window.socket.manager.connect();
+
+                // Queue the message to be sent when connection is established
+                window.socket.manager.pendingMessages.push(JSON.stringify({
+                    message: message
+                }));
+
+                // Set status to indicate processing
+                window.statusUtils.setStatus('connecting');
+
+                // Start a timer to monitor WebSocket connection status
+                const connectionCheckInterval = setInterval(() => {
+                    if (window.socket && window.socket.socketConnected) {
+                        console.log("WebSocket connection established, message should be sent from queue");
+                        clearInterval(connectionCheckInterval);
+
+                        // Update status to thinking once connected
+                        window.statusUtils.setStatus('thinking');
+                    }
+                }, 500);
+
+                // Timeout after 10 seconds and use REST fallback
+                setTimeout(() => {
+                    clearInterval(connectionCheckInterval);
+                    if (!(window.socket && window.socket.socketConnected)) {
+                        console.log("WebSocket connection timed out, falling back to REST API");
+                        sendMessageREST(message, displayMessage);
+                    }
+                }, 10000);
+            } else {
+                // Socket manager not available, fall back to REST
+                console.log("WebSocket manager not available, falling back to REST API");
+                sendMessageREST(message, displayMessage);
+            }
+        }
     } else {
-        // Fallback to REST API if WebSocket is not connected
+        // No socket at all, create new socket and fall back to REST for this message
+        console.log("No WebSocket instance found, falling back to REST API and creating new socket");
+
+        // Initialize socket for future messages
+        if (window.socketClient && typeof window.socketClient.initSocket === 'function') {
+            window.socketClient.initSocket(window.state.sessionId).then(socket => {
+                window.socket = socket;
+                console.log("Created new WebSocket connection for future messages");
+            }).catch(error => {
+                console.error("Failed to create WebSocket connection:", error);
+            });
+        }
+
+        // Use REST API for current message
         sendMessageREST(message, displayMessage);
     }
     

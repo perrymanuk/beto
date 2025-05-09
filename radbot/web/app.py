@@ -8,6 +8,7 @@ import logging
 import os
 import uuid
 import time
+from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Form, HTTPException, Depends
@@ -38,20 +39,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app
-app = FastAPI(
-    title="RadBot Web Interface",
-    description="Web interface for interacting with RadBot agent",
-    version="0.1.0",
-)
+def create_app():
+    """Create and configure the FastAPI application.
+    
+    Returns:
+        FastAPI: The configured FastAPI application
+    """
+    # Create FastAPI app
+    app = FastAPI(
+        title="RadBot Web Interface",
+        description="Web interface for interacting with RadBot agent",
+        version="0.1.0",
+    )
+    
+    # Register API routers immediately after app creation
+    register_events_router(app)
+    register_agent_info_router(app)
+    register_sessions_router(app)
+    register_messages_router(app)
+    app.include_router(memory_router)
+    logger.info("API routers registered during app initialization")
+    
+    return app
 
-# Register API routers immediately after app creation
-register_events_router(app)
-register_agent_info_router(app)
-register_sessions_router(app)
-register_messages_router(app)
-app.include_router(memory_router)
-logger.info("API routers registered during app initialization")
+# Create the FastAPI app instance
+app = create_app()
 
 # Define a startup event to initialize database schema and MCP servers
 @app.on_event("startup")
@@ -260,17 +272,22 @@ async def chat(
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str, session_manager: SessionManager = Depends(get_session_manager)):
     """WebSocket endpoint for real-time chat.
-    
+
     Args:
         websocket: The WebSocket connection
         session_id: The session ID
     """
     await manager.connect(websocket, session_id)
-    
+
     try:
         # Get or create a runner for this session
         runner = await get_or_create_runner_for_session(session_id, session_manager)
-        
+
+        # Reset the session to ensure new connection starts with Beto
+        if hasattr(runner, 'reset_session'):
+            logger.info(f"Resetting session {session_id} to ensure starting with Beto agent")
+            runner.reset_session()
+
         # Send ready status
         await manager.send_status(session_id, "ready")
         
@@ -422,12 +439,27 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, session_mana
             if "message" not in data:
                 await manager.send_status(session_id, "error: Invalid message format")
                 continue
-            
+
             user_message = data["message"]
-            
+
+            # Check for special command to reset session to Beto
+            if user_message.lower() in ["reset to beto", "use beto", "start beto"]:
+                logger.info(f"Explicit request to reset session to Beto agent")
+                if hasattr(runner, 'reset_session'):
+                    runner.reset_session()
+                    await manager.send_status(session_id, "reset")
+                    await manager.send_events(session_id, [{
+                        "type": "system",
+                        "category": "system",
+                        "text": "Session reset to Beto agent",
+                        "timestamp": datetime.now().isoformat()
+                    }])
+                    await manager.send_status(session_id, "ready")
+                    continue
+
             # Send "thinking" status
             await manager.send_status(session_id, "thinking")
-            
+
             try:
                 # Process the message
                 logger.info(f"Processing WebSocket message for session {session_id}")
