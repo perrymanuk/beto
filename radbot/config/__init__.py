@@ -150,3 +150,12 @@ def get_schema_config(schema_name: str) -> Dict[str, Any]:
         Dictionary representation of the JSON schema
     """
     return config_manager.get_schema_config(schema_name)
+
+def get_claude_templates() -> Dict[str, str]:
+    """
+    Get all Claude templates from the configuration.
+    
+    Returns:
+        Dictionary of template names to template strings
+    """
+    return config_loader.get_config().get("claude_templates", {})

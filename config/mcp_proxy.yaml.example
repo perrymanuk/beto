@@ -1,0 +1,59 @@
+# MCP-Proxy Integration Configuration Example
+# Add this to your config.yaml to enable the MCP-Proxy integration
+
+integrations:
+  mcp:
+    enabled: true
+    servers:
+      # MCP-Proxy server configurations
+      
+      # mcp-server-firecrawl via proxy
+      - id: firecrawl-proxy
+        enabled: true
+        transport: sse
+        url: https://mcp-proxy.demonsafe.com/mcp-server-firecrawl/sse
+        description: "Firecrawl web crawling and extraction tools"
+        # Optional auth token if required
+        # auth_token: "your_auth_token_here"
+        
+      # tavily-mcp via proxy
+      - id: tavily-proxy
+        enabled: true
+        transport: sse
+        url: https://mcp-proxy.demonsafe.com/tavily-mcp/sse
+        description: "Tavily search and research tools"
+        # Optional auth token if required
+        # auth_token: "your_auth_token_here"
+        
+      # context7 via proxy
+      - id: context7-proxy
+        enabled: true
+        transport: sse
+        url: https://mcp-proxy.demonsafe.com/context7/sse
+        description: "Context7 library documentation tools"
+        # Optional auth token if required
+        # auth_token: "your_auth_token_here"
+        
+      # webresearch via proxy
+      - id: webresearch-proxy
+        enabled: true
+        transport: sse
+        url: https://mcp-proxy.demonsafe.com/webresearch/sse
+        description: "Web research and browsing tools"
+        # Optional auth token if required
+        # auth_token: "your_auth_token_here"
+        
+      # mcp_nomad via proxy (if needed)
+      - id: nomad-proxy
+        enabled: true
+        transport: sse
+        url: https://mcp-proxy.demonsafe.com/mcp_nomad/sse
+        description: "Nomad job management tools"
+        # Optional auth token if required
+        # auth_token: "your_auth_token_here"
+
+# For all proxy servers:
+# - The connection uses SSE transport which is handled by our standard MCPSSEClient
+# - Each server endpoint follows the pattern: https://mcp-proxy.demonsafe.com/{service-name}/sse
+# - Authentication can be added via the auth_token field if required by the proxy
+# - No special client implementation is needed as the standard client.py supports this connection pattern

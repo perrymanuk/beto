@@ -44,7 +44,8 @@ def create_code_execution_agent(
     cfg = config or config_manager
     
     # Get the model name (must be a Gemini 2 model)
-    model_name = model or cfg.get_main_model()
+    # First try to get agent-specific model, then fall back to provided model or defaults
+    model_name = model or cfg.get_agent_model("code_execution_agent")
     if not any(name in model_name.lower() for name in ["gemini-2", "gemini-2.0", "gemini-2.5"]):
         logger.warning(
             f"Model {model_name} may not be compatible with built_in_code_execution tool. "
@@ -102,26 +103,24 @@ def create_code_execution_agent(
                         def __init__(self):
                             pass
             
-            # Check if the agent has a config attribute already
-            if not hasattr(code_agent, "config"):
-                # For LlmAgent type in ADK 0.4.0+
-                if hasattr(code_agent, "set_config"):
-                    # Use set_config method if available
-                    config = types.GenerateContentConfig()
-                    config.tools = [types.Tool(code_execution=ToolCodeExecution())]
-                    code_agent.set_config(config)
-                    logger.info("Set code execution config via set_config method for Vertex AI")
-                else:
-                    # Try to add config attribute directly
-                    code_agent.config = types.GenerateContentConfig()
-                    code_agent.config.tools = [types.Tool(code_execution=ToolCodeExecution())]
-                    logger.info("Added config attribute directly for code execution with Vertex AI")
+            # In ADK 0.4.0+, we should always use set_config method
+            # The "config" attribute no longer exists directly on Agent class
+            
+            # Initialize a Code Execution tool config with Vertex AI
+            code_execution_config = types.GenerateContentConfig()
+            code_execution_config.tools = [types.Tool(code_execution=ToolCodeExecution())]
+            
+            # Use set_config if available (ADK 0.4.0+)
+            if hasattr(code_agent, "set_config"):
+                code_agent.set_config(code_execution_config)
+                logger.info("Set code execution config via set_config method for Vertex AI")
             else:
-                # Update existing config
-                if not hasattr(code_agent.config, "tools"):
-                    code_agent.config.tools = []
-                code_agent.config.tools.append(types.Tool(code_execution=ToolCodeExecution()))
-                logger.info("Updated existing config with code execution tool for Vertex AI")
+                # Fall back to direct attribute setting as a last resort
+                try:
+                    code_agent.config = code_execution_config
+                    logger.info("Added config attribute directly for code execution with Vertex AI")
+                except Exception as e:
+                    logger.warning(f"Unable to set code execution config: {str(e)}")
         except Exception as e:
             logger.warning(f"Failed to configure code execution for Vertex AI: {str(e)}")
     

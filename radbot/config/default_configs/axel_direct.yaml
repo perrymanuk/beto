@@ -1,0 +1,18 @@
+# Axel Direct Agent Configuration
+agent:
+  main_model: "gemini-2.5-pro-latest"
+  sub_agent_model: "gemini-2.5-flash-latest"
+  
+  # Using Vertex AI is typically required for specialized agents
+  use_vertex_ai: true
+  
+  # Agent-specific model configuration
+  agent_models:
+    axel_agent_model: "gemini-2.5-pro-latest"
+  
+  # You may need to set your Vertex AI project and location
+  vertex_project: "htg-infra"
+  vertex_location: "us-central1"
+  
+  # Path to service account JSON file for Vertex AI authentication
+  service_account_file: "/Users/perry.manuk/Downloads/htg-infra-241817ba8aed.json"

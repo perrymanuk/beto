@@ -4,12 +4,13 @@
 
 // Slash commands functionality
 const commands = [
+    { name: '/sessions', description: 'Toggle sessions panel' },
     { name: '/tasks', description: 'Toggle tasks panel' },
     { name: '/events', description: 'Toggle events panel' },
     { name: '/clear', description: 'Clear conversation history' },
     { name: '/help', description: 'Show available commands' },
     { name: '/details', description: 'Show details for an item by ID', requiresArg: true },
-    { name: '/matrix', description: 'Control matrix background - toggle, opacity, speed', requiresArg: true }
+    { name: '/claude', description: 'Use Claude template from config', requiresArg: true }
 ];
 
 let activeCommandIndex = -1;
@@ -47,6 +48,11 @@ export function executeCommand(commandText) {
     console.log(`Executing command: ${cmd} with args: ${args}`);
     
     switch (cmd) {
+        case 'sessions':
+            document.dispatchEvent(new CustomEvent('command:sessions'));
+            window.chatModule.addMessage('system', 'Sessions panel toggled');
+            break;
+            
         case 'tasks':
             document.dispatchEvent(new CustomEvent('command:tasks'));
             window.chatModule.addMessage('system', 'Tasks panel toggled');
@@ -73,13 +79,64 @@ export function executeCommand(commandText) {
             }
             break;
             
-        case 'matrix':
-            handleMatrixCommand(args);
+        case 'claude':
+            if (!args) {
+                window.chatModule.addMessage('system', 'Error: Please provide text or a template name. Usage: /claude [text] or /claude:[template-name]');
+            } else {
+                // Check if the first argument is a template name or direct text
+                const parts = args.trim().split(/\s+/);
+                const firstPart = parts[0];
+                
+                // Check if the first part looks like a template name (no spaces, punctuation, etc)
+                const isTemplateName = /^[a-zA-Z0-9_-]+$/.test(firstPart) && !firstPart.includes('=');
+                
+                if (isTemplateName) {
+                    // Fetch templates to check if it matches
+                    fetch('/api/claude-templates')
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! Status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data && data.templates && data.templates[firstPart]) {
+                                // It's a template, handle it as a template
+                                handleClaudeTemplate(args);
+                            } else {
+                                // Not a valid template, treat the whole thing as direct text to Claude
+                                sendDirectToClaudePrompt(args);
+                            }
+                        })
+                        .catch(error => {
+                            // If we can't check templates, assume it's direct text
+                            console.error('Error checking templates:', error);
+                            sendDirectToClaudePrompt(args);
+                        });
+                } else {
+                    // Not a template name format, send directly to Claude
+                    sendDirectToClaudePrompt(args);
+                }
+            }
             break;
             
         default:
-            window.chatModule.addMessage('system', `Unknown command: ${cmd}. Type /help for available commands.`);
+            // Check if this is a claude template command with colon syntax (/claude:template-name)
+            if (cmd.startsWith('claude:')) {
+                const templateName = cmd.substring(7); // Remove 'claude:'
+                handleClaudeTemplate(templateName + (args ? ' ' + args : ''));
+            } else {
+                window.chatModule.addMessage('system', `Unknown command: ${cmd}. Type /help for available commands.`);
+            }
     }
+    
+    // Ensure chat input retains focus after command execution
+    setTimeout(() => {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }, 0);
 }
 
 // Show help message
@@ -93,6 +150,8 @@ function showHelp() {
     helpMessage += '\n**UI Controls:**\n';
     helpMessage += '- Enter - Send message\n';
     helpMessage += '- Shift+Enter - New line\n';
+    helpMessage += '- Up Arrow - Navigate to previous messages in history\n';
+    helpMessage += '- Down Arrow - Navigate to more recent messages in history\n';
     
     window.chatModule.addMessage('system', helpMessage);
 }
@@ -145,61 +204,6 @@ function showItemDetails(itemId) {
     
     // If not found
     window.chatModule.addMessage('system', `No item found with ID: ${itemId}`);
-}
-
-// Handle matrix background commands
-function handleMatrixCommand(args) {
-    if (!args) {
-        window.chatModule.addMessage('system', 'Matrix background toggled');
-        document.dispatchEvent(new CustomEvent('matrix:toggle'));
-        return;
-    }
-    
-    const parts = args.split(' ');
-    const subCmd = parts[0].toLowerCase();
-    const value = parts[1];
-    
-    switch (subCmd) {
-        case 'opacity':
-            if (!value) {
-                window.chatModule.addMessage('system', 'Please provide an opacity value between 0 and 1. Example: /matrix opacity 0.3');
-                return;
-            }
-            
-            const opacity = parseFloat(value);
-            if (isNaN(opacity) || opacity < 0 || opacity > 1) {
-                window.chatModule.addMessage('system', 'Opacity must be a number between 0 and 1');
-                return;
-            }
-            
-            document.dispatchEvent(new CustomEvent('matrix:opacity', { detail: { opacity } }));
-            window.chatModule.addMessage('system', `Matrix opacity set to ${opacity}`);
-            break;
-            
-        case 'speed':
-            if (!value) {
-                window.chatModule.addMessage('system', 'Please provide a speed value between 0.1 and 5. Example: /matrix speed 1.5');
-                return;
-            }
-            
-            const speed = parseFloat(value);
-            if (isNaN(speed) || speed < 0.1 || speed > 5) {
-                window.chatModule.addMessage('system', 'Speed must be a number between 0.1 and 5');
-                return;
-            }
-            
-            document.dispatchEvent(new CustomEvent('matrix:speed', { detail: { speed } }));
-            window.chatModule.addMessage('system', `Matrix speed set to ${speed}`);
-            break;
-            
-        case 'toggle':
-            document.dispatchEvent(new CustomEvent('matrix:toggle'));
-            window.chatModule.addMessage('system', 'Matrix background toggled');
-            break;
-            
-        default:
-            window.chatModule.addMessage('system', 'Unknown matrix command. Available: opacity, speed, toggle');
-    }
 }
 
 // Handle command autocomplete
@@ -285,6 +289,90 @@ function hideCommandSuggestions() {
 }
 
 // Handle keyboard navigation for command suggestions
+// Send text directly to Claude without template processing
+function sendDirectToClaudePrompt(text) {
+    // For direct Claude prompts, we'll add a special prefix
+    const promptPrefix = "Claude: ";
+    const promptText = promptPrefix + text.trim();
+    
+    // Send the message
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput) {
+        chatInput.value = promptText;
+        window.chatModule.sendMessage();
+    } else {
+        window.chatModule.addMessage('system', 'Error: Could not send message to Claude.');
+    }
+}
+
+// Handle Claude template commands
+function handleClaudeTemplate(argString) {
+    // First fetch the templates from the server
+    fetch('/api/claude-templates')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Parse the command structure (template name and any args)
+            const parts = argString.trim().split(/\s+/);
+            const templateName = parts[0];
+            
+            if (!data || !data.templates || !data.templates[templateName]) {
+                window.chatModule.addMessage('system', `Error: Template "${templateName}" not found in configuration.`);
+                return;
+            }
+            
+            let templateText = data.templates[templateName];
+            
+            // Check if there are arguments to process
+            if (parts.length > 1) {
+                // Extract arguments in key=value format
+                const argPairs = {};
+                const remainingText = [];
+                
+                for (let i = 1; i < parts.length; i++) {
+                    const part = parts[i];
+                    // Check if it's a key=value pair
+                    if (part.includes('=')) {
+                        const [key, value] = part.split('=');
+                        // Remove quotes if they exist
+                        argPairs[key] = value.replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+                    } else {
+                        // If it's not a key=value pair, add it to remaining text
+                        remainingText.push(part);
+                    }
+                }
+                
+                // Replace variables in the template
+                for (const [key, value] of Object.entries(argPairs)) {
+                    const varRegex = new RegExp('\\$' + key, 'g');
+                    templateText = templateText.replace(varRegex, value);
+                }
+                
+                // Append any remaining text that wasn't in key=value format
+                if (remainingText.length > 0) {
+                    templateText += ' ' + remainingText.join(' ');
+                }
+            }
+            
+            // Send the templated message
+            const chatInput = document.getElementById('chat-input');
+            if (chatInput) {
+                chatInput.value = templateText;
+                window.chatModule.sendMessage();
+            } else {
+                window.chatModule.addMessage('system', 'Error: Could not send templated message.');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching Claude templates:', error);
+            window.chatModule.addMessage('system', `Error: Could not fetch Claude templates. ${error.message}`);
+        });
+}
+
 export function handleCommandKeyNavigation(event) {
     const commandSuggestionsElement = document.getElementById('command-suggestions');
     if (!commandSuggestionsElement) return;

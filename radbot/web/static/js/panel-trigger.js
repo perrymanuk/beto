@@ -9,6 +9,18 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Panel trigger system initialized');
     
+    // Setup sessions button - needs to directly call tilingManager
+    document.addEventListener('command:sessions', function() {
+        console.log('Sessions command received - direct call to tiling manager');
+        
+        // Check if tiling manager exists
+        if (window.tilingManager) {
+            window.tilingManager.togglePanel('sessions');
+        } else {
+            console.error('Tiling manager not found');
+        }
+    });
+    
     // Setup task button - needs to directly call tilingManager
     document.addEventListener('command:tasks', function() {
         console.log('Tasks command received - direct call to tiling manager');
@@ -39,8 +51,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Set up direct handlers for buttons
 function setupDirectHandlers() {
+    const toggleSessionsButton = document.getElementById('toggle-sessions-button');
     const toggleTasksButton = document.getElementById('toggle-tasks-button');
     const toggleEventsButton = document.getElementById('toggle-events-button');
+    
+    if (toggleSessionsButton) {
+        toggleSessionsButton.addEventListener('click', function(e) {
+            console.log('Sessions button clicked - direct handler');
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Call tiling manager directly
+            if (window.tilingManager) {
+                window.tilingManager.togglePanel('sessions');
+            } else {
+                console.error('Tiling manager not available');
+            }
+        });
+    }
     
     if (toggleTasksButton) {
         toggleTasksButton.addEventListener('click', function(e) {

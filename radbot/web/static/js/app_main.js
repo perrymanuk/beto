@@ -12,13 +12,25 @@ import * as commandUtils from './commands.js';
 import * as statusUtils from './status.js';
 import * as selectsUtils from './selects.js';
 import * as socketClient from './socket.js';
+import { ChatPersistence, mergeMessages } from './chat_persistence.js';
+import { initSessionManager } from './sessions.js';
 
 // Global state
 const state = {
     sessionId: localStorage.getItem('radbot_session_id') || null,
     currentAgentName: "BETO", // Track current agent name - use uppercase to match status bar
-    currentModel: "gemini-2.5-flash", // Track current model name
+    initialAgentName: "BETO", // Store initial agent to revert when needed
+    currentModel: "gemini-2.5-pro", // Default model - will be updated with actual model info from events
     isDarkTheme: true, // Always use dark theme
+    agentModels: {}, // Will be populated with agent models
+    // Track agent conversations separately
+    agentContexts: {
+        "BETO": {
+            lastMessageId: null,
+            lastSentMessage: null,
+            pendingResponse: false
+        }
+    },
     // Hardcode task API settings since settings dialog is removed
     taskApiSettings: {
         endpoint: 'http://localhost:8001',
@@ -26,6 +38,15 @@ const state = {
         defaultProject: ''
     }
 };
+
+// Initialize chat persistence
+const chatPersistence = new ChatPersistence({
+    maxMessagesPerChat: 200,
+    storagePrefix: 'radbot_chat_'
+});
+
+// Log the expected storage key for the current session
+console.log('Expected localStorage key:', `radbot_chat_${state.sessionId || 'undefined'}`);
 
 // Global data
 let events = [];
@@ -44,10 +65,44 @@ window.state = state;
 window.events = events;
 window.tasks = tasks;
 window.projects = projects;
+window.chatPersistence = chatPersistence;
+
+// Make chat persistence utilities globally available
+window.mergeMessages = mergeMessages;
+
+// Test localStorage directly to ensure it's working
+function testLocalStorage() {
+    try {
+        const testKey = 'radbot_test_key';
+        const testValue = { test: true, timestamp: Date.now() };
+        const testString = JSON.stringify(testValue);
+        
+        // Save test value
+        localStorage.setItem(testKey, testString);
+        console.log('Test localStorage.setItem succeeded:', testKey, testString);
+        
+        // Retrieve test value
+        const retrieved = localStorage.getItem(testKey);
+        console.log('Test localStorage.getItem retrieved:', retrieved);
+        
+        // Cleanup
+        localStorage.removeItem(testKey);
+        console.log('Test localStorage.removeItem succeeded');
+        
+        return retrieved === testString;
+    } catch (error) {
+        console.error('localStorage test failed:', error);
+        return false;
+    }
+}
 
 // Initialize
 function init() {
     console.log('Initializing app_main.js');
+    
+    // Test localStorage
+    const localStorageWorking = testLocalStorage();
+    console.log('localStorage working:', localStorageWorking);
     
     // Listen for tiling manager ready event
     document.addEventListener('tiling:ready', () => {
@@ -69,24 +124,201 @@ function init() {
         }
     }, 300);
     
-    // Create session ID if not exists
+    // Initialize session manager
+    const sessionManager = initSessionManager();
+    
+    // Get the active session ID from session manager
+    state.sessionId = sessionManager.getActiveSessionId() || localStorage.getItem('radbot_session_id') || null;
+    
+    // Create or retrieve persistent session ID
     if (!state.sessionId) {
-        state.sessionId = generateUUID();
+        state.sessionId = crypto.randomUUID ? crypto.randomUUID() : generateUUID();
+        // Store in both places for consistency
         localStorage.setItem('radbot_session_id', state.sessionId);
+        localStorage.setItem('radbot_active_session_id', state.sessionId);
+        console.log('Created new session ID:', state.sessionId);
+    } else {
+        console.log('Using existing session ID:', state.sessionId);
+        // Ensure active session is stored in both places
+        localStorage.setItem('radbot_session_id', state.sessionId);
+        localStorage.setItem('radbot_active_session_id', state.sessionId);
     }
     
-    // Connect to WebSocket immediately
-    window.socket = socketClient.initSocket(state.sessionId);
+    // Set chat persistence instance in session manager
+    sessionManager.setChatPersistence(chatPersistence);
     
-    // Fetch tasks, projects, and events directly from API
-    fetchTasks();
-    fetchEvents();
+    // Add to global window object for debugging
+    window.SESSION_ID = state.sessionId;
+    console.log(`Global SESSION_ID set to: ${window.SESSION_ID}`);
+    
+    // Set up event listener for chat data changes from other tabs
+    window.addEventListener('chatDataChanged', (event) => {
+        console.log('Chat data changed event received:', event.detail);
+        
+        // Only reload if the change was for our current session
+        if (event.detail.chatId === state.sessionId) {
+            // Load and render chat messages from local storage
+            loadChatFromStorage();
+        }
+    });
+    
+    // Set up event listener for session changes
+    window.addEventListener('sessionChanged', (event) => {
+        console.log('Session changed event received:', event.detail);
+        
+        // Update the current session ID
+        state.sessionId = event.detail.sessionId;
+        
+        // Load and render chat messages from local storage
+        loadChatFromStorage();
+    });
+    
+    // Set flag to prevent duplicate message storage during initial load
+    window.initialLoadInProgress = true;
+    
+    // Load any existing chat messages from local storage
+    loadChatFromStorage();
+    
+    // Clear the flag after loading completes
+    window.initialLoadInProgress = false;
+    
+    // Reset agent to BETO
+    console.log('Ensuring agent is set to BETO for initialization');
+    // Initialize functions might not be available yet on first run, so use direct assignment
+    if (typeof resetAgentToBeto === 'function') {
+        resetAgentToBeto();
+    } else {
+        // Direct initialization on first run
+        state.currentAgentName = "BETO";
+    }
+
+    // Connect to WebSocket with a small delay to allow other initializations to complete first
+    console.log('Scheduling WebSocket connection with a delay');
+    setTimeout(() => {
+        console.log('Connecting to WebSocket now');
+        const result = socketClient.initSocket(state.sessionId);
+
+        // Handle both promise and direct return cases
+        if (result && typeof result.then === 'function') {
+            result.then(connection => {
+                console.log('WebSocket connection established via promise');
+                window.socket = connection;
+
+                // Reset agent to BETO again after WebSocket connection is established
+                resetAgentToBeto();
+            });
+        } else {
+            console.log('WebSocket connection established directly');
+            window.socket = result;
+
+            // Reset agent to BETO again after WebSocket connection is established
+            resetAgentToBeto();
+        }
+    }, 500);
+    
+    // Fetch tasks, projects, and events directly from API with staggered timing
+    // to reduce server load
+    setTimeout(() => fetchTasks(), 1000);
+    setTimeout(() => fetchEvents(), 1500);
+    
+    // Get initial agent and model information
+    fetchAgentInfo();
+    
+    // Schedule periodic server sync (every 5 minutes instead of every 60 seconds)
+    // This significantly reduces the number of database operations
+    if (window.chatPersistence && window.chatPersistence.serverSyncEnabled) {
+        let syncCounter = 0;
+        const MAX_SYNCS = 3; // Limit to 3 syncs per session to prevent excessive operations
+        
+        setInterval(() => {
+            if (window.state && window.state.sessionId && window.navigator.onLine) {
+                // Only sync if we haven't hit the maximum
+                if (syncCounter < MAX_SYNCS) {
+                    console.log(`Running scheduled server sync (${syncCounter + 1}/${MAX_SYNCS})...`);
+                    window.chatPersistence.syncWithServer(window.state.sessionId)
+                        .then(() => {
+                            syncCounter++; // Increment counter after successful sync
+                            console.log(`Sync completed. Remaining syncs: ${MAX_SYNCS - syncCounter}`);
+                        })
+                        .catch(error => console.error("Error during server sync:", error));
+                } else {
+                    console.log("Maximum syncs reached, skipping scheduled sync");
+                }
+            }
+        }, 300000); // Every 5 minutes instead of every minute
+    }
+}
+
+// Load chat messages from local storage
+function loadChatFromStorage() {
+    if (!state.sessionId) {
+        console.error('Cannot load chat: No session ID available');
+        return;
+    }
+    
+    console.log(`Attempting to load messages for session ${state.sessionId}`);
+    
+    try {
+        // Store original storage items for inspection
+        const storage = localStorage;
+        const allItems = {};
+        const relevantItems = {};
+        
+        // Log all localStorage keys for debugging
+        console.log('All localStorage keys:');
+        for (let i = 0; i < storage.length; i++) {
+            const key = storage.key(i);
+            allItems[key] = storage.getItem(key);
+            console.log(`${i}: ${key} = ${storage.getItem(key).substring(0, 50)}...`);
+            
+            if (key && (key.includes('radbot') || key.includes('chat_'))) {
+                relevantItems[key] = storage.getItem(key);
+            }
+        }
+        
+        console.log('Current localStorage items:', allItems);
+        console.log('Relevant chat items:', relevantItems);
+        
+        // Get messages from storage
+        const messages = chatPersistence.getMessages(state.sessionId);
+        
+        if (messages && messages.length > 0) {
+            console.log(`Loaded ${messages.length} messages from storage for session ${state.sessionId}`);
+            
+            // Clear existing messages from UI
+            if (chatModule.getChatElements().messages) {
+                chatModule.getChatElements().messages.innerHTML = '';
+            }
+            
+            // Add each message to the UI
+            let loadCount = 0;
+            messages.forEach(msg => {
+                // Only add messages with valid roles
+                if (msg.role && msg.content) {
+                    chatModule.addMessage(msg.role, msg.content, msg.agent);
+                    loadCount++;
+                } else {
+                    console.warn('Skipping invalid message:', msg);
+                }
+            });
+            
+            console.log(`Successfully rendered ${loadCount} messages`);
+            
+            // Scroll to the bottom after rendering all messages
+            chatModule.scrollToBottom();
+        } else {
+            console.log('No stored messages found for this session');
+        }
+    } catch (error) {
+        console.error('Error loading chat from storage:', error);
+    }
 }
 
 // Make functions globally available for tiling manager
 window.initializeUI = initializeUI;
 window.renderTasks = renderTasks;
 window.renderEvents = renderEvents;
+window.updateModelForCurrentAgent = updateModelForCurrentAgent;
 
 // Fetch data immediately when panels are opened
 document.addEventListener('command:tasks', function() {
@@ -137,9 +369,22 @@ function initializeUI() {
     // Initialize event type filter
     initEventTypeFilter();
     
-    // Check if WebSocket needs to be initialized or reinitialized
+    // Initialize sessions UI with a retry mechanism
+    if (window.sessionManager) {
+        const sessionsInitialized = window.sessionManager.initSessionsUI();
+        
+        // If sessions UI initialization failed (e.g., container not found), 
+        // we'll rely on the advanced observer in sessions.js
+        if (!sessionsInitialized) {
+            console.log('Sessions UI initialization deferred to observer in sessions.js');
+        }
+    }
+    
+    // Check if WebSocket needs to be reinitialized (but don't create new ones unnecessarily)
     if (!window.socket) {
-        window.socket = socketClient.initSocket(state.sessionId);
+        console.log('No active WebSocket found during UI initialization');
+        // We won't initialize a new socket here to prevent multiple connections
+        // The main init() function already schedules a socket connection
     }
 }
 
@@ -243,8 +488,29 @@ function initVoiceWaveAnimation() {
 }
 
 // Fetch tasks from API
-async function fetchTasks() {
-    console.log("Fetching tasks data...");
+async function fetchTasks(retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+    
+    console.log(`Fetching tasks data (attempt ${retryCount + 1} of ${MAX_RETRIES + 1})...`);
+    
+    // Check if tasks panel is open before fetching
+    const tasksPanel = document.querySelector('[data-content="tasks"]');
+    if (!tasksPanel && retryCount === 0) {
+        console.log('Tasks panel not open, skipping fetch or deferring');
+        
+        // Listen for panel opening
+        const listener = function() {
+            console.log('Tasks panel opened, fetching tasks data now');
+            document.removeEventListener('command:tasks', listener);
+            // Give the panel time to fully render
+            setTimeout(() => fetchTasks(), 300);
+        };
+        
+        document.addEventListener('command:tasks', listener);
+        return;
+    }
+    
     try {
         // Try to fetch from the real API first
         try {
@@ -289,9 +555,18 @@ async function fetchTasks() {
             }
         } catch (apiError) {
             console.warn("Failed to connect to real API:", apiError);
+            
+            // Try to retry with backoff if we haven't exceeded max retries
+            if (retryCount < MAX_RETRIES) {
+                console.log(`Retrying tasks fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+                setTimeout(() => fetchTasks(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+                return;
+            }
+            
+            console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching tasks, using mock data`);
         }
         
-        // If we get here, the real API failed - use mock data
+        // If we get here, the real API failed and retries exhausted - use mock data
         console.log("Using mock task data");
         
         // Mock data for testing
@@ -319,8 +594,24 @@ async function fetchTasks() {
     } catch (error) {
         console.error('Unexpected error in fetchTasks:', error);
         
+        // Try to retry with backoff if we haven't exceeded max retries
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying tasks fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+            setTimeout(() => fetchTasks(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+            return;
+        }
+        
+        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for handling tasks error`);
+        
         // Fall back to simple mock data if everything else fails
-        tasks = [{ task_id: "error1", title: "Error fetching tasks", status: "backlog", priority: "high", project_id: "error" }];
+        tasks = [{ 
+            task_id: "error1", 
+            title: "Error fetching tasks", 
+            status: "backlog", 
+            priority: "high", 
+            project_id: "error",
+            description: `Error: ${error.message} (after ${retryCount} retries)`
+        }];
         projects = [{ project_id: "error", name: "Error" }];
         
         window.tasks = tasks;
@@ -330,11 +621,42 @@ async function fetchTasks() {
     }
 }
 
-// Render tasks in UI
+// Render tasks in UI with retry capability
 function renderTasks() {
-    const tasksContainer = document.getElementById('tasks-container');
-    if (!tasksContainer) return;
+    console.log('Rendering tasks panel');
     
+    const tasksContainer = document.getElementById('tasks-container');
+    if (!tasksContainer) {
+        console.log('Tasks container not found, checking panel state...');
+        
+        // Check if tasks panel is actually open
+        const tasksPanel = document.querySelector('[data-content="tasks"]');
+        
+        if (tasksPanel) {
+            console.log('Tasks panel exists but container not found, waiting for DOM update...');
+            
+            // Panel exists but container might not be fully rendered yet
+            setTimeout(() => {
+                const retryContainer = document.getElementById('tasks-container');
+                if (retryContainer) {
+                    console.log('Tasks container found after delay, rendering now');
+                    renderTasksContent(retryContainer);
+                } else {
+                    console.warn('Tasks container still not found after delay');
+                }
+            }, 300);
+        } else {
+            // Panel not open, so not finding the container is expected
+            console.log('Tasks panel not open, skipping rendering');
+        }
+        return;
+    }
+    
+    renderTasksContent(tasksContainer);
+}
+
+// Separate function to render the actual tasks content
+function renderTasksContent(tasksContainer) {
     // Clear existing tasks
     tasksContainer.innerHTML = '';
     
@@ -430,18 +752,42 @@ function renderTasks() {
 }
 
 // Fetch events from API
-async function fetchEvents() {
-    console.log("Fetching events data...");
+async function fetchEvents(retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+    
+    console.log(`Fetching events data (attempt ${retryCount + 1} of ${MAX_RETRIES + 1})...`);
+    
+    // Check if events panel is open before fetching
+    const eventsPanel = document.querySelector('[data-content="events"]');
+    if (!eventsPanel && retryCount === 0) {
+        console.log('Events panel not open, skipping fetch or deferring');
+        
+        // Listen for panel opening
+        const listener = function() {
+            console.log('Events panel opened, fetching events data now');
+            document.removeEventListener('command:events', listener);
+            // Give the panel time to fully render
+            setTimeout(() => fetchEvents(), 300);
+        };
+        
+        document.addEventListener('command:events', listener);
+        return;
+    }
+    
     try {
         // Determine the API base URL - use current origin
         const baseUrl = `${window.location.protocol}//${window.location.host}`;
         
-        // Get the current session ID - reuse the one from socket connection if available
-        const sessionId = state.sessionId || localStorage.getItem('radbot_session_id') || generateUUID();
+        // Get the current session ID with better fallbacks
+        const sessionId = window.SESSION_ID || state.sessionId || 
+                          localStorage.getItem('radbot_active_session_id') || 
+                          localStorage.getItem('radbot_session_id') || 
+                          generateUUID();
         
         // Based on custom_web_ui.md - we need to use the session API endpoint
         const apiUrl = `${baseUrl}/api/events/${sessionId}`;
-        console.log(`Attempting to fetch events data from ${apiUrl}`);
+        console.log(`Attempting to fetch events data from ${apiUrl} for session ${sessionId}`);
         
         try {
             // Make the API request
@@ -528,6 +874,16 @@ async function fetchEvents() {
             // Handle API connection errors (CORS, connection refused, etc.)
             console.error("API error fetching events:", apiError);
             
+            // Try to retry with backoff if we haven't exceeded max retries
+            if (retryCount < MAX_RETRIES) {
+                console.log(`Retrying events fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+                setTimeout(() => fetchEvents(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+                return;
+            }
+            
+            // If we've exhausted retries, show error
+            console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching events`);
+            
             // Create a connection error event
             events = [{
                 type: "other",
@@ -539,7 +895,8 @@ async function fetchEvents() {
                     service: "Events API",
                     endpoint: apiUrl,
                     error_type: apiError.name,
-                    error_stack: apiError.stack
+                    error_stack: apiError.stack,
+                    retries_attempted: retryCount
                 }
             }];
             
@@ -550,6 +907,16 @@ async function fetchEvents() {
         // Handle any unexpected errors
         console.error('Unexpected error in fetchEvents:', error);
         
+        // Try to retry with backoff if we haven't exceeded max retries
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying events fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
+            setTimeout(() => fetchEvents(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+            return;
+        }
+        
+        // If we've exhausted retries, show error
+        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching events`);
+        
         events = [{
             type: "other",
             timestamp: new Date().toISOString(),
@@ -558,7 +925,8 @@ async function fetchEvents() {
             details: {
                 error_message: `An unexpected error occurred: ${error.message}`,
                 error_type: error.name,
-                error_stack: error.stack
+                error_stack: error.stack,
+                retries_attempted: retryCount
             }
         }];
         
@@ -567,16 +935,42 @@ async function fetchEvents() {
     }
 }
 
-// Render events in UI
+// Render events in UI with retry capability
 function renderEvents() {
     console.log('Rendering events panel');
     
     const eventsContainer = document.getElementById('events-container');
     if (!eventsContainer) {
-        console.warn('Events container not found, cannot render events');
+        console.log('Events container not found, checking panel state...');
+        
+        // Check if events panel is actually open
+        const eventsPanel = document.querySelector('[data-content="events"]');
+        
+        if (eventsPanel) {
+            console.log('Events panel exists but container not found, waiting for DOM update...');
+            
+            // Panel exists but container might not be fully rendered yet
+            setTimeout(() => {
+                const retryContainer = document.getElementById('events-container');
+                if (retryContainer) {
+                    console.log('Events container found after delay, rendering now');
+                    renderEventsContent(retryContainer);
+                } else {
+                    console.warn('Events container still not found after delay');
+                }
+            }, 300);
+        } else {
+            // Panel not open, so not finding the container is expected
+            console.log('Events panel not open, skipping rendering');
+        }
         return;
     }
     
+    renderEventsContent(eventsContainer);
+}
+
+// Separate function to render the actual events content
+function renderEventsContent(eventsContainer) {
     // Clear existing events - first remove event listeners to prevent memory leaks
     const oldEventItems = eventsContainer.querySelectorAll('.event-item');
     oldEventItems.forEach(item => {
@@ -811,9 +1205,10 @@ function formatEventType(type) {
     }
 }
 
-// Show event details
-function showEventDetails(event) {
-    console.log('Showing event details:', event);
+// Show event details with improved error handling
+function showEventDetails(event, retryCount = 0) {
+    const MAX_RETRIES = 3;
+    console.log(`Showing event details (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, event);
     
     // First, ensure the events tile is visible - this is using the tiling system
     let eventsPanel = document.querySelector('[data-content="events"]');
@@ -828,9 +1223,16 @@ function showEventDetails(event) {
             if (eventsPanel) {
                 console.log('Events panel now found, attempting to show details again');
                 // Try again after panel is opened
-                showEventDetails(event);
+                showEventDetails(event, retryCount);
             } else {
-                console.error('Could not find events panel after attempting to open it');
+                if (retryCount < MAX_RETRIES) {
+                    console.log(`Retrying panel check (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+                    setTimeout(() => {
+                        showEventDetails(event, retryCount + 1);
+                    }, 300 * (retryCount + 1));
+                } else {
+                    console.error('Could not find events panel after multiple attempts');
+                }
             }
         }, 300);
         return;
@@ -865,11 +1267,18 @@ function showEventDetails(event) {
             console.log('Created event-details-content container');
             
             // Now try to use the newly created container
-            setTimeout(() => showEventDetails(event), 100);
+            setTimeout(() => showEventDetails(event, retryCount), 100);
             return;
         }
         
-        console.error('Could not find detail panel to add event details content');
+        // If detail panel not found, but retries available, try again
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Detail panel not found, retrying (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+            setTimeout(() => showEventDetails(event, retryCount + 1), 300 * (retryCount + 1));
+            return;
+        }
+        
+        console.error('Could not find detail panel to add event details content after multiple attempts');
         return;
     }
     
@@ -1254,6 +1663,205 @@ function formatJsonSyntax(json) {
     });
 }
 
+// Get initial agent and model information with retry mechanism
+function fetchAgentInfo(retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+    
+    console.log(`Fetching agent and model information (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+    
+    try {
+        // Make a request to get the agent info from the server with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        fetch('/api/agent-info', { signal: controller.signal })
+            .then(response => {
+                clearTimeout(timeoutId);
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    console.warn(`Agent info API returned error: ${response.status}`);
+                    // Retry if we haven't hit the maximum
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`Retrying agent info fetch in ${RETRY_DELAY}ms...`);
+                        setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+                    }
+                    return null;
+                }
+            })
+            .then(data => {
+                if (data) {
+                    console.log("Agent info loaded from API:", data);
+                    
+                    // Store the agent models in window.state for later reference
+                    window.state.agentModels = data.agent_models || {};
+                    
+                    // Add debug output of available models
+                    if (data.agent_models) {
+                        console.log("Available agent models:");
+                        for (const [agent, model] of Object.entries(data.agent_models)) {
+                            console.log(`  ${agent}: ${model}`);
+                        }
+                    }
+                    
+                    // Update agent name if available
+                    if (data.agent_name) {
+                        window.statusUtils.updateAgentStatus(data.agent_name);
+                    }
+                    
+                    // Get the appropriate model for the current agent
+                    const currentAgent = window.state.currentAgentName.toLowerCase();
+                    let modelToUse = data.model; // Default to main model
+                    
+                    // Try all possible ways to find the right model
+                    if (data.agent_models) {
+                        // Look for an exact match first
+                        if (data.agent_models[currentAgent]) {
+                            modelToUse = data.agent_models[currentAgent];
+                            console.log(`Found exact model match for ${currentAgent}: ${modelToUse}`);
+                        } 
+                        // Then try special case for scout
+                        else if (currentAgent === 'scout' && data.agent_models.scout_agent) {
+                            modelToUse = data.agent_models.scout_agent;
+                            console.log(`Using scout_agent model for ${currentAgent}: ${modelToUse}`);
+                        }
+                        // Try with _agent suffix
+                        else if (data.agent_models[currentAgent + '_agent']) {
+                            modelToUse = data.agent_models[currentAgent + '_agent'];
+                            console.log(`Using ${currentAgent}_agent model: ${modelToUse}`);
+                        }
+                        // Try without _agent suffix
+                        else if (currentAgent.endsWith('_agent') && data.agent_models[currentAgent.replace('_agent', '')]) {
+                            modelToUse = data.agent_models[currentAgent.replace('_agent', '')];
+                            console.log(`Using ${currentAgent.replace('_agent', '')} model: ${modelToUse}`);
+                        }
+                        // For any partial match (case insensitive)
+                        else {
+                            for (const [agentKey, modelValue] of Object.entries(data.agent_models)) {
+                                if (currentAgent.includes(agentKey.toLowerCase()) || 
+                                    agentKey.toLowerCase().includes(currentAgent)) {
+                                    modelToUse = modelValue;
+                                    console.log(`Using partial match ${agentKey} model for ${currentAgent}: ${modelToUse}`);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    console.log(`Selected model for ${currentAgent}: ${modelToUse}`);
+                    
+                    // Update model name
+                    if (modelToUse) {
+                        window.statusUtils.updateModelStatus(modelToUse);
+                    } else {
+                        // Fallback to updateModelForCurrentAgent
+                        updateModelForCurrentAgent();
+                    }
+                    
+                    // Force a visual refresh of the status bar
+                    if (typeof updateStatusBar === 'function') {
+                        updateStatusBar();
+                    } else if (window.statusUtils && window.statusUtils.updateStatusBar) {
+                        window.statusUtils.updateStatusBar();
+                    }
+                } else {
+                    // Fallback to updateModelForCurrentAgent
+                    updateModelForCurrentAgent();
+                }
+            })
+            .catch(error => {
+                console.warn("Failed to fetch agent info:", error);
+                
+                // Check if this was an abort error (timeout)
+                if (error.name === 'AbortError') {
+                    console.warn("Agent info request timed out");
+                }
+                
+                // Retry if we haven't hit the maximum
+                if (retryCount < MAX_RETRIES) {
+                    console.log(`Retrying agent info fetch after error (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+                    setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+                    return;
+                }
+                
+                // If API fails and retries exhausted, still update the displayed model based on current agent
+                console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for agent info, using fallback`);
+                updateModelForCurrentAgent();
+            });
+    } catch (error) {
+        console.warn("Error in fetchAgentInfo:", error);
+        
+        // Retry if we haven't hit the maximum
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying agent info fetch after error (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+            setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
+            return;
+        }
+        
+        // If API fails and retries exhausted, still update the displayed model based on current agent
+        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for agent info, using fallback`);
+        updateModelForCurrentAgent();
+    }
+}
+
+// Update model display based on the current agent name
+function updateModelForCurrentAgent() {
+    const agentName = window.state.currentAgentName.toLowerCase();
+    let modelName;
+    
+    // Log the current agent for debugging
+    console.log(`Updating model for agent: ${agentName}`);
+    
+    // Try to find the model in agentModels first (from API)
+    if (window.state.agentModels) {
+        // Check all possible variations of the agent name
+        const possibleNames = [
+            agentName,
+            agentName + '_agent',
+            agentName.replace('_agent', '')
+        ];
+        
+        // Try each possible name
+        for (const name of possibleNames) {
+            if (window.state.agentModels[name]) {
+                modelName = window.state.agentModels[name];
+                console.log(`Found model in agentModels for "${name}": ${modelName}`);
+                break;
+            }
+        }
+    }
+    
+    // If we still don't have a model, use hardcoded values matching config.yaml
+    if (!modelName) {
+        console.log(`No model found in agentModels, using hardcoded values`);
+        
+        // Check the agent name with more flexibility - EXACTLY match config.yaml values
+        if (agentName.includes('scout')) {
+            modelName = "gemini-2.5-pro-preview-05-06";  // Match config.yaml scout_agent
+        } else if (agentName.includes('code') || agentName === "code_execution_agent") {
+            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml code_execution_agent
+        } else if (agentName.includes('search')) {
+            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml search_agent
+        } else if (agentName.includes('todo')) {
+            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml todo_agent
+        } else {
+            // Default for beto/main agent - match config.yaml main_model
+            modelName = "gemini-2.5-flash-preview-04-17";
+        }
+    }
+    
+    window.statusUtils.updateModelStatus(modelName);
+    console.log(`Updated model based on agent ${agentName}: ${modelName}`);
+    
+    // Force a visual refresh of the status bar
+    if (typeof updateStatusBar === 'function') {
+        updateStatusBar();
+    } else if (window.statusUtils && window.statusUtils.updateStatusBar) {
+        window.statusUtils.updateStatusBar();
+    }
+}
+
 // Generate a UUID for session ID
 function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -1261,6 +1869,106 @@ function generateUUID() {
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
     });
+}
+
+// Reset agent to BETO to fix any agent mismatch issues
+// Track agent context and transitions
+function trackAgentContext(agentName) {
+    // Normalize agent name to uppercase for consistency
+    agentName = agentName.toUpperCase();
+
+    // Initialize context for this agent if it doesn't exist yet
+    if (!state.agentContexts[agentName]) {
+        console.log(`Initializing context for agent: ${agentName}`);
+        state.agentContexts[agentName] = {
+            lastMessageId: null,
+            lastSentMessage: null,
+            pendingResponse: false
+        };
+    }
+
+    return state.agentContexts[agentName];
+}
+
+// Handle agent switching, preserving context between transfers
+function switchAgentContext(newAgentName) {
+    const prevAgentName = state.currentAgentName;
+    console.log(`Switching agent context from ${prevAgentName} to ${newAgentName}`);
+
+    // Save current agent's context state
+    if (prevAgentName && prevAgentName !== newAgentName) {
+        const prevContext = trackAgentContext(prevAgentName);
+        prevContext.lastMessageId = findLastMessageIdForAgent(prevAgentName);
+        prevContext.pendingResponse = false; // Reset pending flag when switching away
+        console.log(`Saved context for ${prevAgentName}:`, prevContext);
+    }
+
+    // Get new agent's context
+    const newContext = trackAgentContext(newAgentName);
+    console.log(`Loaded context for ${newAgentName}:`, newContext);
+
+    // Update the current agent
+    state.currentAgentName = newAgentName;
+
+    // Return the loaded context
+    return newContext;
+}
+
+// Helper to find the last message ID for an agent
+function findLastMessageIdForAgent(agentName) {
+    // Normalize for comparison
+    agentName = agentName.toUpperCase();
+
+    // Get all messages from storage
+    const messages = window.chatPersistence.getMessages(window.state.sessionId);
+    if (!messages || messages.length === 0) return null;
+
+    // Loop backward through messages to find the last one from this agent
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (msg.agent === agentName ||
+           (msg.role === 'assistant' && (!msg.agent || msg.agent === agentName))) {
+            return msg.id;
+        }
+    }
+
+    return null;
+}
+
+function resetAgentToBeto() {
+    console.log(`Resetting agent from ${state.currentAgentName} to BETO`);
+
+    // Switch to BETO context instead of just setting the name
+    switchAgentContext("BETO");
+
+    // Update CSS and status
+    document.documentElement.style.setProperty('--agent-name', `"${state.currentAgentName}"`);
+
+    // Direct update of status bar element
+    const agentStatus = document.getElementById('agent-status');
+    if (agentStatus) {
+        agentStatus.textContent = `AGENT: ${state.currentAgentName}`;
+
+        // Visual feedback for the change
+        agentStatus.style.color = 'var(--term-blue)';
+        setTimeout(() => {
+            agentStatus.style.color = '';
+        }, 500);
+    } else {
+        console.warn("Cannot find agent-status element in DOM");
+    }
+
+    // Update other UI elements
+    if (window.statusUtils) {
+        window.statusUtils.updateAgentStatus("BETO");
+        window.statusUtils.updateClock();
+        window.statusUtils.setStatus('ready');
+    }
+
+    // Make these functions globally available
+    window.resetAgentToBeto = resetAgentToBeto;
+    window.switchAgentContext = switchAgentContext;
+    window.trackAgentContext = trackAgentContext;
 }
 
 // Initialize on page load

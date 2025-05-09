@@ -7,7 +7,7 @@ This directory contains documentation for feature enhancements implemented in th
 
 ## Contents
 
-*This directory is currently empty. Feature enhancement documentation will be added as enhancements are implemented.*
+- [Agent Model Configuration](../agent_model_configuration.md) - Agent-specific model configuration feature
 
 ## Overview
 

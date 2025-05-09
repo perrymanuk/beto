@@ -7,11 +7,34 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>RadBot Linux Interface</title>
+    <!-- Split CSS Files -->
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/header.css">
+    <link rel="stylesheet" href="/static/css/messages.css">
+    <link rel="stylesheet" href="/static/css/input.css">
+    <link rel="stylesheet" href="/static/css/tasks.css">
+    <link rel="stylesheet" href="/static/css/events.css">
+    <link rel="stylesheet" href="/static/css/sessions.css">
+    <link rel="stylesheet" href="/static/css/settings.css">
+    <link rel="stylesheet" href="/static/css/responsive.css">
+    <!-- Legacy CSS kept for backward compatibility - Remove once testing confirms all styles are working -->
     <link rel="stylesheet" href="/static/css/style.css">
+    
     <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/emoji-toolkit@7.0.0/lib/js/joypixels.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-toolkit@7.0.0/extras/css/joypixels.min.css">
+    <!-- Prism.js for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
 </head>
 <body>
     <div class="app-container" id="app-container">
@@ -42,6 +65,9 @@
                     </div>
                 </div>
                 <div class="controls">
+                    <button id="toggle-sessions-button" title="Show/hide sessions panel">
+                        SESSIONS
+                    </button>
                     <button id="toggle-tasks-button" title="Show/hide tasks panel">
                         TASKS
                     </button>
@@ -165,6 +191,30 @@
         </div>
     </template>
     
+    <template id="sessions-template">
+        <div class="sessions-content">
+            <div class="sessions-header">
+                <h3>Sessions</h3>
+                <button id="new-session-button" class="new-session-button">NEW SESSION</button>
+            </div>
+            <div class="sessions-filter">
+                <div class="search-group">
+                    <input type="text" id="session-search" placeholder="Search sessions...">
+                </div>
+            </div>
+            <div class="sessions-container" id="sessions-container">
+                <!-- Sessions will be added here dynamically -->
+                <div class="sessions-empty-state">No sessions found.</div>
+            </div>
+        </div>
+    </template>
+    
+    <template id="session-details-template">
+        <div class="session-details-content" id="session-details-content">
+            <!-- Session details will be populated here -->
+        </div>
+    </template>
+    
     <!-- Settings Dialog Removed -->
     
     <!-- Core UI Scripts (Load First) -->
@@ -172,17 +222,29 @@
     <script src="/static/js/border-fix.js"></script>
     
     <!-- Modular JS Architecture -->
+    <script type="module" src="/static/js/chat_persistence.js"></script>
     <script type="module" src="/static/js/chat.js"></script>
     <script type="module" src="/static/js/emoji.js"></script>
     <script type="module" src="/static/js/commands.js"></script>
     <script type="module" src="/static/js/status.js"></script>
     <script type="module" src="/static/js/selects.js"></script>
     <script type="module" src="/static/js/socket.js"></script>
+    <script type="module" src="/static/js/sessions.js"></script>
+    
+    <!-- Modularized app_main.js components -->
+    <script type="module" src="/static/js/app_core.js"></script>
+    <script type="module" src="/static/js/ui_initialization.js"></script>
+    <script type="module" src="/static/js/data_services.js"></script>
+    <script type="module" src="/static/js/event_rendering.js"></script>
+    <script type="module" src="/static/js/agent_config.js"></script>
+    
+    <!-- Keep original for backward compatibility during testing -->
     <script type="module" src="/static/js/app_main.js"></script>
     
     <!-- Support Scripts (Load Last) -->
     <script src="/static/js/matrix-background.js"></script>
     <script src="/static/js/panel-trigger.js"></script>
+    <script type="module" src="/static/js/sessions_test.js"></script>
     
     <!-- Legacy script kept for backward compatibility -->
     <!-- <script src="/static/js/app.js"></script> -->

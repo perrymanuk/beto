@@ -6,22 +6,26 @@ class TilingManager {
     
     // Track panel states
     this.panelStates = {
+      sessionsOpen: false,
       tasksOpen: false,
       eventsOpen: false
     };
     
     this.templates = {
       chat: document.getElementById('chat-template'),
+      sessions: document.getElementById('sessions-template'),
       tasks: document.getElementById('tasks-template'),
       events: document.getElementById('events-template'),
       taskDetails: document.getElementById('task-details-template'),
-      eventDetails: document.getElementById('event-details-template')
+      eventDetails: document.getElementById('event-details-template'),
+      sessionDetails: document.getElementById('session-details-template')
     };
     
     // Initialize by rendering the main chat container
     this.renderInitialLayout();
     
     // Listen for command events
+    document.addEventListener('command:sessions', () => this.togglePanel('sessions'));
     document.addEventListener('command:tasks', () => this.togglePanel('tasks'));
     document.addEventListener('command:events', () => this.togglePanel('events'));
   }
@@ -54,7 +58,7 @@ class TilingManager {
     document.dispatchEvent(new CustomEvent('tiling:ready'));
   }
   
-  // Toggle a panel (tasks or events)
+  // Toggle a panel (sessions, tasks, or events)
   togglePanel(panelType) {
     console.log(`Toggling ${panelType} panel`);
     
@@ -63,18 +67,28 @@ class TilingManager {
     const savedInputValue = this.saveChatInput();
     
     // Toggle panel state
-    if (panelType === 'tasks') {
+    if (panelType === 'sessions') {
+      this.panelStates.sessionsOpen = !this.panelStates.sessionsOpen;
+      
+      // If opening sessions panel, close other panels
+      if (this.panelStates.sessionsOpen) {
+        this.panelStates.tasksOpen = false;
+        this.panelStates.eventsOpen = false;
+      }
+    } else if (panelType === 'tasks') {
       this.panelStates.tasksOpen = !this.panelStates.tasksOpen;
       
-      // If opening tasks panel, close events panel
+      // If opening tasks panel, close other panels
       if (this.panelStates.tasksOpen) {
+        this.panelStates.sessionsOpen = false;
         this.panelStates.eventsOpen = false;
       }
     } else if (panelType === 'events') {
       this.panelStates.eventsOpen = !this.panelStates.eventsOpen;
       
-      // If opening events panel, close tasks panel
+      // If opening events panel, close other panels
       if (this.panelStates.eventsOpen) {
+        this.panelStates.sessionsOpen = false;
         this.panelStates.tasksOpen = false;
       }
     }
@@ -90,7 +104,7 @@ class TilingManager {
     // Clear container
     this.container.innerHTML = '';
     
-    if (!this.panelStates.tasksOpen && !this.panelStates.eventsOpen) {
+    if (!this.panelStates.sessionsOpen && !this.panelStates.tasksOpen && !this.panelStates.eventsOpen) {
       // Just render chat panel
       const chatTile = document.createElement('div');
       chatTile.className = 'tile';
@@ -131,12 +145,20 @@ class TilingManager {
       resizeHandle.className = 'resize-handle resize-handle-horizontal';
       container.appendChild(resizeHandle);
       
-      // Add second panel (tasks or events)
+      // Add second panel (sessions, tasks, or events)
       const secondPanelTile = document.createElement('div');
       secondPanelTile.className = 'tile split-in-horizontal';
       secondPanelTile.style.flex = '30 1 0%';
       
-      const panelType = this.panelStates.tasksOpen ? 'tasks' : 'events';
+      // Determine which panel to show
+      let panelType;
+      if (this.panelStates.sessionsOpen) {
+        panelType = 'sessions';
+      } else if (this.panelStates.tasksOpen) {
+        panelType = 'tasks';
+      } else {
+        panelType = 'events';
+      }
       secondPanelTile.setAttribute('data-content', panelType);
       
       // Add header
@@ -145,7 +167,15 @@ class TilingManager {
       
       const title = document.createElement('div');
       title.className = 'tile-title';
-      title.textContent = panelType === 'tasks' ? 'Tasks' : 'Events';
+      
+      // Set appropriate title based on panel type
+      if (panelType === 'sessions') {
+        title.textContent = 'Sessions';
+      } else if (panelType === 'tasks') {
+        title.textContent = 'Tasks';
+      } else {
+        title.textContent = 'Events';
+      }
       
       const controls = document.createElement('div');
       controls.className = 'tile-controls';
@@ -218,6 +248,59 @@ class TilingManager {
         
         // Setup vertical resize handle
         this.setupVerticalResizeHandle(verticalResizeHandle, eventsContentTile, detailsContentTile);
+      } else if (panelType === 'sessions') {
+        // Similar split view for sessions panel
+        const verticalContainer = document.createElement('div');
+        verticalContainer.className = 'tile-container vertical';
+        
+        // Add sessions content tile
+        const sessionsContentTile = document.createElement('div');
+        sessionsContentTile.className = 'tile';
+        sessionsContentTile.style.flex = '70 1 0%';
+        
+        // Add sessions content
+        const sessionsContent = document.createElement('div');
+        sessionsContent.className = 'tile-content sessions';
+        
+        // Add mountain background
+        const mountainBg = document.createElement('div');
+        mountainBg.className = 'mountain-bg';
+        sessionsContent.appendChild(mountainBg);
+        
+        // Add content from template
+        const sessionsTemplate = this.templates.sessions.content.cloneNode(true);
+        sessionsContent.appendChild(sessionsTemplate);
+        sessionsContentTile.appendChild(sessionsContent);
+        
+        // Add details tile
+        const detailsContentTile = document.createElement('div');
+        detailsContentTile.className = 'tile detail-panel';
+        detailsContentTile.style.flex = '30 1 0%';
+        
+        // Add session details content
+        const detailsContent = document.createElement('div');
+        detailsContent.className = 'tile-content session-details';
+        
+        // Add content from template
+        const detailsTemplate = this.templates.sessionDetails.content.cloneNode(true);
+        detailsContent.appendChild(detailsTemplate);
+        detailsContentTile.appendChild(detailsContent);
+        
+        // Add both to vertical container
+        verticalContainer.appendChild(sessionsContentTile);
+        
+        // Add resize handle
+        const verticalResizeHandle = document.createElement('div');
+        verticalResizeHandle.className = 'resize-handle resize-handle-vertical';
+        verticalContainer.appendChild(verticalResizeHandle);
+        
+        verticalContainer.appendChild(detailsContentTile);
+        
+        // Add vertical container to the second panel tile
+        secondPanelTile.appendChild(verticalContainer);
+        
+        // Setup vertical resize handle
+        this.setupVerticalResizeHandle(verticalResizeHandle, sessionsContentTile, detailsContentTile);
       } else {
         // For other panels (tasks), use the simple layout
         const panelContent = document.createElement('div');
@@ -250,13 +333,28 @@ class TilingManager {
     // Refresh app.js event listeners
     this.reinitializeAppJs();
     
-    // Trigger content rendering for the visible panel
-    if (this.panelStates.tasksOpen && typeof window.renderTasks === 'function') {
+    // Trigger content rendering for the visible panel with better timing
+    if (this.panelStates.sessionsOpen && window.sessionManager && typeof window.sessionManager.renderSessionsList === 'function') {
+      console.log('Scheduling renderSessionsList after panel toggle');
+      // Use longer delays with multiple attempts to ensure DOM is fully ready
+      setTimeout(() => {
+        console.log('First attempt to render sessions list');
+        window.sessionManager.renderSessionsList(0);
+        
+        // Schedule a second attempt as a fallback
+        setTimeout(() => {
+          console.log('Second attempt to render sessions list (fallback)');
+          if (window.sessionManager.sessionsContainer === null) {
+            window.sessionManager.renderSessionsList(1);
+          }
+        }, 300);
+      }, 200);
+    } else if (this.panelStates.tasksOpen && typeof window.renderTasks === 'function') {
       console.log('Calling renderTasks after panel toggle');
-      setTimeout(() => window.renderTasks(), 100);
+      setTimeout(() => window.renderTasks(), 200);
     } else if (this.panelStates.eventsOpen && typeof window.renderEvents === 'function') {
       console.log('Calling renderEvents after panel toggle');
-      setTimeout(() => window.renderEvents(), 100);
+      setTimeout(() => window.renderEvents(), 200);
     }
   }
   
@@ -414,6 +512,39 @@ class TilingManager {
           // Show event details (not implemented in simplified version)
         }
       });
+    }
+    
+    // Sessions panel handlers
+    const sessionsContainer = document.getElementById('sessions-container');
+    if (sessionsContainer) {
+      console.log('Sessions container found, initializing handlers');
+      
+      // Initialize sessions UI if session manager exists
+      if (window.sessionManager && typeof window.sessionManager.initSessionsUI === 'function') {
+        console.log('Initializing sessions UI from tiling manager');
+        window.sessionManager.initSessionsUI();
+      } else {
+        console.log('Session manager not available or initSessionsUI not a function');
+      }
+      
+      // Initialize new session button
+      const newSessionButton = document.getElementById('new-session-button');
+      if (newSessionButton) {
+        console.log('Setting up new session button handler');
+        // Remove existing handlers
+        const newBtn = newSessionButton.cloneNode(true);
+        if (newSessionButton.parentNode) {
+          newSessionButton.parentNode.replaceChild(newBtn, newSessionButton);
+        }
+        
+        // Add handler
+        newBtn.addEventListener('click', () => {
+          console.log('New session button clicked');
+          if (window.sessionManager && typeof window.sessionManager.createNewSession === 'function') {
+            window.sessionManager.createNewSession();
+          }
+        });
+      }
     }
   }
   

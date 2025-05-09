@@ -1,0 +1,17 @@
+# Claude CLI MCP Server Configuration
+# This enables the Claude CLI integration
+
+integrations:
+  mcp:
+    enabled: true
+    servers:
+      # Claude CLI MCP server configuration
+      - id: claude-cli
+        name: Claude CLI Direct
+        enabled: true
+        transport: stdio  # Claude CLI uses stdio transport
+        command: claude  # Path to the Claude CLI executable
+        args:
+          - mcp
+          - serve
+        timeout: 60  # Timeout in seconds

@@ -233,6 +233,12 @@ class ConfigLoader:
             "agent": {
                 "main_model": os.getenv("RADBOT_MAIN_MODEL", "gemini-2.5-pro"),
                 "sub_agent_model": os.getenv("RADBOT_SUB_MODEL", "gemini-2.0-flash"),
+                "agent_models": {
+                    "code_execution_agent": os.getenv("RADBOT_CODE_AGENT_MODEL", ""),
+                    "search_agent": os.getenv("RADBOT_SEARCH_AGENT_MODEL", ""),
+                    "scout_agent": os.getenv("RADBOT_SCOUT_AGENT_MODEL", ""),
+                    "todo_agent": os.getenv("RADBOT_TODO_AGENT_MODEL", ""),
+                },
                 "use_vertex_ai": os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "FALSE").upper() == "TRUE",
                 "vertex_project": os.getenv("GOOGLE_CLOUD_PROJECT"),
                 "vertex_location": os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")

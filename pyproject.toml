@@ -42,6 +42,9 @@ dependencies = [
     "google-api-python-client>=2.102.0", # Required for Google Calendar API
     "google-auth-httplib2>=0.1.0",      # Required for Google Calendar API authentication
     "google-auth-oauthlib>=1.1.0",      # Required for Google Calendar OAuth flow
+    "langchain-community>=0.2.16",      # Required for integrations
+    "tavily-python>=0.3.8",             # Required for Tavily search integration
+    "python-jsonrpc>=0.10.0",          # Required for Context7 MCP stdio client
     # Removed gcsa due to dependency conflict with ADK 0.4.0 (tzlocal version conflict)
 ]
 
@@ -57,8 +60,6 @@ dev = [
 ]
 
 web = [
-    "langchain-community>=0.2.16",
-    "tavily-python>=0.3.8",
     "fastapi>=0.110.0",
     "uvicorn>=0.27.1",
     "jinja2>=3.1.4",

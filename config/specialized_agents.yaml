@@ -1,0 +1,80 @@
+agent:
+  # Main model configuration
+  main_model: "gemini-1.5-pro-latest"
+  sub_agent_model: "gemini-1.5-flash-latest"
+  
+  # Using Vertex AI is typically required for specialized agents
+  use_vertex_ai: true
+  
+  # Specialized agents configuration
+  specialized_agents:
+    enabled: true
+    
+    # Scout agent (research and design)
+    scout:
+      enabled: true
+      model: "gemini-1.5-pro-latest"
+    
+    # Axel agent (implementation and execution)
+    axel:
+      enabled: true
+      model: "gemini-1.5-pro-latest"
+      dynamic_workers: true
+      max_workers: 5
+    
+    # Web research agent
+    web_research:
+      enabled: true
+      model: "gemini-1.5-pro-latest"
+    
+    # Code execution agent
+    code_execution:
+      enabled: true
+      model: "gemini-1.5-pro-latest"
+    
+    # Filesystem agent
+    filesystem:
+      enabled: true
+      model: "gemini-1.5-flash-latest"
+    
+    # Memory agent
+    memory:
+      enabled: true
+      model: "gemini-1.5-flash-latest"
+    
+    # Todo agent
+    todo:
+      enabled: true
+      model: "gemini-1.5-flash-latest"
+    
+    # Calendar agent
+    calendar:
+      enabled: true
+      model: "gemini-1.5-flash-latest"
+    
+    # Home Assistant agent
+    homeassistant:
+      enabled: true
+      model: "gemini-1.5-flash-latest"
+    
+    # Agentic coder agent (for prompt_claude delegations)
+    agentic_coder:
+      enabled: true
+      model: "gemini-1.5-pro-latest"
+    
+    # Utility agent
+    utility:
+      enabled: true
+      model: "gemini-1.5-flash-latest"
+
+# If you have specific MCP servers for specialized agents
+integrations:
+  mcp:
+    servers:
+      # Include any specific MCP servers needed for specialized agents
+      # This is just an example - adjust based on your actual MCP server setup
+      - id: "sequentialthinking"
+        name: "Sequential Thinking"
+        enabled: true
+        transport: "sse"
+        url: "http://localhost:8080/sequentialthinking/sse"

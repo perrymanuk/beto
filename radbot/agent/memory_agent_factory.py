@@ -16,8 +16,9 @@ from radbot.agent.agent import RadBotAgent
 from radbot.memory.qdrant_memory import QdrantMemoryService
 from radbot.tools.memory import search_past_conversations, store_important_information
 from radbot.config import config_manager
+from radbot.config.config_loader import config_loader
 
-# Load environment variables
+# Load environment variables (for backward compatibility)
 load_dotenv()
 
 def create_memory_enabled_agent(
@@ -45,21 +46,37 @@ def create_memory_enabled_agent(
     
     # Create or use provided memory service
     if not memory_service:
-        # Connect to Qdrant using environment variables
-        host = os.getenv("QDRANT_HOST")
-        port = os.getenv("QDRANT_PORT")
-        url = os.getenv("QDRANT_URL")
-        api_key = os.getenv("QDRANT_API_KEY")
+        # Get Qdrant settings from config_loader
+        vector_db_config = config_loader.get_config().get("vector_db", {})
+        url = vector_db_config.get("url")
+        api_key = vector_db_config.get("api_key")
+        host = vector_db_config.get("host", "localhost")
+        port = vector_db_config.get("port", 6333)
+        collection = vector_db_config.get("collection", "radbot_memories")
         
-        # Get collection name from env if available
-        collection = os.getenv("QDRANT_COLLECTION", "radbot_memories")
+        # Fallback to environment variables for backward compatibility
+        if not url:
+            url = os.getenv("QDRANT_URL")
+        if not api_key:
+            api_key = os.getenv("QDRANT_API_KEY")
+        if not host or host == "localhost":
+            host = os.getenv("QDRANT_HOST", host)
+        if port == 6333:
+            port = os.getenv("QDRANT_PORT", port)
+        if collection == "radbot_memories":
+            collection = os.getenv("QDRANT_COLLECTION", collection)
+        
+        # Log Qdrant connection details (without sensitive info)
+        logging.info(f"Connecting to Qdrant with: host={host}, port={port}, collection={collection}")
+        if url:
+            logging.info(f"Using Qdrant URL: {url}")
         
         # Create memory service
         try:
             memory_service = QdrantMemoryService(
                 collection_name=collection,
                 host=host,
-                port=int(port) if port else None,
+                port=int(port) if isinstance(port, str) else port,
                 url=url,
                 api_key=api_key
             )

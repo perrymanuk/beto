@@ -11,6 +11,7 @@ An AI agent designed with a unique '90s SoCal influence. Beto blends practical f
 
 *   **`get_current_time`**: Fetches the current time for a specified city, or defaults to UTC if you don't name one. Simple, right?
 *   **`get_weather`**: Grabs the weather report for any city you ask about. Don't leave home without knowing the conditions, man.
+*   **`web_search`**: Performs a general web search. Handy for quick lookups.
 
 ### Home Assistant Control
 
@@ -30,13 +31,17 @@ An AI agent designed with a unique '90s SoCal influence. Beto blends practical f
 *   **`copy_file`**: Duplicates files or directories from one spot to another.
 *   **`move_file`**: Moves files or directories, which can also be used to rename them.
 *   **`delete_file`**: Removes files or directories permanently. Handle with care!
+*   **`edit_file_func`**: Modifies a file by applying a list of text replacements. Like using `sed` but safer.
 
-### Web Data (Crawl4AI)
+### Web & Search Tools
+
+(Crawl4AI tools are for ingesting and querying specific web content into a knowledge base)
 
 *   **`crawl4ai_ingest_and_read`**: Fetches content from a web page, lets me read it immediately, and also saves it in a knowledge base for later.
 *   **`crawl4ai_ingest_url`**: Fetches content from one or more URLs and stores it in the knowledge base. Good for building up info without cluttering the conversation.
 *   **`crawl4ai_query`**: Searches through the web content previously saved in the knowledge base using your search terms.
 *   **`crawl4ai_two_step`**: Reads a main page, finds links on it, and then fetches the content from those linked pages too. A deep dive.
+*   **`call_search_agent`**: Uses a specialized agent (powered by Tavily) for web search. Good for more focused queries.
 
 ### Task Management (Todos)
 
@@ -46,6 +51,8 @@ An AI agent designed with a unique '90s SoCal influence. Beto blends practical f
 *   **`list_projects`**: Shows all the different project lists you've created.
 *   **`list_project_tasks`**: Lists all the tasks specifically for one project.
 *   **`list_all_tasks`**: Gathers and lists all tasks from all projects. Tasks are sorted with "In Progress" at the top, followed by "Backlog" and "Done".
+*   **`update_task`**: Modifies an existing task (description, status, project, etc.).
+*   **`update_project`**: Renames an existing project.
 
 ### Calendar Management (Google Calendar)
 
@@ -59,6 +66,36 @@ An AI agent designed with a unique '90s SoCal influence. Beto blends practical f
 
 *   **`search_past_conversations`**: Searches back through our previous chats to find relevant info. Helps me remember context.
 *   **`store_important_information`**: Allows me to save specific facts or preferences you tell me for future reference.
+
+### Web Interface (UI)
+
+The RadBot web interface features an i3-inspired tiling layout, allowing you to manage multiple panels side-by-side.
+
+*   **Tiling Panels:**
+    *   **Chat:** The main conversation area.
+    *   **Sessions:** View and manage your chat history sessions.
+    *   **Tasks:** View and filter your todo tasks.
+    *   **Events:** View and filter the internal agent events (tool calls, transfers, etc.).
+*   **Input Commands:**
+    *   Prefix messages with `/` to execute built-in commands (e.g., `/tasks`, `/help`, `/clear`).
+    *   Prefix messages with `#` followed by a space (`# `) to save the text directly to your memory for future recall.
+
+### Input Prefixes & Commands
+
+*   **`/`**: Use the slash prefix for built-in commands (e.g., `/tasks`, `/help`, `/clear`). Type `/` in the input for suggestions.
+*   **`# `**: Use the hash prefix followed by a space (`# `) to save the text directly to your memory.
+*   **`/claude`**: Send text directly to Claude or use templated prompts defined in `config.yaml`. Examples:
+    - Direct: `/claude What's the capital of France?`
+    - Template: `/claude:pr-review PR_NUM="123" GH_REPO="https://github.com/org/repo"` (fills in variables in the template)
+
+### Specialized Agents Architecture
+
+RadBot features a multi-agent architecture with specialized agents that have focused toolsets, reducing token usage and improving performance:
+
+*   **`call_search_agent`**: (See Web & Search Tools) - Specialized for web search tasks
+*   **`call_code_execution_agent`**: Executes Python code securely. Like having a mini-IDE built-in.
+*   **`call_scout_agent`**: Researches technical topics using various sources (web, docs, code repos). Your personal research assistant.
+*   **`call_axel_agent`**: Implements code and technical solutions based on specifications from Scout. Features a dynamic worker system that can distribute implementation tasks across specialized "thing" agents for parallel execution of code implementation, documentation, and testing.
 
 ### System Operations (Requires Caution)
 
@@ -77,11 +114,12 @@ An AI agent designed with a unique '90s SoCal influence. Beto blends practical f
    make setup
    ```
 
-3. Create your `.env` file from the example:
+3. Configure the application:
    ```
-   cp .env.example .env
-   # Edit .env with your API keys and configuration
+   cp config.yaml.example config.yaml
+   # Edit config.yaml with your API keys, model settings, and tool configurations
    ```
+   RadBot uses `config.yaml` for most settings, including API keys, model preferences, and tool enablement.
 
 ## Usage
 

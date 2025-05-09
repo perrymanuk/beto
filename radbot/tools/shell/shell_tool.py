@@ -2,10 +2,11 @@
 
 This module registers the shell command execution tool with the Google Agent SDK,
 allowing the bot to execute shell commands with proper security controls.
+It supports both subprocess and Claude CLI MCP backends for command execution.
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 
 from google.ai.generativelanguage import Tool, FunctionDeclaration, Schema, Type
 from google.adk.tools import FunctionTool
@@ -15,16 +16,53 @@ from radbot.tools.shell.shell_command import execute_shell_command, ALLOWED_COMM
 logger = logging.getLogger(__name__)
 
 
-def get_shell_tool(strict_mode: bool = True) -> Any:
+def execute_command_with_claude(
+    command: str,
+    arguments: Optional[List[str]] = None,
+    timeout: int = 120,
+    strict_mode: bool = True
+) -> Dict[str, Any]:
+    """
+    Execute a shell command (Claude CLI support has been removed).
+    
+    This function now just returns an error message indicating that 
+    Claude CLI command execution has been deprecated in favor of direct prompting.
+    
+    Args:
+        command: The command to execute
+        arguments: Command arguments (optional)
+        timeout: Maximum execution time in seconds
+        strict_mode: Whether to enforce command allowlisting
+        
+    Returns:
+        Dict with error message
+    """
+    error_message = "Claude CLI shell integration has been removed. Only Claude direct prompting is supported."
+    logger.warning(error_message)
+    return {
+        "stdout": "",
+        "stderr": error_message,
+        "return_code": -1,
+        "error": error_message,
+    }
+
+
+def get_shell_tool(strict_mode: bool = True, use_claude_cli: bool = False) -> Any:
     """Get the shell command execution tool configured for the Google Agent SDK.
     
     Args:
         strict_mode: When True, only allow-listed commands are permitted.
                     When False, any command can be executed (SECURITY RISK).
+        use_claude_cli: Whether to use Claude CLI for command execution (deprecated).
+                    Now always uses subprocess regardless of this setting.
     
     Returns:
         A tool object ready to be used with the agent.
     """
+    # Warn if attempting to use Claude CLI
+    if use_claude_cli:
+        logger.warning("Claude CLI shell execution has been removed. Using subprocess instead.")
+        
     # Dynamically generate the description based on the allowed commands
     allowed_commands_str = ", ".join(sorted(list(ALLOWED_COMMANDS)))
     
@@ -42,6 +80,9 @@ def get_shell_tool(strict_mode: bool = True) -> Any:
         )
         logger.warning("Shell tool initialized in ALLOW ALL mode - SECURITY RISK")
     
+    # Always using subprocess now
+    tool_description += f" (Using subprocess for execution)"
+    
     # Create a wrapper function for ADK compatibility
     def shell_command_tool(command: str, arguments: Optional[List[str]] = None, timeout: int = 60) -> Dict[str, Any]:
         """Execute a shell command securely.
@@ -57,6 +98,8 @@ def get_shell_tool(strict_mode: bool = True) -> Any:
         if arguments is None:
             arguments = []
         
+        # Always use subprocess
+        logger.info(f"Executing command '{command}' using subprocess")
         return execute_shell_command(
             command=command,
             arguments=arguments,
@@ -73,7 +116,7 @@ def get_shell_tool(strict_mode: bool = True) -> Any:
 
 
 async def handle_shell_function_call(
-    function_name: str, arguments: Dict[str, Any], strict_mode: bool = True
+    function_name: str, arguments: Dict[str, Any], strict_mode: bool = True, use_claude_cli: bool = False
 ) -> Dict[str, Any]:
     """Handle function calls from the agent to the shell command execution tool.
     
@@ -81,10 +124,16 @@ async def handle_shell_function_call(
         function_name: The name of the function being called.
         arguments: The arguments passed to the function.
         strict_mode: Whether to enforce command allow-listing.
+        use_claude_cli: Whether to use Claude CLI for command execution (deprecated).
+                        Now always uses subprocess regardless of this setting.
     
     Returns:
         The result of executing the shell command.
     """
+    # Warn if attempting to use Claude CLI
+    if use_claude_cli:
+        logger.warning("Claude CLI shell execution has been removed. Using subprocess instead.")
+        
     if function_name != "execute_shell_command":
         error_message = f"Unknown function: {function_name}"
         logger.error(error_message)
@@ -132,7 +181,8 @@ async def handle_shell_function_call(
             "error": error_message
         }
     
-    # Execute the command with the specified mode
+    # Always use subprocess now
+    logger.info(f"Function call: Executing command '{command}' using subprocess")
     return execute_shell_command(
         command=command,
         arguments=arg_list,
@@ -141,7 +191,7 @@ async def handle_shell_function_call(
     )
 
 
-def get_genai_shell_tool(strict_mode: bool = True) -> Tool:
+def get_genai_shell_tool(strict_mode: bool = True, use_claude_cli: bool = False) -> Tool:
     """Get the shell command execution tool for the Google GenAI SDK.
     
     This is used when working directly with the GenAI SDK instead of ADK.
@@ -149,10 +199,16 @@ def get_genai_shell_tool(strict_mode: bool = True) -> Tool:
     Args:
         strict_mode: When True, only allow-listed commands are permitted.
                     When False, any command can be executed (SECURITY RISK).
+        use_claude_cli: Whether to use Claude CLI for command execution (deprecated).
+                        Now always uses subprocess regardless of this setting.
     
     Returns:
         A Tool object for the GenAI SDK.
     """
+    # Warn if attempting to use Claude CLI
+    if use_claude_cli:
+        logger.warning("Claude CLI shell execution has been removed. Using subprocess instead.")
+        
     # Dynamically generate the description based on the allowed commands
     allowed_commands_str = ", ".join(sorted(list(ALLOWED_COMMANDS)))
     
@@ -169,6 +225,9 @@ def get_genai_shell_tool(strict_mode: bool = True) -> Tool:
             "Use with extreme caution. Provide the command name and a list of arguments."
         )
         logger.warning("Shell tool initialized in ALLOW ALL mode - SECURITY RISK")
+    
+    # Always using subprocess now
+    tool_description += f" (Using subprocess for execution)"
         
     return Tool(
         function_declarations=[
