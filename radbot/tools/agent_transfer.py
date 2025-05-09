@@ -32,6 +32,7 @@ def handle_agent_transfers(agent, from_agent: str, request: str):
     logger.info(f"Transfer request from {from_agent} to {agent.name}: {request[:50]}...")
 
     # Instead of forwarding the request, just return a greeting from the new agent
+    # This prevents context confusion between agents by not forwarding the original prompt
     greeting = f"I am now {agent.name}. How can I help you today?"
     logger.info(f"Agent transfer complete - request NOT forwarded to maintain context separation")
     return greeting

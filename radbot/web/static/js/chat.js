@@ -684,38 +684,78 @@ export function sendMessage() {
     messageHistoryIndex = -1;
     chatInput.classList.remove('history-mode');
     
-    // Special handler for "scout pls" or "scount pls" message - force agent switch
-    if (message.toLowerCase() === 'scout pls' || message.toLowerCase() === 'scount pls') {
-        console.log("SCOUT REQUEST DETECTED - Forcing agent switch");
-        // Force the agent change
-        window.state.currentAgentName = 'SCOUT';
-        
-        // Update CSS and status
-        document.documentElement.style.setProperty('--agent-name', `"${window.state.currentAgentName}"`);
-        
-        // Direct update of status bar element to ensure it updates
-        const agentStatus = document.getElementById('agent-status');
-        if (agentStatus) {
-            agentStatus.textContent = `AGENT: ${window.state.currentAgentName}`;
-            console.log("Directly updated agent status element text: " + agentStatus.textContent);
-            
-            // Visual feedback for the change
-            agentStatus.style.color = 'var(--term-blue)';
-            setTimeout(() => {
-                agentStatus.style.color = '';
-            }, 500);
-        } else {
-            console.error("Cannot find agent-status element in DOM");
+    // Special handler for agent pls commands - force agent switch without forwarding previous prompt
+    const agentPlsRegex = /^(\w+)\s+pls$/i;
+    const agentPlsMatch = message.match(agentPlsRegex);
+
+    if (agentPlsMatch) {
+        const targetAgent = agentPlsMatch[1].toUpperCase();
+        console.log(`AGENT REQUEST DETECTED - Forcing switch to ${targetAgent}`);
+
+        // Check if this is a valid agent
+        const validAgents = ['SCOUT', 'BETO', 'AXEL', 'SEARCH', 'CODE'];
+        if (validAgents.includes(targetAgent) || targetAgent.endsWith('_AGENT')) {
+            // Use the context switching function if available
+            if (window.switchAgentContext && typeof window.switchAgentContext === 'function') {
+                window.switchAgentContext(targetAgent);
+            } else {
+                // Direct update if context switching not available
+                window.state.currentAgentName = targetAgent;
+            }
+
+            // Update CSS and status
+            document.documentElement.style.setProperty('--agent-name', `"${window.state.currentAgentName}"`);
+
+            // Direct update of status bar element to ensure it updates
+            const agentStatus = document.getElementById('agent-status');
+            if (agentStatus) {
+                agentStatus.textContent = `AGENT: ${window.state.currentAgentName}`;
+                console.log("Directly updated agent status element text: " + agentStatus.textContent);
+
+                // Visual feedback for the change
+                agentStatus.style.color = 'var(--term-blue)';
+                setTimeout(() => {
+                    agentStatus.style.color = '';
+                }, 500);
+            } else {
+                console.error("Cannot find agent-status element in DOM");
+            }
+
+            // Update other UI elements
+            window.statusUtils.updateClock();
+
+            // First add the user message to the chat log
+            addMessage('user', message);
+
+            // Then add the system message about the agent switch
+            addMessage('system', `Agent switched to: ${window.state.currentAgentName}`);
+
+            // Force a status update to update all UI elements consistently
+            window.statusUtils.setStatus('ready');
+
+            // Clear any pending WebSocket messages to prevent forwarding
+            if (window.socket && window.socket.manager && window.socket.manager.pendingMessages) {
+                window.socket.manager.pendingMessages = [];
+            }
+
+            // Send introduction request with explicit agent targeting
+            // This prevents any previous context from being included
+            if (window.socket && window.socket.socketConnected) {
+                window.socket.send(JSON.stringify({
+                    message: `AGENT:${targetAgent}:Introduce yourself and describe your capabilities.`
+                }));
+
+                // Set status to indicate processing
+                window.statusUtils.setStatus('thinking');
+            }
+
+            // Clear the input field and resize
+            chatInput.value = '';
+            resizeTextarea();
+
+            // Return early to prevent normal message handling
+            return;
         }
-        
-        // Update other UI elements
-        window.statusUtils.updateClock();
-        
-        // Add a system message
-        addMessage('system', `Agent switched to: ${window.state.currentAgentName}`);
-        
-        // Force a status update to update all UI elements consistently
-        window.statusUtils.setStatus('ready');
     }
     
     // Check if this is a slash command
@@ -741,8 +781,20 @@ export function sendMessage() {
         if (window.socket.socketConnected) {
             // Send via WebSocket directly
             console.log("Sending message via connected WebSocket");
+
+            // Ensure we have the most up-to-date agent name in case it was changed via transfer
+            // This ensures we maintain context properly after agent transfers
+            const currentAgentName = window.state.currentAgentName;
+
+            // Simplified approach with no agent-specific contexts
+            console.log(`Sending message to agent: ${currentAgentName} (simplified approach)`)
+
+            // Always include current agent name to ensure correct targeting
+            const targetedMessage = `AGENT:${currentAgentName}:${message}`;
+            console.log(`Including agent targeting: ${currentAgentName}`);
+
             window.socket.send(JSON.stringify({
-                message: message
+                message: targetedMessage
             }));
 
             // Set status to indicate processing
@@ -924,10 +976,17 @@ async function sendMessageREST(message, displayMessage) {
     // and input is already cleared before this function is called
     
     try {
+        // Ensure we have the most up-to-date agent name in case it was changed via transfer
+        const currentAgentName = window.state.currentAgentName;
+
+        // Format message with agent targeting prefix for consistent handling on server
+        const targetedMessage = `AGENT:${currentAgentName}:${message}`;
+        console.log(`Including agent targeting in REST call: ${currentAgentName}`);
+
         const formData = new FormData();
-        formData.append('message', message);
+        formData.append('message', targetedMessage); // Use the targeted message
         formData.append('session_id', window.state.sessionId);
-        
+
         const response = await fetch('/api/chat', {
             method: 'POST',
             body: formData

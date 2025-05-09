@@ -113,11 +113,34 @@ app.add_middleware(
 )
 
 # Mount static files directory
-app.mount(
-    "/static", 
-    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), 
-    name="static"
-)
+# Create a custom class that only handles HTTP requests, not WebSocket
+class HTTPOnlyStaticFiles(StaticFiles):
+    """StaticFiles class that only handles HTTP requests, not WebSocket."""
+    async def __call__(self, scope, receive, send):
+        """Handle request or return 404 for non-HTTP requests."""
+        if scope["type"] != "http":
+            # Log and ignore non-HTTP requests (like WebSocket)
+            logger.info(f"Ignoring non-HTTP request to static files: {scope['type']}")
+            return
+        await super().__call__(scope, receive, send)
+
+def mount_static_files():
+    """Mount static files after all routes have been defined."""
+    try:
+        app.mount(
+            "/static",
+            HTTPOnlyStaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")),
+            name="static"
+        )
+        logger.info("Static files mounted successfully")
+    except Exception as e:
+        logger.error(f"Error mounting static files: {str(e)}", exc_info=True)
+
+# Schedule static files mounting after all other routes are registered
+@app.on_event("startup")
+async def mount_static_files_on_startup():
+    """Mount static files during application startup after routes are registered."""
+    mount_static_files()
 
 # Set up Jinja2 templates
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
@@ -457,13 +480,141 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, session_mana
                     await manager.send_status(session_id, "ready")
                     continue
 
+            # Check for special agent targeting message format (AGENT:NAME:actual message)
+            target_agent = None
+            if user_message.startswith("AGENT:"):
+                parts = user_message.split(":", 2)
+                if len(parts) >= 3:
+                    target_agent = parts[1].strip().lower()
+                    user_message = parts[2].strip()
+                    logger.info(f"Detected explicit agent targeting: {target_agent}")
+
             # Send "thinking" status
             await manager.send_status(session_id, "thinking")
 
             try:
                 # Process the message
                 logger.info(f"Processing WebSocket message for session {session_id}")
-                result = runner.process_message(user_message)
+
+                # Handle explicit agent targeting if present
+                if target_agent:
+                    # Import agent transfer tool
+                    from radbot.tools.agent_transfer import process_request, find_agent_by_name
+                    from agent import root_agent  # Import from root module
+
+                    # Debug the agent tree
+                    logger.info("DEBUG: Agent tree structure:")
+                    if hasattr(root_agent, 'name'):
+                        logger.info(f"Root agent name: {root_agent.name}")
+                    else:
+                        logger.info("Root agent has no name attribute")
+
+                    if hasattr(root_agent, 'sub_agents'):
+                        sub_agents = [sa.name for sa in root_agent.sub_agents if hasattr(sa, 'name')]
+                        logger.info(f"Sub-agents: {sub_agents}")
+                    else:
+                        logger.info("Root agent has no sub_agents attribute")
+
+                    # Make case-insensitive check for scout
+                    if target_agent.lower() == 'scout':
+                        # Try direct access to scout agent
+                        for sub_agent in root_agent.sub_agents:
+                            if hasattr(sub_agent, 'name') and sub_agent.name.lower() == 'scout':
+                                logger.info(f"Found Scout agent directly: {sub_agent.name}")
+                                # Process the request directly with the Scout agent's generate_content method
+                                # This bypasses the transfer mechanism completely to avoid context bleed
+                                try:
+                                    # First try direct generation to bypass any transfer issues
+                                    if hasattr(sub_agent, 'generate_content') and callable(sub_agent.generate_content):
+                                        logger.info("Calling Scout's generate_content method directly")
+                                        logger.info(f"Direct message to Scout: {user_message[:50]}...")
+                                        response = sub_agent.generate_content(user_message)
+
+                                        # Extract text from response
+                                        if hasattr(response, 'text'):
+                                            response_text = response.text
+                                        elif hasattr(response, 'parts') and response.parts:
+                                            response_text = ''
+                                            for part in response.parts:
+                                                if hasattr(part, 'text') and part.text:
+                                                    response_text += part.text
+                                        else:
+                                            # Fallback to string representation
+                                            response_text = str(response)
+
+                                        logger.info(f"Direct Scout response received, length: {len(response_text)}")
+                                    else:
+                                        # Fallback to process_request
+                                        logger.info("Fallback to process_request for Scout")
+                                        response_text = process_request(sub_agent, user_message)
+                                except Exception as e:
+                                    logger.error(f"Error with direct generation: {str(e)}", exc_info=True)
+                                    # Try process_request as a fallback
+                                    response_text = process_request(sub_agent, user_message)
+
+                                # Log the response for debugging
+                                logger.info(f"Scout's response (first 100 chars): {response_text[:100]}...")
+
+                                # Create a result with the response
+                                result = {
+                                    "response": response_text,
+                                    "events": [{
+                                        "type": "model_response",
+                                        "category": "model_response",
+                                        "text": response_text,
+                                        "is_final": True,
+                                        "agent_name": "SCOUT",
+                                        "timestamp": datetime.now().isoformat()
+                                    }]
+                                }
+                                break
+                        else:
+                            # If we get here, we didn't find Scout directly
+                            logger.warning("Could not find Scout agent directly in sub_agents")
+                            # Try using the standard finder
+                            target = find_agent_by_name(root_agent, target_agent)
+                            if target:
+                                logger.info(f"Found target agent with find_agent_by_name: {target.name}")
+                                response_text = process_request(target, user_message)
+                                result = {
+                                    "response": response_text,
+                                    "events": [{
+                                        "type": "model_response",
+                                        "category": "model_response",
+                                        "text": response_text,
+                                        "is_final": True,
+                                        "agent_name": target.name,
+                                        "timestamp": datetime.now().isoformat()
+                                    }]
+                                }
+                            else:
+                                logger.warning(f"Target agent {target_agent} not found, using default runner")
+                                result = runner.process_message(user_message)
+                    else:
+                        # Standard approach for other agents
+                        target = find_agent_by_name(root_agent, target_agent)
+                        if target:
+                            logger.info(f"Found target agent: {target.name}")
+                            # Process the request with the specific agent
+                            response_text = process_request(target, user_message)
+                            # Create a result with the response
+                            result = {
+                                "response": response_text,
+                                "events": [{
+                                    "type": "model_response",
+                                    "category": "model_response",
+                                    "text": response_text,
+                                    "is_final": True,
+                                    "agent_name": target.name,
+                                    "timestamp": datetime.now().isoformat()
+                                }]
+                            }
+                        else:
+                            logger.warning(f"Target agent {target_agent} not found, using default runner")
+                            result = runner.process_message(user_message)
+                else:
+                    # Use normal runner for processing
+                    result = runner.process_message(user_message)
                 
                 # Extract response and events
                 response = result.get("response", "")

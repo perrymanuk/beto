@@ -64,25 +64,59 @@ class WebSocketManager {
         // Only attempt to close if not already closed
         if (this.socket.readyState !== WebSocket.CLOSED) {
           console.log(`Closing existing socket for session ${this.sessionId} (state: ${this.getReadyStateString()})`);
-          this.socket.close();
+          // Use a clean close code to avoid excessive reconnection attempts
+          this.socket.close(1000, "Clean reconnection");
         }
       } catch (e) {
         console.warn(`Error closing existing socket for session ${this.sessionId}:`, e);
       }
       this.socket = null;
     }
+
+    // Check if we've had too many reconnection attempts in a short time
+    if (this.reconnectAttempts > 5) {
+      console.warn(`Too many reconnection attempts (${this.reconnectAttempts}), taking a longer break`);
+      // Wait a bit longer between reconnection attempts
+      setTimeout(() => {
+        console.log("Resuming reconnection attempts after break");
+        this._doConnect();
+      }, 5000);
+      return;
+    }
+
+    this._doConnect();
+  }
+
+  // Actual connection implementation
+  _doConnect() {
     
     const wsUrl = `${this.baseUrl}/ws/${this.sessionId}`;
     console.log(`Connecting to WebSocket at ${wsUrl} (attempt #${this.reconnectAttempts + 1})`);
-    
+
     try {
       // Update activity timestamp
       this.lastActivityTimestamp = Date.now();
-      
-      // Create new WebSocket
-      this.socket = new WebSocket(wsUrl);
+
+      // Create new WebSocket with a short timeout
+      const socket = new WebSocket(wsUrl);
+      this.socket = socket;
+
+      // Add connection timeout
+      const connectionTimeout = setTimeout(() => {
+        if (socket.readyState !== WebSocket.OPEN) {
+          console.warn(`WebSocket connection timed out for session ${this.sessionId}`);
+          try {
+            socket.close(1000, "Connection timeout");
+          } catch (e) {
+            console.warn(`Error closing WebSocket after timeout: ${e}`);
+          }
+        }
+      }, 5000);
       
       this.socket.onopen = () => {
+        // Clear the connection timeout
+        clearTimeout(connectionTimeout);
+
         console.log(`WebSocket connected for session ${this.sessionId}`);
         this.connected = true;
         this.reconnectAttempts = 0;
@@ -277,8 +311,22 @@ class WebSocketManager {
             console.warn(`Too many missed heartbeats (${this.missedHeartbeats}) for session ${this.sessionId}, closing connection`);
             this.stopHeartbeat();
             if (this.socket) {
-              this.socket.close();
+              try {
+                // Only attempt to close if the socket is in an open or connecting state
+                if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
+                  this.socket.close(1000, "Heartbeat timeout"); // Use clean close code
+                }
+              } catch (e) {
+                console.warn(`Error closing WebSocket: ${e}`);
+              }
             }
+
+            // Reset the socket completely
+            this.socket = null;
+            this.connected = false;
+
+            // Set a longer reconnect delay after heartbeat failures
+            this.reconnectAttempts = Math.min(this.maxReconnectAttempts - 1, this.reconnectAttempts + 2);
           }
         } else {
           // Socket isn't open, force reconnection
@@ -365,101 +413,99 @@ class WebSocketManager {
         // Process various event types
         if (Array.isArray(data.content)) {
           data.content.forEach(event => {
-            // Handle agent transfer events
-            if (event.type === 'agent_transfer' || event.category === 'agent_transfer') {
-              console.log('Agent transfer event detected:', event);
+            // Handle agent transfer events - Check for actions.transfer_to_agent (ADK 0.4.0 style)
+            if (event.actions && event.actions.transfer_to_agent) {
+              const newAgent = event.actions.transfer_to_agent;
+              console.log(`ADK 0.4.0 agent transfer detected via actions.transfer_to_agent: ${newAgent}`);
+              console.log(`Agent transfer: ${window.state.currentAgentName} → ${newAgent}`);
 
-              // Check if the target agent is specified
-              if (event.to_agent) {
-                const newAgent = event.to_agent;
-                console.log(`Agent transfer detected: ${window.state.currentAgentName} → ${newAgent}`);
-
-                // Save current agent's context and switch to the new agent's context
-                if (window.switchAgentContext && typeof window.switchAgentContext === 'function') {
-                  const context = window.switchAgentContext(newAgent);
-                  console.log(`Switched to agent context for ${newAgent}:`, context);
-
-                  // If this is a new agent we haven't seen before, clear pending messages
-                  if (context.lastMessageId === null) {
-                    // Clear any pending messages to prevent re-sending the last message
-                    if (this.pendingMessages && this.pendingMessages.length > 0) {
-                      console.log(`Clearing ${this.pendingMessages.length} pending messages after agent transfer`);
-                      this.pendingMessages = [];
-                    }
-                  }
-                } else {
-                  // If context switching not available, just update agent name directly
-                  console.log("Agent context switching not available, using basic agent update");
-                  window.state.currentAgentName = newAgent;
-
-                  // Additionally clear any pending WebSocket messages to prevent re-sending
-                  if (this.pendingMessages && this.pendingMessages.length > 0) {
-                    console.log(`Clearing ${this.pendingMessages.length} pending messages after agent transfer`);
-                    this.pendingMessages = [];
-                  }
+              // Store this as a permanent transfer so it persists across page refreshes
+              try {
+                if (window.localStorage) {
+                  window.localStorage.setItem('lastActiveAgent', newAgent);
+                  console.log(`Stored ${newAgent} as lastActiveAgent in localStorage`);
                 }
-
-                // IMPORTANT: First update the model before updating the agent status
-                // This ensures the model update isn't overridden by updateAgentStatus
-
-                // Get model from event details if available
-                if (event.details && event.details.model) {
-                  window.statusUtils.updateModelStatus(event.details.model);
-                  console.log(`Updated model from event details: ${event.details.model}`);
-                }
-                // Try to get model from agentModels if available
-                else if (window.state.agentModels) {
-                  // Convert to lowercase for case-insensitive lookup
-                  const agentKey = newAgent.toLowerCase();
-
-                  // Handle 'scout' agent specially since it's stored as scout_agent in backend
-                  if (agentKey === 'scout' && window.state.agentModels['scout_agent']) {
-                    window.statusUtils.updateModelStatus(window.state.agentModels['scout_agent']);
-                    console.log(`Updated model from agentModels for scout: ${window.state.agentModels['scout_agent']}`);
-                  }
-                  // Try exact match
-                  else if (window.state.agentModels[agentKey]) {
-                    window.statusUtils.updateModelStatus(window.state.agentModels[agentKey]);
-                    console.log(`Updated model from agentModels: ${window.state.agentModels[agentKey]}`);
-                  }
-                  // Try agent_name format
-                  else if (window.state.agentModels[agentKey + '_agent']) {
-                    window.statusUtils.updateModelStatus(window.state.agentModels[agentKey + '_agent']);
-                    console.log(`Updated model from agentModels with _agent suffix: ${window.state.agentModels[agentKey + '_agent']}`);
-                  }
-                  // Fallback to updateModelForCurrentAgent
-                  else {
-                    console.log(`Agent ${agentKey} not found in agentModels, using fallback lookup...`);
-                    if (typeof window.updateModelForCurrentAgent === 'function') {
-                      // Temporarily set the agent name so updateModelForCurrentAgent works
-                      const savedAgent = window.state.currentAgentName;
-                      window.state.currentAgentName = newAgent;
-                      window.updateModelForCurrentAgent();
-                      window.state.currentAgentName = savedAgent; // Restore
-                    }
-                  }
-                }
-                // Last resort fallback
-                else if (typeof window.updateModelForCurrentAgent === 'function') {
-                  // Temporarily set the agent name so updateModelForCurrentAgent works
-                  const savedAgent = window.state.currentAgentName;
-                  window.state.currentAgentName = newAgent;
-                  window.updateModelForCurrentAgent();
-                  window.state.currentAgentName = savedAgent; // Restore
-                }
-
-                // Now update the agent status
-                window.statusUtils.updateAgentStatus(newAgent);
-
-                // Force an update of the status bar
-                if (window.statusUtils.updateStatusBar) {
-                  window.statusUtils.updateStatusBar();
-                }
-
-                // Add a system message to notify the user about the agent change
-                const transferMessage = `Agent switched to: ${newAgent.toUpperCase()}`;
-                window.chatModule.addMessage('system', transferMessage);
+              } catch (e) {
+                console.warn(`Failed to update localStorage with lastActiveAgent: ${e}`);
               }
+
+              // Update agent state (simplified approach)
+              if (window.switchAgentContext && typeof window.switchAgentContext === 'function') {
+                // Call the simplified switchAgentContext function
+                window.switchAgentContext(newAgent);
+                console.log(`Agent name updated to: ${newAgent} (simplified approach)`);
+              } else {
+                // Direct update if function not available
+                window.state.currentAgentName = newAgent;
+                console.log(`Agent name directly updated to: ${newAgent}`);
+              }
+
+              // Always clear pending messages on agent transfer to prevent context bleed
+              if (this.pendingMessages && this.pendingMessages.length > 0) {
+                console.log(`Clearing ${this.pendingMessages.length} pending messages after agent transfer`);
+                this.pendingMessages = [];
+              }
+
+              // IMPORTANT: First update the model before updating the agent status
+              // This ensures the model update isn't overridden by updateAgentStatus
+
+              // Get model from event details if available
+              if (event.details && event.details.model) {
+                window.statusUtils.updateModelStatus(event.details.model);
+                console.log(`Updated model from event details: ${event.details.model}`);
+              }
+              // Try to get model from agentModels if available
+              else if (window.state.agentModels) {
+                // Convert to lowercase for case-insensitive lookup
+                const agentKey = newAgent.toLowerCase();
+
+                // Handle 'scout' agent specially since it's stored as scout_agent in backend
+                if (agentKey === 'scout' && window.state.agentModels['scout_agent']) {
+                  window.statusUtils.updateModelStatus(window.state.agentModels['scout_agent']);
+                  console.log(`Updated model from agentModels for scout: ${window.state.agentModels['scout_agent']}`);
+                }
+                // Try exact match
+                else if (window.state.agentModels[agentKey]) {
+                  window.statusUtils.updateModelStatus(window.state.agentModels[agentKey]);
+                  console.log(`Updated model from agentModels: ${window.state.agentModels[agentKey]}`);
+                }
+                // Try agent_name format
+                else if (window.state.agentModels[agentKey + '_agent']) {
+                  window.statusUtils.updateModelStatus(window.state.agentModels[agentKey + '_agent']);
+                  console.log(`Updated model from agentModels with _agent suffix: ${window.state.agentModels[agentKey + '_agent']}`);
+                }
+                // Fallback to updateModelForCurrentAgent
+                else {
+                  console.log(`Agent ${agentKey} not found in agentModels, using fallback lookup...`);
+                  if (typeof window.updateModelForCurrentAgent === 'function') {
+                    // Temporarily set the agent name so updateModelForCurrentAgent works
+                    const savedAgent = window.state.currentAgentName;
+                    window.state.currentAgentName = newAgent;
+                    window.updateModelForCurrentAgent();
+                    window.state.currentAgentName = savedAgent; // Restore
+                  }
+                }
+              }
+              // Last resort fallback
+              else if (typeof window.updateModelForCurrentAgent === 'function') {
+                // Temporarily set the agent name so updateModelForCurrentAgent works
+                const savedAgent = window.state.currentAgentName;
+                window.state.currentAgentName = newAgent;
+                window.updateModelForCurrentAgent();
+                window.state.currentAgentName = savedAgent; // Restore
+              }
+
+              // Now update the agent status
+              window.statusUtils.updateAgentStatus(newAgent);
+
+              // Force an update of the status bar
+              if (window.statusUtils.updateStatusBar) {
+                window.statusUtils.updateStatusBar();
+              }
+
+              // Add a system message to notify the user about the agent change
+              const transferMessage = `Agent switched to: ${newAgent.toUpperCase()}`;
+              window.chatModule.addMessage('system', transferMessage);
             }
             
             // Process model_response events to display in chat
