@@ -17,22 +17,24 @@ logger = logging.getLogger(__name__)
 def handle_agent_transfers(agent, from_agent: str, request: str):
     """
     Handle a transfer request from one agent to another.
-    
+
     This function processes a transfer request from one agent to another,
     handling the agent lookup and transfer.
-    
+
     Args:
         agent: The agent receiving the transfer
         from_agent: The name of the agent sending the transfer
         request: The request to process
-        
+
     Returns:
         The response from the agent
     """
     logger.info(f"Transfer request from {from_agent} to {agent.name}: {request[:50]}...")
-    
-    # Process the request directly - no need to locate the agent as it's already passed
-    return process_request(agent, request)
+
+    # Instead of forwarding the request, just return a greeting from the new agent
+    greeting = f"I am now {agent.name}. How can I help you today?"
+    logger.info(f"Agent transfer complete - request NOT forwarded to maintain context separation")
+    return greeting
 
 def process_request(agent, request: str) -> str:
     """

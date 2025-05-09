@@ -368,25 +368,50 @@ class WebSocketManager {
             // Handle agent transfer events
             if (event.type === 'agent_transfer' || event.category === 'agent_transfer') {
               console.log('Agent transfer event detected:', event);
-              
+
               // Check if the target agent is specified
               if (event.to_agent) {
                 const newAgent = event.to_agent;
                 console.log(`Agent transfer detected: ${window.state.currentAgentName} → ${newAgent}`);
-                
+
+                // Save current agent's context and switch to the new agent's context
+                if (window.switchAgentContext && typeof window.switchAgentContext === 'function') {
+                  const context = window.switchAgentContext(newAgent);
+                  console.log(`Switched to agent context for ${newAgent}:`, context);
+
+                  // If this is a new agent we haven't seen before, clear pending messages
+                  if (context.lastMessageId === null) {
+                    // Clear any pending messages to prevent re-sending the last message
+                    if (this.pendingMessages && this.pendingMessages.length > 0) {
+                      console.log(`Clearing ${this.pendingMessages.length} pending messages after agent transfer`);
+                      this.pendingMessages = [];
+                    }
+                  }
+                } else {
+                  // If context switching not available, just update agent name directly
+                  console.log("Agent context switching not available, using basic agent update");
+                  window.state.currentAgentName = newAgent;
+
+                  // Additionally clear any pending WebSocket messages to prevent re-sending
+                  if (this.pendingMessages && this.pendingMessages.length > 0) {
+                    console.log(`Clearing ${this.pendingMessages.length} pending messages after agent transfer`);
+                    this.pendingMessages = [];
+                  }
+                }
+
                 // IMPORTANT: First update the model before updating the agent status
                 // This ensures the model update isn't overridden by updateAgentStatus
-                
+
                 // Get model from event details if available
                 if (event.details && event.details.model) {
                   window.statusUtils.updateModelStatus(event.details.model);
                   console.log(`Updated model from event details: ${event.details.model}`);
-                } 
+                }
                 // Try to get model from agentModels if available
                 else if (window.state.agentModels) {
                   // Convert to lowercase for case-insensitive lookup
                   const agentKey = newAgent.toLowerCase();
-                  
+
                   // Handle 'scout' agent specially since it's stored as scout_agent in backend
                   if (agentKey === 'scout' && window.state.agentModels['scout_agent']) {
                     window.statusUtils.updateModelStatus(window.state.agentModels['scout_agent']);
@@ -422,15 +447,15 @@ class WebSocketManager {
                   window.updateModelForCurrentAgent();
                   window.state.currentAgentName = savedAgent; // Restore
                 }
-                
+
                 // Now update the agent status
                 window.statusUtils.updateAgentStatus(newAgent);
-                
+
                 // Force an update of the status bar
                 if (window.statusUtils.updateStatusBar) {
                   window.statusUtils.updateStatusBar();
                 }
-                
+
                 // Add a system message to notify the user about the agent change
                 const transferMessage = `Agent switched to: ${newAgent.toUpperCase()}`;
                 window.chatModule.addMessage('system', transferMessage);

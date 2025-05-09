@@ -638,25 +638,35 @@ function navigateMessageHistory(direction) {
 // Send message via WebSocket
 export function sendMessage() {
     const message = chatInput.value.trim();
-    
+
     if (!message) return;
-    
+
     // Handle # prefix for memory storage
     if (message.startsWith('# ')) {
         // Extract the memory content (remove the # prefix)
         const memoryContent = message.substring(2).trim();
-        
+
         if (memoryContent) {
             // Store in memory via API
             storeInMemory(memoryContent);
-            
+
             // Clear input and update UI
             chatInput.value = '';
             resizeTextarea();
-            
+
             // Add confirmation message
             addMessage('system', `📝 Saved to memory: "${memoryContent}"`);
             return;
+        }
+    }
+
+    // Save this message to the current agent's context
+    if (window.state && window.state.agentContexts && window.state.currentAgentName) {
+        const agentContext = window.state.agentContexts[window.state.currentAgentName];
+        if (agentContext) {
+            agentContext.lastSentMessage = message;
+            agentContext.pendingResponse = true;
+            console.log(`Saved message to ${window.state.currentAgentName} context:`, message);
         }
     }
     

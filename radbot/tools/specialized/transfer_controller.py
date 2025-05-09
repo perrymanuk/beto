@@ -131,10 +131,22 @@ class TransferController:
             
             # Perform the transfer
             try:
-                # Use the built-in transfer_to_agent tool
+                # Use the built-in transfer_to_agent tool but don't forward the original message
+                # Instead, replace it with a simple greeting to prevent context confusion
+
+                # Save original message but don't forward it
+                original_message = params.get("message", "")
+                logger.info(f"Original transfer message (not forwarded): {original_message[:50]}...")
+
+                # Replace with simple greeting
+                params["message"] = f"Agent transfer initiated. Do not respond yet."
+
+                # Perform the transfer with the modified message
                 response = transfer_to_agent(params)
-                logger.info(f"Transferred from '{agent_name}' to '{target_agent_name}'")
-                return response
+                logger.info(f"Transferred from '{agent_name}' to '{target_agent_name}' with context separation")
+
+                # Return a standard greeting instead of the actual response
+                return {"response": f"I am now {target_agent_name}. How can I help you today?"}
             except Exception as e:
                 error_msg = f"Error transferring to '{target_agent_name}': {str(e)}"
                 logger.error(error_msg)

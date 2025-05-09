@@ -23,6 +23,14 @@ const state = {
     currentModel: "gemini-2.5-pro", // Default model - will be updated with actual model info from events
     isDarkTheme: true, // Always use dark theme
     agentModels: {}, // Will be populated with agent models
+    // Track agent conversations separately
+    agentContexts: {
+        "BETO": {
+            lastMessageId: null,
+            lastSentMessage: null,
+            pendingResponse: false
+        }
+    },
     // Hardcode task API settings since settings dialog is removed
     taskApiSettings: {
         endpoint: 'http://localhost:8001',
@@ -176,7 +184,13 @@ function init() {
     
     // Reset agent to BETO
     console.log('Ensuring agent is set to BETO for initialization');
-    resetAgentToBeto();
+    // Initialize functions might not be available yet on first run, so use direct assignment
+    if (typeof resetAgentToBeto === 'function') {
+        resetAgentToBeto();
+    } else {
+        // Direct initialization on first run
+        state.currentAgentName = "BETO";
+    }
 
     // Connect to WebSocket with a small delay to allow other initializations to complete first
     console.log('Scheduling WebSocket connection with a delay');
@@ -1858,11 +1872,74 @@ function generateUUID() {
 }
 
 // Reset agent to BETO to fix any agent mismatch issues
+// Track agent context and transitions
+function trackAgentContext(agentName) {
+    // Normalize agent name to uppercase for consistency
+    agentName = agentName.toUpperCase();
+
+    // Initialize context for this agent if it doesn't exist yet
+    if (!state.agentContexts[agentName]) {
+        console.log(`Initializing context for agent: ${agentName}`);
+        state.agentContexts[agentName] = {
+            lastMessageId: null,
+            lastSentMessage: null,
+            pendingResponse: false
+        };
+    }
+
+    return state.agentContexts[agentName];
+}
+
+// Handle agent switching, preserving context between transfers
+function switchAgentContext(newAgentName) {
+    const prevAgentName = state.currentAgentName;
+    console.log(`Switching agent context from ${prevAgentName} to ${newAgentName}`);
+
+    // Save current agent's context state
+    if (prevAgentName && prevAgentName !== newAgentName) {
+        const prevContext = trackAgentContext(prevAgentName);
+        prevContext.lastMessageId = findLastMessageIdForAgent(prevAgentName);
+        prevContext.pendingResponse = false; // Reset pending flag when switching away
+        console.log(`Saved context for ${prevAgentName}:`, prevContext);
+    }
+
+    // Get new agent's context
+    const newContext = trackAgentContext(newAgentName);
+    console.log(`Loaded context for ${newAgentName}:`, newContext);
+
+    // Update the current agent
+    state.currentAgentName = newAgentName;
+
+    // Return the loaded context
+    return newContext;
+}
+
+// Helper to find the last message ID for an agent
+function findLastMessageIdForAgent(agentName) {
+    // Normalize for comparison
+    agentName = agentName.toUpperCase();
+
+    // Get all messages from storage
+    const messages = window.chatPersistence.getMessages(window.state.sessionId);
+    if (!messages || messages.length === 0) return null;
+
+    // Loop backward through messages to find the last one from this agent
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (msg.agent === agentName ||
+           (msg.role === 'assistant' && (!msg.agent || msg.agent === agentName))) {
+            return msg.id;
+        }
+    }
+
+    return null;
+}
+
 function resetAgentToBeto() {
     console.log(`Resetting agent from ${state.currentAgentName} to BETO`);
 
-    // Reset the state
-    state.currentAgentName = "BETO";
+    // Switch to BETO context instead of just setting the name
+    switchAgentContext("BETO");
 
     // Update CSS and status
     document.documentElement.style.setProperty('--agent-name', `"${state.currentAgentName}"`);
@@ -1888,8 +1965,10 @@ function resetAgentToBeto() {
         window.statusUtils.setStatus('ready');
     }
 
-    // Make this function globally available
+    // Make these functions globally available
     window.resetAgentToBeto = resetAgentToBeto;
+    window.switchAgentContext = switchAgentContext;
+    window.trackAgentContext = trackAgentContext;
 }
 
 // Initialize on page load
