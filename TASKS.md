@@ -170,12 +170,38 @@ See the migration doc at `docs/implementation/fixes/crawl4ai_mcp_migration.md` f
 
 #### Completed
 
-✅ Identified the issue with FunctionTool parameter mismatch in ADK 0.4.0 
+✅ Identified the issue with FunctionTool parameter mismatch in ADK 0.4.0
 ✅ Created test script to verify correct parameters for FunctionTool
 ✅ Fixed claude_prompt.py to use the correct 'func' parameter instead of 'function'
 ✅ Updated web/api/session.py to handle FunctionTool name resolution more robustly
 ✅ Added documentation in docs/implementation/fixes/adk_functiontool_parameter_fix.md
 ✅ Tested the fix by verifying Claude prompt tool creation works correctly
+
+### Agent Context Separation Fix
+
+#### Completed
+
+✅ Identified the issue with context preservation between agents in transfers
+✅ Modified agent_transfer.py to prevent forwarding prompts between agents
+✅ Updated transfer_controller.py to use a neutral initialization message
+✅ Implemented frontend context tracking for each agent
+✅ Added explicit agent targeting in messages with AGENT:NAME:message format
+✅ Implemented direct agent access for Scout in the websocket handler
+✅ Enhanced _get_event_type in utils.py to properly detect transfer_to_agent tool calls
+✅ Added special handling for transfer_to_agent in function_call and tool_call formats
+✅ Fixed JavaScript syntax error in socket.js causing agent transfers to fail
+✅ Fixed null reference in app_main.js breaking the application initialization
+✅ Added proper error handling for DOM elements in JavaScript modules
+✅ Updated socket.js to use ADK 0.4.0 style transfer detection via actions.transfer_to_agent
+✅ Created comprehensive documentation in docs/implementation/fixes/agent_context_separation_fix.md
+✅ Tested agent transfers between all specialized agents
+✅ Verified proper transfer event recording in the web interface
+✅ Verified no JavaScript errors appear in the browser console
+✅ Fixed issue where agent transfers don't persist after the first message
+✅ Fixed context tracking in chat.js to properly maintain agent targeting in messages
+✅ Enhanced switchAgentContext function to ensure proper state persistence
+✅ Added REST API fallback improvements for agent targeting
+✅ Created documentation in docs/implementation/fixes/agent_transfer_persistence_fix.md
 
 ### Async Crawl4AI Client Fix
 

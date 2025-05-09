@@ -1,1975 +1,525 @@
 /**
- * RadBot Web Interface Client - Main Module
- * 
- * This is the entry point for the RadBot UI application,
- * responsible for initializing all the modules and managing the application state.
+ * Core application module for RadBot web interface
+ * Manages state, initialization, and agent context
  */
-
-// Import all modules
-import * as chatModule from './chat.js';
-import * as emojiUtils from './emoji.js';
-import * as commandUtils from './commands.js';
-import * as statusUtils from './status.js';
-import * as selectsUtils from './selects.js';
-import * as socketClient from './socket.js';
-import { ChatPersistence, mergeMessages } from './chat_persistence.js';
-import { initSessionManager } from './sessions.js';
 
 // Global state
 const state = {
-    sessionId: localStorage.getItem('radbot_session_id') || null,
-    currentAgentName: "BETO", // Track current agent name - use uppercase to match status bar
-    initialAgentName: "BETO", // Store initial agent to revert when needed
-    currentModel: "gemini-2.5-pro", // Default model - will be updated with actual model info from events
-    isDarkTheme: true, // Always use dark theme
-    agentModels: {}, // Will be populated with agent models
-    // Track agent conversations separately
-    agentContexts: {
-        "BETO": {
-            lastMessageId: null,
-            lastSentMessage: null,
-            pendingResponse: false
-        }
-    },
-    // Hardcode task API settings since settings dialog is removed
-    taskApiSettings: {
-        endpoint: 'http://localhost:8001',
-        apiKey: '',
-        defaultProject: ''
-    }
+    messages: [],          // Current conversation
+    socket: null,          // WebSocket connection
+    status: 'disconnected', // Connection status
+    socketConnected: false, // WebSocket connected
+    userAgentData: null,   // Browser data
+    thinking: false,       // Is the agent thinking?
+    currentAgentName: 'BETO', // Current agent name
+    theme: 'light',        // UI theme
+    selectedSection: 'chat', // Currently selected section
+    events: [],            // Event log
+    tasks: [],             // Tasks from agent
+    isConfigVisible: false, // Configuration panel visibility
+    isSettingsVisible: false, // Settings panel visibility
+    isEventsVisible: false, // Events panel visibility
+    isTasksVisible: false, // Tasks panel visibility
+    agentModels: {},       // Map of agent names to models
+    speechRecognition: null, // Speech recognition
+    speechSynthesis: null, // Speech synthesis
+    voiceInput: false,     // Voice input mode
+    voiceOutput: false,    // Voice output mode
+    isMobile: false,       // Mobile device detection
+    darkModeMediaQuery: null, // System dark mode preference
+    firstMessageSent: false, // Track if user has sent a message
+    pendingMessage: null,  // Queued message waiting for connection
+    messageQueue: [],      // Queue of messages to send
+    selectedSession: null, // Current session ID
+    sessions: [],          // Available sessions
+    isSessionsVisible: false, // Session panel visibility
+    wasConnected: false,   // Track if we were connected before
+    lastTypingTime: 0,     // Last time user was typing
+    typingTimer: null,     // Typing indicator timer
+    typingIndicatorShown: false, // Is typing indicator visible?
+    savedScrollPosition: 0, // Saved scroll position
+    lastContentHeight: 0,  // Last content height
+    connectionAttempts: 0, // Connection attempt counter
+    lastPing: 0,           // Last ping time
+    pingInterval: null,    // Ping interval
+    reconnectTimeout: null, // Reconnect timeout
+    maxReconnectAttempts: 10, // Max reconnect attempts
+    sessionStorage: {},    // In-memory session storage
+    commandHistory: [],    // Command history
+    commandHistoryIndex: -1, // Command history index
+    commandHistoryTemp: '', // Temporary command for history navigation
+    inputHeight: 56,       // Input height
+    maxInputHeight: 200,   // Max input height
+    backupInterval: null,  // Backup interval
+    backupEnabled: true,   // Backup enabled
+    contextSizeLimit: 24,  // Max number of messages to send for context
+    filterActive: '',      // Active filter
+    selectedAgent: null,   // Selected agent for commands
+    commandRegistry: {},   // Registry of slash commands
+    agentContexts: {},     // Empty object - we're not tracking individual agent contexts anymore
+    headerHeight: 60,      // Header height
+    initialized: false,    // Initialization state
+    isSearchActive: false, // Search mode
+    searchQuery: '',       // Current search query
+    searchResults: [],     // Search results
+    searchIndex: -1,       // Current search result index
+    headerContent: '',     // Dynamic header content
+    lastSpeechTimestamp: 0, // Last speech timestamp
+    isSpeaking: false,     // Speaking status
+    transitionInProgress: false, // Page transition
+    pageTitle: 'RadBot',   // Page title
+    lastActivityTime: Date.now(), // Last activity time
+    idleTimeout: null,     // Idle timeout
+    maxIdleTime: 30 * 60 * 1000, // 30 minutes
+    idleWarningShown: false, // Idle warning shown
+    reconnectOnActivity: true, // Reconnect on activity
+    eventsFilter: 'all',   // Events filter
+    lastProblem: null,     // Last error/warning message
+    menuOpen: false,       // Mobile menu state
+    pendingScroll: false,  // Pending scroll to bottom
+    unreadCount: 0,        // Unread message count
 };
 
-// Initialize chat persistence
-const chatPersistence = new ChatPersistence({
-    maxMessagesPerChat: 200,
-    storagePrefix: 'radbot_chat_'
-});
-
-// Log the expected storage key for the current session
-console.log('Expected localStorage key:', `radbot_chat_${state.sessionId || 'undefined'}`);
-
-// Global data
-let events = [];
-let tasks = [];
-let projects = [];
-let socket = null;
-
-// Make modules and utilities globally available
-window.chatModule = chatModule;
-window.emojiUtils = emojiUtils;
-window.commandUtils = commandUtils;
-window.statusUtils = statusUtils;
-window.selectsUtils = selectsUtils;
-window.socket = null;
-window.state = state;
-window.events = events;
-window.tasks = tasks;
-window.projects = projects;
-window.chatPersistence = chatPersistence;
-
-// Make chat persistence utilities globally available
-window.mergeMessages = mergeMessages;
-
-// Test localStorage directly to ensure it's working
-function testLocalStorage() {
-    try {
-        const testKey = 'radbot_test_key';
-        const testValue = { test: true, timestamp: Date.now() };
-        const testString = JSON.stringify(testValue);
-        
-        // Save test value
-        localStorage.setItem(testKey, testString);
-        console.log('Test localStorage.setItem succeeded:', testKey, testString);
-        
-        // Retrieve test value
-        const retrieved = localStorage.getItem(testKey);
-        console.log('Test localStorage.getItem retrieved:', retrieved);
-        
-        // Cleanup
-        localStorage.removeItem(testKey);
-        console.log('Test localStorage.removeItem succeeded');
-        
-        return retrieved === testString;
-    } catch (error) {
-        console.error('localStorage test failed:', error);
-        return false;
+// Module initialization
+(function() {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+    
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initializeApp();
     }
-}
+})();
 
-// Initialize
-function init() {
-    console.log('Initializing app_main.js');
+function initializeApp() {
+    if (state.initialized) return;
+    state.initialized = true;
     
-    // Test localStorage
-    const localStorageWorking = testLocalStorage();
-    console.log('localStorage working:', localStorageWorking);
+    console.log('Initializing application...');
     
-    // Listen for tiling manager ready event
-    document.addEventListener('tiling:ready', () => {
-        console.log('Received tiling:ready event, initializing UI');
-        initializeUI();
-    });
+    // Set up device detection
+    detectDevice();
     
-    // Listen for layout changes to re-initialize UI elements
-    document.addEventListener('layout:changed', () => {
-        console.log('Layout changed, reinitializing UI');
-        initializeUI();
-    });
+    // Initialize UI components
+    initializeUI();
     
-    // As a fallback, also wait a moment to try initialization
-    setTimeout(() => {
-        if (!chatModule.getChatElements().input) {
-            console.log('Attempting UI initialization via timeout');
-            initializeUI();
-        }
-    }, 300);
-    
-    // Initialize session manager
-    const sessionManager = initSessionManager();
-    
-    // Get the active session ID from session manager
-    state.sessionId = sessionManager.getActiveSessionId() || localStorage.getItem('radbot_session_id') || null;
-    
-    // Create or retrieve persistent session ID
-    if (!state.sessionId) {
-        state.sessionId = crypto.randomUUID ? crypto.randomUUID() : generateUUID();
-        // Store in both places for consistency
-        localStorage.setItem('radbot_session_id', state.sessionId);
-        localStorage.setItem('radbot_active_session_id', state.sessionId);
-        console.log('Created new session ID:', state.sessionId);
-    } else {
-        console.log('Using existing session ID:', state.sessionId);
-        // Ensure active session is stored in both places
-        localStorage.setItem('radbot_session_id', state.sessionId);
-        localStorage.setItem('radbot_active_session_id', state.sessionId);
-    }
-    
-    // Set chat persistence instance in session manager
-    sessionManager.setChatPersistence(chatPersistence);
-    
-    // Add to global window object for debugging
-    window.SESSION_ID = state.sessionId;
-    console.log(`Global SESSION_ID set to: ${window.SESSION_ID}`);
-    
-    // Set up event listener for chat data changes from other tabs
-    window.addEventListener('chatDataChanged', (event) => {
-        console.log('Chat data changed event received:', event.detail);
-        
-        // Only reload if the change was for our current session
-        if (event.detail.chatId === state.sessionId) {
-            // Load and render chat messages from local storage
-            loadChatFromStorage();
-        }
-    });
-    
-    // Set up event listener for session changes
-    window.addEventListener('sessionChanged', (event) => {
-        console.log('Session changed event received:', event.detail);
-        
-        // Update the current session ID
-        state.sessionId = event.detail.sessionId;
-        
-        // Load and render chat messages from local storage
-        loadChatFromStorage();
-    });
-    
-    // Set flag to prevent duplicate message storage during initial load
-    window.initialLoadInProgress = true;
-    
-    // Load any existing chat messages from local storage
-    loadChatFromStorage();
-    
-    // Clear the flag after loading completes
-    window.initialLoadInProgress = false;
-    
-    // Reset agent to BETO
-    console.log('Ensuring agent is set to BETO for initialization');
-    // Initialize functions might not be available yet on first run, so use direct assignment
-    if (typeof resetAgentToBeto === 'function') {
-        resetAgentToBeto();
-    } else {
-        // Direct initialization on first run
-        state.currentAgentName = "BETO";
-    }
-
-    // Connect to WebSocket with a small delay to allow other initializations to complete first
-    console.log('Scheduling WebSocket connection with a delay');
-    setTimeout(() => {
-        console.log('Connecting to WebSocket now');
-        const result = socketClient.initSocket(state.sessionId);
-
-        // Handle both promise and direct return cases
-        if (result && typeof result.then === 'function') {
-            result.then(connection => {
-                console.log('WebSocket connection established via promise');
-                window.socket = connection;
-
-                // Reset agent to BETO again after WebSocket connection is established
-                resetAgentToBeto();
-            });
-        } else {
-            console.log('WebSocket connection established directly');
-            window.socket = result;
-
-            // Reset agent to BETO again after WebSocket connection is established
-            resetAgentToBeto();
-        }
-    }, 500);
-    
-    // Fetch tasks, projects, and events directly from API with staggered timing
-    // to reduce server load
-    setTimeout(() => fetchTasks(), 1000);
-    setTimeout(() => fetchEvents(), 1500);
-    
-    // Get initial agent and model information
-    fetchAgentInfo();
-    
-    // Schedule periodic server sync (every 5 minutes instead of every 60 seconds)
-    // This significantly reduces the number of database operations
-    if (window.chatPersistence && window.chatPersistence.serverSyncEnabled) {
-        let syncCounter = 0;
-        const MAX_SYNCS = 3; // Limit to 3 syncs per session to prevent excessive operations
-        
-        setInterval(() => {
-            if (window.state && window.state.sessionId && window.navigator.onLine) {
-                // Only sync if we haven't hit the maximum
-                if (syncCounter < MAX_SYNCS) {
-                    console.log(`Running scheduled server sync (${syncCounter + 1}/${MAX_SYNCS})...`);
-                    window.chatPersistence.syncWithServer(window.state.sessionId)
-                        .then(() => {
-                            syncCounter++; // Increment counter after successful sync
-                            console.log(`Sync completed. Remaining syncs: ${MAX_SYNCS - syncCounter}`);
-                        })
-                        .catch(error => console.error("Error during server sync:", error));
-                } else {
-                    console.log("Maximum syncs reached, skipping scheduled sync");
-                }
+    // Load preferences
+    // Define loadPreferences function if not available
+    if (typeof loadPreferences !== 'function') {
+        console.log('loadPreferences not available, defining basic implementation');
+        window.loadPreferences = function() {
+            // Load theme preference
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                state.theme = savedTheme;
+                document.body.classList.toggle('dark-theme', state.theme === 'dark');
             }
-        }, 300000); // Every 5 minutes instead of every minute
-    }
-}
 
-// Load chat messages from local storage
-function loadChatFromStorage() {
-    if (!state.sessionId) {
-        console.error('Cannot load chat: No session ID available');
-        return;
-    }
-    
-    console.log(`Attempting to load messages for session ${state.sessionId}`);
-    
-    try {
-        // Store original storage items for inspection
-        const storage = localStorage;
-        const allItems = {};
-        const relevantItems = {};
-        
-        // Log all localStorage keys for debugging
-        console.log('All localStorage keys:');
-        for (let i = 0; i < storage.length; i++) {
-            const key = storage.key(i);
-            allItems[key] = storage.getItem(key);
-            console.log(`${i}: ${key} = ${storage.getItem(key).substring(0, 50)}...`);
-            
-            if (key && (key.includes('radbot') || key.includes('chat_'))) {
-                relevantItems[key] = storage.getItem(key);
-            }
-        }
-        
-        console.log('Current localStorage items:', allItems);
-        console.log('Relevant chat items:', relevantItems);
-        
-        // Get messages from storage
-        const messages = chatPersistence.getMessages(state.sessionId);
-        
-        if (messages && messages.length > 0) {
-            console.log(`Loaded ${messages.length} messages from storage for session ${state.sessionId}`);
-            
-            // Clear existing messages from UI
-            if (chatModule.getChatElements().messages) {
-                chatModule.getChatElements().messages.innerHTML = '';
-            }
-            
-            // Add each message to the UI
-            let loadCount = 0;
-            messages.forEach(msg => {
-                // Only add messages with valid roles
-                if (msg.role && msg.content) {
-                    chatModule.addMessage(msg.role, msg.content, msg.agent);
-                    loadCount++;
-                } else {
-                    console.warn('Skipping invalid message:', msg);
-                }
-            });
-            
-            console.log(`Successfully rendered ${loadCount} messages`);
-            
-            // Scroll to the bottom after rendering all messages
-            chatModule.scrollToBottom();
-        } else {
-            console.log('No stored messages found for this session');
-        }
-    } catch (error) {
-        console.error('Error loading chat from storage:', error);
-    }
-}
+            // Load voice preferences
+            state.voiceInput = localStorage.getItem('voiceInput') === 'true';
+            state.voiceOutput = localStorage.getItem('voiceOutput') === 'true';
 
-// Make functions globally available for tiling manager
-window.initializeUI = initializeUI;
-window.renderTasks = renderTasks;
-window.renderEvents = renderEvents;
-window.updateModelForCurrentAgent = updateModelForCurrentAgent;
-
-// Fetch data immediately when panels are opened
-document.addEventListener('command:tasks', function() {
-    console.log("Tasks panel opened - fetching latest data");
-    fetchTasks();
-});
-
-document.addEventListener('command:events', function() {
-    console.log("Events panel opened - fetching latest data");
-    // Clear events cache before fetching to ensure we get fresh data
-    events = [];
-    window.events = [];
-    
-    // Wait for DOM to update, then fetch events
-    setTimeout(() => {
-        fetchEvents();
-    }, 100);
-});
-
-// Initialize UI elements after DOM is ready
-function initializeUI() {
-    console.log('Initializing UI elements');
-    
-    // Initialize each module
-    const chatInitialized = chatModule.initChat();
-    const emojiInitialized = emojiUtils.initEmoji();
-    const commandsInitialized = commandUtils.initCommands();
-    const statusInitialized = statusUtils.initStatus();
-    
-    // If any critical modules failed to initialize, try again in a moment
-    if (!chatInitialized) {
-        console.log('Critical UI elements not found, retrying initialization...');
-        setTimeout(initializeUI, 200);
-        return;
-    }
-    
-    console.log('UI elements initialized successfully');
-    
-    // Initialize voice wave animation
-    initVoiceWaveAnimation();
-    
-    // Set up select components
-    selectsUtils.initSelects();
-    
-    // Initialize event panel buttons
-    initEventPanelButtons();
-    
-    // Initialize event type filter
-    initEventTypeFilter();
-    
-    // Initialize sessions UI with a retry mechanism
-    if (window.sessionManager) {
-        const sessionsInitialized = window.sessionManager.initSessionsUI();
-        
-        // If sessions UI initialization failed (e.g., container not found), 
-        // we'll rely on the advanced observer in sessions.js
-        if (!sessionsInitialized) {
-            console.log('Sessions UI initialization deferred to observer in sessions.js');
-        }
-    }
-    
-    // Check if WebSocket needs to be reinitialized (but don't create new ones unnecessarily)
-    if (!window.socket) {
-        console.log('No active WebSocket found during UI initialization');
-        // We won't initialize a new socket here to prevent multiple connections
-        // The main init() function already schedules a socket connection
-    }
-}
-
-// Initialize event panel buttons
-function initEventPanelButtons() {
-    const toggleEventsButton = document.getElementById('toggle-events-button');
-    const toggleTasksButton = document.getElementById('toggle-tasks-button');
-    
-    if (toggleEventsButton) {
-        toggleEventsButton.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('command:events'));
-        });
-    }
-    
-    if (toggleTasksButton) {
-        toggleTasksButton.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('command:tasks'));
-        });
-    }
-}
-
-// Initialize event type filter
-function initEventTypeFilter() {
-    const eventTypeFilter = document.getElementById('event-type-filter');
-    
-    // Check if the events panel exists yet
-    const eventsPanel = document.querySelector('[data-content="events"]');
-    if (!eventsPanel) {
-        // No need to spam console logs if panel isn't open yet
-        return false;
-    }
-    
-    if (eventTypeFilter) {
-        console.log('Setting up event type filter');
-        
-        // Remove old event listeners by cloning
-        const newFilter = eventTypeFilter.cloneNode(true);
-        if (eventTypeFilter.parentNode) {
-            eventTypeFilter.parentNode.replaceChild(newFilter, eventTypeFilter);
-        }
-        
-        // Set up the new event listener
-        newFilter.addEventListener('change', function() {
-            console.log('Event type filter changed to:', this.value);
-            renderEvents();
-        });
-        
-        return true;
-    } else {
-        // Only retry a few times to avoid excessive logs
-        console.log('Event type filter element not found, will retry once events panel opens');
-        
-        // Set up a mutation observer to detect when the events panel is created
-        const observer = new MutationObserver((mutations) => {
-            if (document.getElementById('event-type-filter')) {
-                console.log('Event filter detected in DOM, initializing');
-                observer.disconnect();
-                setTimeout(initEventTypeFilter, 100);
-            }
-        });
-        
-        // Only observe if the events panel exists
-        if (eventsPanel) {
-            observer.observe(eventsPanel, { childList: true, subtree: true });
-        }
-        
-        // Also listen for the events panel opening
-        document.addEventListener('command:events', function eventsPanelOpened() {
-            console.log('Events panel opened event detected');
-            document.removeEventListener('command:events', eventsPanelOpened);
-            setTimeout(initEventTypeFilter, 300);
-        });
-        
-        return false;
-    }
-}
-
-// Initialize voice wave animation
-function initVoiceWaveAnimation() {
-    const voiceWave = document.querySelector('.voice-wave-animation');
-    if (!voiceWave) return;
-    
-    // Clear existing bars
-    voiceWave.innerHTML = '';
-    
-    // Create bars
-    const bars = 20;
-    for (let i = 0; i < bars; i++) {
-        const bar = document.createElement('div');
-        bar.className = 'voice-bar';
-        
-        // Set random initial height and animation delay
-        const height = 4 + Math.floor(Math.random() * 8);
-        const delay = Math.random() * 0.5;
-        
-        bar.style.height = `${height}px`;
-        bar.style.animation = `voice-wave-animation 1.5s ease-in-out ${delay}s infinite`;
-        
-        voiceWave.appendChild(bar);
-    }
-}
-
-// Fetch tasks from API
-async function fetchTasks(retryCount = 0) {
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
-    
-    console.log(`Fetching tasks data (attempt ${retryCount + 1} of ${MAX_RETRIES + 1})...`);
-    
-    // Check if tasks panel is open before fetching
-    const tasksPanel = document.querySelector('[data-content="tasks"]');
-    if (!tasksPanel && retryCount === 0) {
-        console.log('Tasks panel not open, skipping fetch or deferring');
-        
-        // Listen for panel opening
-        const listener = function() {
-            console.log('Tasks panel opened, fetching tasks data now');
-            document.removeEventListener('command:tasks', listener);
-            // Give the panel time to fully render
-            setTimeout(() => fetchTasks(), 300);
+            console.log('Basic preferences loaded');
         };
-        
-        document.addEventListener('command:tasks', listener);
-        return;
+    }
+
+    // Now call the function (either our basic implementation or the one loaded from another module)
+    if (typeof loadPreferences === 'function') {
+        loadPreferences();
     }
     
-    try {
-        // Try to fetch from the real API first
-        try {
-            const apiUrl = 'http://localhost:8001/api/tasks'; // Use the actual task API endpoint
-            console.log(`Attempting to fetch real tasks data from ${apiUrl}`);
-            
-            const response = await fetch(apiUrl);
-            
-            if (response.ok) {
-                const tasksData = await response.json();
-                console.log("Successfully fetched real task data:", tasksData);
-                
-                // The API returns tasks as a direct array
-                tasks = tasksData || [];
-                
-                // We need to fetch projects separately
-                try {
-                    const projectsResponse = await fetch('http://localhost:8001/api/projects');
-                    if (projectsResponse.ok) {
-                        projects = await projectsResponse.json();
-                        console.log("Successfully fetched real projects data:", projects);
-                    } else {
-                        console.warn("Failed to fetch projects, using default project");
-                        projects = [{project_id: "unknown", name: "Default"}];
-                    }
-                } catch (projectError) {
-                    console.warn("Error fetching projects:", projectError);
-                    projects = [{project_id: "unknown", name: "Default"}];
-                }
-                
-                // Make available globally
-                window.tasks = tasks;
-                window.projects = projects;
-                
-                // Update selects module with projects
-                selectsUtils.setProjects(projects);
-                
-                renderTasks();
-                return;
-            } else {
-                console.warn(`Real API returned error status: ${response.status}. Will use mock data instead.`);
-            }
-        } catch (apiError) {
-            console.warn("Failed to connect to real API:", apiError);
-            
-            // Try to retry with backoff if we haven't exceeded max retries
-            if (retryCount < MAX_RETRIES) {
-                console.log(`Retrying tasks fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
-                setTimeout(() => fetchTasks(retryCount + 1), RETRY_DELAY * (retryCount + 1));
-                return;
-            }
-            
-            console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching tasks, using mock data`);
-        }
-        
-        // If we get here, the real API failed and retries exhausted - use mock data
-        console.log("Using mock task data");
-        
-        // Mock data for testing
-        tasks = [
-            { task_id: "task1", title: "Implement login screen", status: "inprogress", priority: "high", project_id: "proj1" },
-            { task_id: "task2", title: "Fix navigation bug", status: "backlog", priority: "medium", project_id: "proj1" },
-            { task_id: "task3", title: "Update documentation", status: "done", priority: "low", project_id: "proj2" },
-            { task_id: "task4", title: "Refactor database layer", status: "backlog", priority: "high", project_id: "proj2" },
-            { task_id: "task5", title: "Add unit tests", status: "inprogress", priority: "medium", project_id: "proj1" }
-        ];
-        
-        projects = [
-            { project_id: "proj1", name: "Frontend App" },
-            { project_id: "proj2", name: "Backend API" }
-        ];
-        
-        // Make available globally
-        window.tasks = tasks;
-        window.projects = projects;
-        
-        // Update selects module with projects
-        selectsUtils.setProjects(projects);
-        
-        renderTasks();
-    } catch (error) {
-        console.error('Unexpected error in fetchTasks:', error);
-        
-        // Try to retry with backoff if we haven't exceeded max retries
-        if (retryCount < MAX_RETRIES) {
-            console.log(`Retrying tasks fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
-            setTimeout(() => fetchTasks(retryCount + 1), RETRY_DELAY * (retryCount + 1));
-            return;
-        }
-        
-        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for handling tasks error`);
-        
-        // Fall back to simple mock data if everything else fails
-        tasks = [{ 
-            task_id: "error1", 
-            title: "Error fetching tasks", 
-            status: "backlog", 
-            priority: "high", 
-            project_id: "error",
-            description: `Error: ${error.message} (after ${retryCount} retries)`
-        }];
-        projects = [{ project_id: "error", name: "Error" }];
-        
-        window.tasks = tasks;
-        window.projects = projects;
-        selectsUtils.setProjects(projects);
-        renderTasks();
-    }
+    // Initialize session management
+    initializeSessions();
+    
+    // Set up event listeners
+    setupEventListeners();
+    
+    // Initialize command registry
+    initializeCommands();
+    
+    // Connect to the server
+    initializeConnection();
+    
+    // Register global handlers
+    window.state = state;
+    window.switchAgentContext = switchAgentContext;
+    window.trackAgentContext = trackAgentContext;
+    window.updateModelForCurrentAgent = updateModelForCurrentAgent;
+
+    console.log('Application initialized.');
 }
 
-// Render tasks in UI with retry capability
-function renderTasks() {
-    console.log('Rendering tasks panel');
-    
-    const tasksContainer = document.getElementById('tasks-container');
-    if (!tasksContainer) {
-        console.log('Tasks container not found, checking panel state...');
-        
-        // Check if tasks panel is actually open
-        const tasksPanel = document.querySelector('[data-content="tasks"]');
-        
-        if (tasksPanel) {
-            console.log('Tasks panel exists but container not found, waiting for DOM update...');
-            
-            // Panel exists but container might not be fully rendered yet
-            setTimeout(() => {
-                const retryContainer = document.getElementById('tasks-container');
-                if (retryContainer) {
-                    console.log('Tasks container found after delay, rendering now');
-                    renderTasksContent(retryContainer);
-                } else {
-                    console.warn('Tasks container still not found after delay');
-                }
-            }, 300);
-        } else {
-            // Panel not open, so not finding the container is expected
-            console.log('Tasks panel not open, skipping rendering');
-        }
-        return;
-    }
-    
-    renderTasksContent(tasksContainer);
-}
-
-// Separate function to render the actual tasks content
-function renderTasksContent(tasksContainer) {
-    // Clear existing tasks
-    tasksContainer.innerHTML = '';
-    
-    // Get the selection state
-    const { selectedProject, selectedStatus } = selectsUtils.getSelectionState();
-    
-    // Filter tasks
-    const filteredTasks = tasks.filter(task => {
-        // Handle project filtering with both project_id and project_name
-        let projectMatch = selectedProject === 'all';
-        if (!projectMatch) {
-            if (task.project_name) {
-                // Try to match by project name if it exists on the task
-                const project = projects.find(p => p.name === task.project_name);
-                if (project) {
-                    projectMatch = project.project_id === selectedProject;
-                }
-            }
-            // If we still don't have a match, try the project_id directly
-            if (!projectMatch) {
-                projectMatch = task.project_id === selectedProject;
-            }
-        }
-        
-        const statusMatch = selectedStatus === 'all' || selectedStatus === task.status;
-        return projectMatch && statusMatch;
-    });
-    
-    // Sort tasks - priority first, then by status
-    filteredTasks.sort((a, b) => {
-        // First sort by priority
-        const priorityOrder = { high: 1, medium: 2, low: 3 };
-        const priorityA = priorityOrder[a.priority] || 4;
-        const priorityB = priorityOrder[b.priority] || 4;
-        
-        if (priorityA !== priorityB) {
-            return priorityA - priorityB;
-        }
-        
-        // Then sort by status
-        const statusOrder = { inprogress: 1, backlog: 2, done: 3 };
-        const statusA = statusOrder[a.status] || 4;
-        const statusB = statusOrder[b.status] || 4;
-        
-        return statusA - statusB;
-    });
-    
-    // Render each task
-    filteredTasks.forEach(task => {
-        const taskItem = document.createElement('div');
-        taskItem.className = `task-item ${task.status}`;
-        taskItem.dataset.id = task.task_id;
-        
-        const taskStatus = document.createElement('div');
-        taskStatus.className = `task-status-indicator ${task.status}`;
-        
-        const taskTitle = document.createElement('div');
-        taskTitle.className = 'task-title';
-        // Use description as title for API data, or title for mock data
-        taskTitle.textContent = task.description || task.title || "Untitled Task";
-        
-        const taskProject = document.createElement('div');
-        taskProject.className = 'task-project';
-        
-        // First try to use project_name if it exists directly on the task
-        if (task.project_name) {
-            taskProject.textContent = task.project_name;
-        } else {
-            // Fall back to looking up by project_id
-            const project = projects.find(p => p.project_id === task.project_id);
-            taskProject.textContent = project ? project.name : (task.project_id || "Unknown Project");
-        }
-        
-        taskItem.appendChild(taskStatus);
-        taskItem.appendChild(taskTitle);
-        taskItem.appendChild(taskProject);
-        
-        // Add click handler to show task details
-        taskItem.addEventListener('click', () => {
-            commandUtils.executeCommand(`/details ${task.task_id}`);
-        });
-        
-        tasksContainer.appendChild(taskItem);
-    });
-    
-    // Show a message if no tasks found
-    if (filteredTasks.length === 0) {
-        const noTasksMsg = document.createElement('div');
-        noTasksMsg.className = 'no-items-message';
-        noTasksMsg.textContent = 'No tasks match the current filters';
-        tasksContainer.appendChild(noTasksMsg);
-    }
-}
-
-// Fetch events from API
-async function fetchEvents(retryCount = 0) {
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
-    
-    console.log(`Fetching events data (attempt ${retryCount + 1} of ${MAX_RETRIES + 1})...`);
-    
-    // Check if events panel is open before fetching
-    const eventsPanel = document.querySelector('[data-content="events"]');
-    if (!eventsPanel && retryCount === 0) {
-        console.log('Events panel not open, skipping fetch or deferring');
-        
-        // Listen for panel opening
-        const listener = function() {
-            console.log('Events panel opened, fetching events data now');
-            document.removeEventListener('command:events', listener);
-            // Give the panel time to fully render
-            setTimeout(() => fetchEvents(), 300);
-        };
-        
-        document.addEventListener('command:events', listener);
-        return;
-    }
-    
-    try {
-        // Determine the API base URL - use current origin
-        const baseUrl = `${window.location.protocol}//${window.location.host}`;
-        
-        // Get the current session ID with better fallbacks
-        const sessionId = window.SESSION_ID || state.sessionId || 
-                          localStorage.getItem('radbot_active_session_id') || 
-                          localStorage.getItem('radbot_session_id') || 
-                          generateUUID();
-        
-        // Based on custom_web_ui.md - we need to use the session API endpoint
-        const apiUrl = `${baseUrl}/api/events/${sessionId}`;
-        console.log(`Attempting to fetch events data from ${apiUrl} for session ${sessionId}`);
-        
-        try {
-            // Make the API request
-            const response = await fetch(apiUrl, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (response.ok) {
-                // Parse the response
-                const data = await response.json();
-                console.log("Successfully fetched events data:", data);
-                
-                if (data && Array.isArray(data)) {
-                    // Direct array of events
-                    events = data;
-                } else if (data && data.events && Array.isArray(data.events)) {
-                    // Object with events array property
-                    events = data.events;
-                } else {
-                    console.warn("Unexpected events data format:", data);
-                    events = [];
-                }
-                
-                // Make events available globally
-                window.events = events;
-                
-                // Render the events in the UI
-                renderEvents();
-                return;
-            } else {
-                // Handle error response
-                console.warn(`API returned error status: ${response.status}`);
-                
-                // Try to get more details from error response
-                try {
-                    const errorData = await response.json();
-                    console.warn("Error details:", errorData);
-                } catch (parseError) {
-                    console.warn("Could not parse error response");
-                }
-                
-                // Use fallback data if API fails
-                if (response.status === 404) {
-                    console.log("No events found for this session or endpoint not found");
-                    
-                    // Create a demo event to show the system is working
-                    events = [{
-                        type: "model_response",
-                        timestamp: new Date().toISOString(),
-                        category: "model_response",
-                        summary: "Welcome Message",
-                        text: "Welcome to RadBot! I'm ready to assist you. Try asking me a question or giving me a task to work on.",
-                        is_final: true,
-                        details: {
-                            "model": "gemini-pro",
-                            "session_id": sessionId
-                        }
-                    }];
-                } else {
-                    // Create an error event
-                    events = [{
-                        type: "other",
-                        timestamp: new Date().toISOString(),
-                        category: "error",
-                        summary: `API Error: ${response.status} ${response.statusText}`,
-                        details: {
-                            error_message: `The events API returned status code ${response.status}`,
-                            service: "Events API",
-                            endpoint: apiUrl,
-                            status_code: response.status,
-                            status_text: response.statusText
-                        }
-                    }];
-                }
-                
-                window.events = events;
-                renderEvents();
-            }
-        } catch (apiError) {
-            // Handle API connection errors (CORS, connection refused, etc.)
-            console.error("API error fetching events:", apiError);
-            
-            // Try to retry with backoff if we haven't exceeded max retries
-            if (retryCount < MAX_RETRIES) {
-                console.log(`Retrying events fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
-                setTimeout(() => fetchEvents(retryCount + 1), RETRY_DELAY * (retryCount + 1));
-                return;
-            }
-            
-            // If we've exhausted retries, show error
-            console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching events`);
-            
-            // Create a connection error event
-            events = [{
-                type: "other",
-                timestamp: new Date().toISOString(),
-                category: "error",
-                summary: "API Connection Error",
-                details: {
-                    error_message: `Failed to connect to Events API: ${apiError.message}`,
-                    service: "Events API",
-                    endpoint: apiUrl,
-                    error_type: apiError.name,
-                    error_stack: apiError.stack,
-                    retries_attempted: retryCount
-                }
-            }];
-            
-            window.events = events;
-            renderEvents();
-        }
-    } catch (error) {
-        // Handle any unexpected errors
-        console.error('Unexpected error in fetchEvents:', error);
-        
-        // Try to retry with backoff if we haven't exceeded max retries
-        if (retryCount < MAX_RETRIES) {
-            console.log(`Retrying events fetch in ${RETRY_DELAY}ms (attempt ${retryCount + 1} of ${MAX_RETRIES})`);
-            setTimeout(() => fetchEvents(retryCount + 1), RETRY_DELAY * (retryCount + 1));
-            return;
-        }
-        
-        // If we've exhausted retries, show error
-        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for fetching events`);
-        
-        events = [{
-            type: "other",
-            timestamp: new Date().toISOString(),
-            category: "error",
-            summary: "Unexpected Error",
-            details: {
-                error_message: `An unexpected error occurred: ${error.message}`,
-                error_type: error.name,
-                error_stack: error.stack,
-                retries_attempted: retryCount
-            }
-        }];
-        
-        window.events = events;
-        renderEvents();
-    }
-}
-
-// Render events in UI with retry capability
-function renderEvents() {
-    console.log('Rendering events panel');
-    
-    const eventsContainer = document.getElementById('events-container');
-    if (!eventsContainer) {
-        console.log('Events container not found, checking panel state...');
-        
-        // Check if events panel is actually open
-        const eventsPanel = document.querySelector('[data-content="events"]');
-        
-        if (eventsPanel) {
-            console.log('Events panel exists but container not found, waiting for DOM update...');
-            
-            // Panel exists but container might not be fully rendered yet
-            setTimeout(() => {
-                const retryContainer = document.getElementById('events-container');
-                if (retryContainer) {
-                    console.log('Events container found after delay, rendering now');
-                    renderEventsContent(retryContainer);
-                } else {
-                    console.warn('Events container still not found after delay');
-                }
-            }, 300);
-        } else {
-            // Panel not open, so not finding the container is expected
-            console.log('Events panel not open, skipping rendering');
-        }
-        return;
-    }
-    
-    renderEventsContent(eventsContainer);
-}
-
-// Separate function to render the actual events content
-function renderEventsContent(eventsContainer) {
-    // Clear existing events - first remove event listeners to prevent memory leaks
-    const oldEventItems = eventsContainer.querySelectorAll('.event-item');
-    oldEventItems.forEach(item => {
-        const newItem = item.cloneNode(true);
-        if (item.parentNode) {
-            item.parentNode.replaceChild(newItem, item);
-        }
-    });
-    eventsContainer.innerHTML = '';
-    
-    // Get event type filter value
-    const eventTypeFilter = document.getElementById('event-type-filter');
-    const selectedType = eventTypeFilter ? eventTypeFilter.value : 'all';
-    console.log(`Filtering events by type: ${selectedType}`);
-    
-    // Check if we have any events
-    if (!events || events.length === 0) {
-        console.log('No events available to display');
-        const noEventsMsg = document.createElement('div');
-        noEventsMsg.className = 'event-empty-state';
-        noEventsMsg.textContent = 'No events recorded yet.';
-        eventsContainer.appendChild(noEventsMsg);
-        return;
-    }
-    
-    console.log(`Found ${events.length} total events`);
-    
-    // Map known event types to normalized categories for filtering
-    const mapEventTypeToCategory = (type) => {
-        if (!type) return 'other';
-        
-        const typeStr = type.toString().toLowerCase().trim();
-        
-        // Tool call categories - ADK 0.4.0 may have several variations
-        if (['tool_call', 'toolcall', 'tool call', 'tool-call', 'function_call', 'functioncall'].includes(typeStr) || 
-            typeStr.includes('tool') || typeStr.includes('function')) {
-            return 'tool_call';
-        }
-        
-        // Model response categories
-        if (['model_response', 'modelresponse', 'model response', 'response', 'content'].includes(typeStr) ||
-            typeStr.includes('model') || typeStr.includes('response')) {
-            return 'model_response';
-        }
-        
-        // Agent transfer categories
-        if (['agent_transfer', 'agenttransfer', 'agent transfer', 'agent-transfer', 'transfer'].includes(typeStr) ||
-            typeStr.includes('agent') || typeStr.includes('transfer')) {
-            return 'agent_transfer';
-        }
-        
-        // Planner categories
-        if (['planner', 'planning', 'plan'].includes(typeStr) ||
-            typeStr.includes('plan') || typeStr.includes('step')) {
-            return 'planner';
-        }
-        
-        // Other categories
-        if (['other', 'system', 'misc', 'unknown'].includes(typeStr)) {
-            return 'other';
-        }
-        
-        // No event reference available here, removed incorrect code
-        
-        return 'other'; // Default category
+// Handle device detection
+function detectDevice() {
+    state.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    state.darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    state.userAgentData = navigator.userAgentData || {
+        brands: [{brand: 'Unknown', version: '0'}],
+        platform: navigator.platform || 'Unknown'
     };
     
-    // Filter events by type with improved type matching
-    const filteredEvents = events.filter(event => {
-        if (selectedType === 'all') return true;
-        
-        // Check primary category from type
-        const eventCategory = mapEventTypeToCategory(event.type);
-        if (eventCategory === selectedType) return true;
-        
-        // Also check category if it exists (may be different from type)
-        if (event.category && mapEventTypeToCategory(event.category) === selectedType) return true;
-        
-        // Also check summary for keywords 
-        if (event.summary) {
-            const summaryLower = event.summary.toLowerCase();
-            if (selectedType === 'tool_call' && (summaryLower.includes('tool') || summaryLower.includes('function'))) 
-                return true;
-            if (selectedType === 'model_response' && (summaryLower.includes('response') || summaryLower.includes('message'))) 
-                return true;
-            if (selectedType === 'agent_transfer' && (summaryLower.includes('transfer') || summaryLower.includes('agent'))) 
-                return true;
-        }
-        
-        // Check for tool_name which indicates a tool call
-        if (selectedType === 'tool_call' && event.tool_name) return true;
-        
-        // Otherwise, it doesn't match the filter
-        return false;
+    console.log(`Device detected: ${state.isMobile ? 'Mobile' : 'Desktop'} - ${state.userAgentData.platform}`);
+}
+
+// Initialize UI components and settings
+function initializeUI() {
+    // Apply theme based on user preference or system setting
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+        state.theme = savedTheme;
+    } else if (state.darkModeMediaQuery.matches) {
+        state.theme = 'dark';
+    }
+    
+    document.body.classList.toggle('dark-theme', state.theme === 'dark');
+    
+    // Setup theme toggle if it exists
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
+    
+    // Initialize panels
+    document.querySelectorAll('.panel-trigger').forEach(trigger => {
+        const panel = trigger.getAttribute('data-panel');
+        trigger.addEventListener('click', () => togglePanel(panel));
     });
     
-    console.log(`After filtering: ${filteredEvents.length} events match the current filter`);
+    // Initialize message input
+    const messageInput = document.getElementById('message');
+    if (messageInput) {
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            const newHeight = Math.min(this.scrollHeight, state.maxInputHeight);
+            this.style.height = newHeight + 'px';
+            state.inputHeight = newHeight;
+        });
+    }
     
-    // Sort events by timestamp (descending - newest first), 
-    // handling both timestamp and start_time fields
-    filteredEvents.sort((a, b) => {
-        const timeA = new Date(a.timestamp || a.start_time);
-        const timeB = new Date(b.timestamp || b.start_time);
-        return timeB - timeA;
-    });
-    
-    // Render each event
-    filteredEvents.forEach(event => {
-        // Check for model information in event details
-        if (event.details && event.details.model && 
-            (event.type === 'model_response' || event.category === 'model_response')) {
-            // Update model status if it's a model response event with model info
-            window.statusUtils.updateModelStatus(event.details.model);
-        }
-        
-        // Check for agent transfer events and update the agent name
-        if (event.type === 'agent_transfer' || event.category === 'agent_transfer') {
-            // Update the current agent name when rendering a transfer event
-            if (event.to_agent) {
-                const newAgent = event.to_agent;
-                console.log(`Agent transfer detected in event rendering: ${newAgent}`);
-                // Update agent status using the dedicated function
-                window.statusUtils.updateAgentStatus(newAgent);
+    // Initialize selects
+    document.querySelectorAll('select.custom-select').forEach(select => {
+        select.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const displayElement = this.parentElement.querySelector('.selected-option');
+            if (displayElement) {
+                displayElement.textContent = selectedOption.textContent;
             }
-        }
-        
-        const eventItem = document.createElement('div');
-        
-        // Determine event category for styling
-        let eventCategory = 'other';
-        
-        // Safely check event type and category
-        const type = event.type ? String(event.type).toLowerCase() : '';
-        const category = event.category ? String(event.category).toLowerCase() : '';
-        
-        if (type === 'tool_call' || category === 'tool_call') {
-            eventCategory = 'tool-call';
-        } else if (type === 'agent_transfer' || category === 'agent_transfer') {
-            eventCategory = 'agent-transfer';
-        } else if (type === 'planner' || category === 'planner') {
-            eventCategory = 'planner';
-        } else if (type === 'model_response' || category === 'model_response') {
-            eventCategory = 'model-response';
-        }
-        
-        eventItem.className = `event-item ${eventCategory}`;
-        
-        // Use an ID if available, or create a unique one based on timestamp and type
-        const eventId = event.event_id || `${event.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        eventItem.dataset.id = eventId;
-        
-        // Format date/time (handle both timestamp and start_time formats)
-        const startTime = new Date(event.timestamp || event.start_time);
-        const timeStr = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const dateStr = startTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        
-        const eventType = document.createElement('div');
-        eventType.className = 'event-type';
-        eventType.textContent = formatEventType(event.type);
-        
-        const eventTimestamp = document.createElement('div');
-        eventTimestamp.className = 'event-timestamp';
-        eventTimestamp.textContent = `${dateStr} ${timeStr}`;
-        
-        const eventSummary = document.createElement('div');
-        eventSummary.className = 'event-summary';
-        // Use the most descriptive field available (summary, title, or tool_name)
-        eventSummary.textContent = event.summary || event.title || (event.tool_name ? `Tool: ${event.tool_name}` : `Event: ${event.type}`);
-        
-        eventItem.appendChild(eventType);
-        eventItem.appendChild(eventTimestamp);
-        eventItem.appendChild(eventSummary);
-        
-        // Add click handler to show event details
-        eventItem.addEventListener('click', () => {
-            // Set this event as active and show details
-            const allEvents = eventsContainer.querySelectorAll('.event-item');
-            allEvents.forEach(e => e.classList.remove('active'));
-            eventItem.classList.add('active');
-            
-            // Show event details
-            showEventDetails(event);
         });
         
-        eventsContainer.appendChild(eventItem);
-    });
-    
-    // Show a message if no events found
-    if (filteredEvents.length === 0) {
-        const noEventsMsg = document.createElement('div');
-        noEventsMsg.className = 'no-items-message';
-        noEventsMsg.textContent = 'No events match the current filter';
-        eventsContainer.appendChild(noEventsMsg);
-    }
-}
-
-// Format event type for display
-function formatEventType(type) {
-    // Handle null or undefined types
-    if (!type) return 'UNKNOWN';
-    
-    // Handle common variations
-    const typeStr = type.toString().toLowerCase().trim();
-    
-    switch (typeStr) {
-        case 'tool_call':
-        case 'toolcall':
-        case 'tool call':
-        case 'tool-call':
-            return 'TOOL CALL';
-            
-        case 'agent_transfer':
-        case 'agenttransfer':
-        case 'agent transfer':
-        case 'agent-transfer':
-            return 'AGENT TRANSFER';
-            
-        case 'planner':
-        case 'planning':
-        case 'plan':
-            return 'PLANNER';
-            
-        case 'other':
-        case 'system':
-        case 'misc':
-        case 'unknown':
-            return 'SYSTEM';
-            
-        default:
-            // Convert to uppercase for consistency
-            return typeStr.toUpperCase();
-    }
-}
-
-// Show event details with improved error handling
-function showEventDetails(event, retryCount = 0) {
-    const MAX_RETRIES = 3;
-    console.log(`Showing event details (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, event);
-    
-    // First, ensure the events tile is visible - this is using the tiling system
-    let eventsPanel = document.querySelector('[data-content="events"]');
-    if (!eventsPanel) {
-        console.warn('Events panel not found in DOM, attempting to open it');
-        // Try to trigger events panel command
-        document.dispatchEvent(new CustomEvent('command:events'));
-        
-        // Wait a moment and try again
-        setTimeout(() => {
-            eventsPanel = document.querySelector('[data-content="events"]');
-            if (eventsPanel) {
-                console.log('Events panel now found, attempting to show details again');
-                // Try again after panel is opened
-                showEventDetails(event, retryCount);
-            } else {
-                if (retryCount < MAX_RETRIES) {
-                    console.log(`Retrying panel check (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-                    setTimeout(() => {
-                        showEventDetails(event, retryCount + 1);
-                    }, 300 * (retryCount + 1));
-                } else {
-                    console.error('Could not find events panel after multiple attempts');
-                }
-            }
-        }, 300);
-        return;
-    }
-    
-    // Now check for the details container
-    const detailsContainer = document.getElementById('event-details-content');
-    if (!detailsContainer) {
-        console.warn('Event details container not found in DOM - attempting to create it');
-        
-        // Look for detail panel where we can put the content
-        const detailPanel = document.querySelector('.detail-panel');
-        if (detailPanel) {
-            console.log('Found detail-panel, creating event details content');
-            
-            // Create event details content container
-            const detailsContent = document.createElement('div');
-            detailsContent.className = 'event-details-content';
-            detailsContent.id = 'event-details-content';
-            
-            // Find existing tile-content if it exists or create one
-            let tileContent = detailPanel.querySelector('.tile-content');
-            if (!tileContent) {
-                tileContent = document.createElement('div');
-                tileContent.className = 'tile-content event-details';
-                detailPanel.appendChild(tileContent);
-            }
-            
-            // Add details content to the tile content
-            tileContent.innerHTML = ''; // Clear existing content
-            tileContent.appendChild(detailsContent);
-            console.log('Created event-details-content container');
-            
-            // Now try to use the newly created container
-            setTimeout(() => showEventDetails(event, retryCount), 100);
-            return;
-        }
-        
-        // If detail panel not found, but retries available, try again
-        if (retryCount < MAX_RETRIES) {
-            console.log(`Detail panel not found, retrying (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-            setTimeout(() => showEventDetails(event, retryCount + 1), 300 * (retryCount + 1));
-            return;
-        }
-        
-        console.error('Could not find detail panel to add event details content after multiple attempts');
-        return;
-    }
-    
-    console.log('Found event-details-content, rendering details');
-    
-    // Clear existing content
-    detailsContainer.innerHTML = '';
-    
-    // Main details
-    const headerSection = document.createElement('div');
-    headerSection.className = 'detail-section';
-    
-    const title = document.createElement('h4');
-    // Use the most descriptive field available for the title
-    const titleText = event.summary || event.title || (event.tool_name ? `Tool Call: ${event.tool_name}` : `Event: ${event.type}`);
-    title.innerHTML = `<span>${titleText}</span>`;
-    
-    const timestamp = document.createElement('div');
-    timestamp.className = 'detail-timestamp';
-    timestamp.textContent = new Date(event.timestamp || event.start_time).toLocaleString();
-    
-    headerSection.appendChild(title);
-    headerSection.appendChild(timestamp);
-    
-    // Event ID - hidden by default but can be shown for debugging
-    const idSection = document.createElement('div');
-    idSection.className = 'detail-section detail-small';
-    
-    const idValue = document.createElement('div');
-    idValue.className = 'detail-id';
-    const eventId = event.event_id || 'N/A';
-    idValue.textContent = `Event ID: ${eventId}`;
-    idSection.appendChild(idValue);
-    
-    // Type section with styled badge
-    const typeSection = document.createElement('div');
-    typeSection.className = 'detail-section';
-    
-    const typeTitle = document.createElement('h4');
-    typeTitle.textContent = 'Event Type: ';
-    const typeValue = document.createElement('span');
-    typeValue.className = `event-type-badge ${event.type}`;
-    typeValue.textContent = formatEventType(event.type);
-    typeTitle.appendChild(typeValue);
-    
-    typeSection.appendChild(typeTitle);
-    
-    // Add main sections to container
-    detailsContainer.appendChild(headerSection);
-    detailsContainer.appendChild(typeSection);
-    
-    // Process specific fields based on event type
-    if (event.type === 'tool_call' || event.category === 'tool_call' || 
-        event.function_call || event.function_response || 
-        event.tool_calls || event.tool_results) {
-        
-        // Tool call sections
-        if (event.tool_name) {
-            const toolSection = document.createElement('div');
-            toolSection.className = 'detail-section';
-            
-            const toolTitle = document.createElement('h4');
-            toolTitle.textContent = 'Tool:';
-            toolSection.appendChild(toolTitle);
-            
-            const toolName = document.createElement('div');
-            toolName.className = 'detail-value';
-            toolName.textContent = event.tool_name;
-            toolSection.appendChild(toolName);
-            
-            detailsContainer.appendChild(toolSection);
-        }
-        
-        // Function call details
-        if (event.function_call) {
-            // Function call specific rendering
-            const functionCallSection = document.createElement('div');
-            functionCallSection.className = 'detail-section';
-            
-            const functionTitle = document.createElement('h4');
-            functionTitle.textContent = 'Function Call:';
-            functionCallSection.appendChild(functionTitle);
-            
-            if (event.function_call.name) {
-                const funcName = document.createElement('div');
-                funcName.className = 'detail-value';
-                funcName.textContent = event.function_call.name;
-                functionCallSection.appendChild(funcName);
-            }
-            
-            if (event.function_call.args) {
-                const argsValue = document.createElement('pre');
-                argsValue.className = 'detail-json';
-                argsValue.innerHTML = formatJsonSyntax(event.function_call.args);
-                functionCallSection.appendChild(argsValue);
-            }
-            
-            detailsContainer.appendChild(functionCallSection);
-        }
-        
-        // Function response details
-        if (event.function_response) {
-            const functionResponseSection = document.createElement('div');
-            functionResponseSection.className = 'detail-section';
-            
-            const responseTitle = document.createElement('h4');
-            responseTitle.textContent = 'Function Response:';
-            functionResponseSection.appendChild(responseTitle);
-            
-            if (event.function_response.name) {
-                const funcName = document.createElement('div');
-                funcName.className = 'detail-value';
-                funcName.textContent = event.function_response.name;
-                functionResponseSection.appendChild(funcName);
-            }
-            
-            if (event.function_response.response) {
-                const responseValue = document.createElement('pre');
-                responseValue.className = 'detail-json';
-                responseValue.innerHTML = formatJsonSyntax(event.function_response.response);
-                functionResponseSection.appendChild(responseValue);
-            }
-            
-            detailsContainer.appendChild(functionResponseSection);
-        }
-        
-        // Input section (regular tool call)
-        if (event.input) {
-            const inputSection = document.createElement('div');
-            inputSection.className = 'detail-section';
-            
-            const inputTitle = document.createElement('h4');
-            inputTitle.textContent = 'Input:';
-            inputSection.appendChild(inputTitle);
-            
-            const inputValue = document.createElement('pre');
-            inputValue.className = 'detail-json';
-            inputValue.innerHTML = formatJsonSyntax(event.input);
-            inputSection.appendChild(inputValue);
-            
-            detailsContainer.appendChild(inputSection);
-        }
-        
-        // Output section (regular tool call)
-        if (event.output) {
-            const outputSection = document.createElement('div');
-            outputSection.className = 'detail-section';
-            
-            const outputTitle = document.createElement('h4');
-            outputTitle.textContent = 'Output:';
-            outputSection.appendChild(outputTitle);
-            
-            const outputValue = document.createElement('pre');
-            outputValue.className = 'detail-json';
-            outputValue.innerHTML = formatJsonSyntax(event.output);
-            outputSection.appendChild(outputValue);
-            
-            detailsContainer.appendChild(outputSection);
-        }
-    } else if (event.type === 'agent_transfer') {
-        // Agent transfer details
-        const transferSection = document.createElement('div');
-        transferSection.className = 'detail-section';
-        
-        const transferTitle = document.createElement('h4');
-        transferTitle.textContent = 'Transfer Details:';
-        transferSection.appendChild(transferTitle);
-        
-        const transferDetails = document.createElement('div');
-        transferDetails.className = 'transfer-details';
-        
-        if (event.from_agent) {
-            const fromAgent = document.createElement('div');
-            fromAgent.className = 'detail-item';
-            fromAgent.innerHTML = `<strong>From:</strong> ${event.from_agent}`;
-            transferDetails.appendChild(fromAgent);
-        }
-        
-        if (event.to_agent) {
-            const toAgent = document.createElement('div');
-            toAgent.className = 'detail-item';
-            toAgent.innerHTML = `<strong>To:</strong> ${event.to_agent}`;
-            transferDetails.appendChild(toAgent);
-        }
-        
-        transferSection.appendChild(transferDetails);
-        detailsContainer.appendChild(transferSection);
-    } else if (event.type === 'planner') {
-        // Planner details
-        if (event.plan) {
-            const planSection = document.createElement('div');
-            planSection.className = 'detail-section';
-            
-            const planTitle = document.createElement('h4');
-            planTitle.textContent = 'Plan:';
-            planSection.appendChild(planTitle);
-            
-            const planDetails = document.createElement('div');
-            planDetails.className = 'plan-details';
-            
-            // Handle plan query if available
-            if (event.plan.query) {
-                const query = document.createElement('div');
-                query.className = 'detail-item';
-                query.innerHTML = `<strong>Query:</strong> ${event.plan.query}`;
-                planDetails.appendChild(query);
-            }
-            
-            // Handle plan steps if available
-            if (event.plan.steps && Array.isArray(event.plan.steps)) {
-                const stepsContainer = document.createElement('div');
-                stepsContainer.className = 'detail-item';
-                
-                const stepsTitle = document.createElement('strong');
-                stepsTitle.textContent = 'Steps:';
-                stepsContainer.appendChild(stepsTitle);
-                
-                const stepsList = document.createElement('ol');
-                stepsList.className = 'steps-list';
-                
-                event.plan.steps.forEach(step => {
-                    const stepItem = document.createElement('li');
-                    stepItem.textContent = step;
-                    stepsList.appendChild(stepItem);
-                });
-                
-                stepsContainer.appendChild(stepsList);
-                planDetails.appendChild(stepsContainer);
-            }
-            
-            planSection.appendChild(planDetails);
-            detailsContainer.appendChild(planSection);
-        }
-    } else if (event.type === 'model_response') {
-        // Model response content
-        if (event.text) {
-            const textSection = document.createElement('div');
-            textSection.className = 'detail-section';
-            
-            const textTitle = document.createElement('h4');
-            textTitle.textContent = 'Response:';
-            textSection.appendChild(textTitle);
-            
-            const textContent = document.createElement('pre');
-            textContent.className = 'response-content';
-            textContent.textContent = event.text;
-            textSection.appendChild(textContent);
-            
-            detailsContainer.appendChild(textSection);
-        }
-    }
-    
-    // Add technical details section for all event types
-    if (event.details && Object.keys(event.details).length > 0) {
-        const detailsSection = document.createElement('div');
-        detailsSection.className = 'detail-section technical-details';
-        
-        const detailsTitle = document.createElement('h4');
-        detailsTitle.textContent = 'Technical Details:';
-        detailsSection.appendChild(detailsTitle);
-        
-        const detailsContent = document.createElement('div');
-        detailsContent.className = 'details-content';
-        
-        // Format technical details as a single JSON object instead of individual fields
-        const technicalJsonContainer = document.createElement('div');
-        technicalJsonContainer.className = 'json-container';
-        technicalJsonContainer.style.maxHeight = '200px';
-        technicalJsonContainer.style.overflowY = 'auto';
-        
-        const technicalJson = document.createElement('pre');
-        technicalJson.className = 'detail-json';
-        technicalJson.innerHTML = formatJsonSyntax(event.details);
-        
-        technicalJsonContainer.appendChild(technicalJson);
-        detailsContent.appendChild(technicalJsonContainer);
-        
-        detailsSection.appendChild(detailsContent);
-        detailsContainer.appendChild(detailsSection);
-    }
-    
-    // Add event ID at the bottom for reference
-    detailsContainer.appendChild(idSection);
-    
-    // Add category if it exists and different from type
-    if (event.category && event.category !== event.type) {
-        const categorySection = document.createElement('div');
-        categorySection.className = 'detail-section detail-small';
-        
-        const categoryValue = document.createElement('div');
-        categoryValue.className = 'detail-category';
-        categoryValue.textContent = `Category: ${event.category}`;
-        categorySection.appendChild(categoryValue);
-        
-        detailsContainer.appendChild(categorySection);
-    }
-    
-    // Add a Raw JSON section to show the full event payload
-    const rawSection = document.createElement('div');
-    rawSection.className = 'detail-section raw-json-section';
-    
-    const rawHeader = document.createElement('div');
-    rawHeader.className = 'raw-json-header';
-    rawHeader.innerHTML = '<h4>Raw Event Data</h4><button class="toggle-raw-json">Show</button>';
-    rawSection.appendChild(rawHeader);
-    
-    const rawContent = document.createElement('div');
-    rawContent.className = 'raw-json-content hidden';
-    rawContent.style.maxHeight = '300px';
-    rawContent.style.overflow = 'hidden';
-    
-    // Create a scrollable container for the JSON
-    const rawJsonContainer = document.createElement('div');
-    rawJsonContainer.className = 'raw-json-container';
-    rawJsonContainer.style.maxHeight = '300px';
-    rawJsonContainer.style.overflowY = 'auto';
-    
-    // Create a pretty-printed JSON display
-    const rawJson = document.createElement('pre');
-    rawJson.className = 'raw-json';
-    rawJson.style.maxHeight = 'none';
-    rawJson.style.overflow = 'visible';
-    
-    // Remove circular references before stringifying
-    const cleanedEvent = JSON.parse(JSON.stringify(event, (key, value) => {
-        // Skip parent/circular references that can't be stringified
-        if (key === 'parent' || key === '_parent') return undefined;
-        return value;
-    }));
-    
-    // Format the JSON with proper indentation and structure
-    const formattedJson = JSON.stringify(cleanedEvent, null, 2);
-    
-    // For better readability, we'll syntax highlight the JSON
-    rawJson.innerHTML = formatJsonSyntax(formattedJson);
-    
-    rawJsonContainer.appendChild(rawJson);
-    rawContent.appendChild(rawJsonContainer);
-    rawSection.appendChild(rawContent);
-    
-    // Add toggle behavior
-    const toggleButton = rawHeader.querySelector('.toggle-raw-json');
-    toggleButton.addEventListener('click', function() {
-        rawContent.classList.toggle('hidden');
-        this.textContent = rawContent.classList.contains('hidden') ? 'Show' : 'Hide';
-    });
-    
-    detailsContainer.appendChild(rawSection);
-}
-
-// Format JSON with syntax highlighting
-function formatJsonSyntax(json) {
-    if (!json) return '';
-    
-    // Handle the case where json is already an object
-    if (typeof json !== 'string') {
-        json = JSON.stringify(json, null, 2);
-    }
-    
-    // Replace potentially harmful characters
-    json = json.replace(/&/g, '&amp;')
-               .replace(/</g, '&lt;')
-               .replace(/>/g, '&gt;');
-    
-    // Format different parts of JSON with specific colors
-    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function(match) {
-        let cls = 'json-number'; // default is number
-        
-        if (/^"/.test(match)) {
-            if (/:$/.test(match)) {
-                cls = 'json-key'; // keys
-            } else {
-                cls = 'json-string'; // strings
-            }
-        } else if (/true|false/.test(match)) {
-            cls = 'json-boolean'; // booleans
-        } else if (/null/.test(match)) {
-            cls = 'json-null'; // null
-        }
-        
-        return '<span class="' + cls + '">' + match + '</span>';
+        // Trigger initial selection
+        const event = new Event('change');
+        select.dispatchEvent(event);
     });
 }
 
-// Get initial agent and model information with retry mechanism
-function fetchAgentInfo(retryCount = 0) {
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
+// Initialize session management
+function initializeSessions() {
+    // Load any session ID from local storage
+    const savedSessionId = localStorage.getItem('currentSessionId');
+    if (savedSessionId) {
+        state.selectedSession = savedSessionId;
+        console.log(`Loaded saved session ID: ${savedSessionId}`);
+    } else {
+        // Create new session ID if none exists
+        state.selectedSession = 'session_' + Date.now();
+        localStorage.setItem('currentSessionId', state.selectedSession);
+        console.log(`Created new session ID: ${state.selectedSession}`);
+    }
     
-    console.log(`Fetching agent and model information (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+    // Check for a saved active agent
+    const lastActiveAgent = localStorage.getItem('lastActiveAgent');
+    if (lastActiveAgent) {
+        state.currentAgentName = lastActiveAgent.toUpperCase();
+        console.log(`Loaded last active agent: ${state.currentAgentName}`);
+    }
     
-    try {
-        // Make a request to get the agent info from the server with timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-        
-        fetch('/api/agent-info', { signal: controller.signal })
-            .then(response => {
-                clearTimeout(timeoutId);
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    console.warn(`Agent info API returned error: ${response.status}`);
-                    // Retry if we haven't hit the maximum
-                    if (retryCount < MAX_RETRIES) {
-                        console.log(`Retrying agent info fetch in ${RETRY_DELAY}ms...`);
-                        setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
-                    }
-                    return null;
-                }
-            })
-            .then(data => {
-                if (data) {
-                    console.log("Agent info loaded from API:", data);
-                    
-                    // Store the agent models in window.state for later reference
-                    window.state.agentModels = data.agent_models || {};
-                    
-                    // Add debug output of available models
-                    if (data.agent_models) {
-                        console.log("Available agent models:");
-                        for (const [agent, model] of Object.entries(data.agent_models)) {
-                            console.log(`  ${agent}: ${model}`);
-                        }
-                    }
-                    
-                    // Update agent name if available
-                    if (data.agent_name) {
-                        window.statusUtils.updateAgentStatus(data.agent_name);
-                    }
-                    
-                    // Get the appropriate model for the current agent
-                    const currentAgent = window.state.currentAgentName.toLowerCase();
-                    let modelToUse = data.model; // Default to main model
-                    
-                    // Try all possible ways to find the right model
-                    if (data.agent_models) {
-                        // Look for an exact match first
-                        if (data.agent_models[currentAgent]) {
-                            modelToUse = data.agent_models[currentAgent];
-                            console.log(`Found exact model match for ${currentAgent}: ${modelToUse}`);
-                        } 
-                        // Then try special case for scout
-                        else if (currentAgent === 'scout' && data.agent_models.scout_agent) {
-                            modelToUse = data.agent_models.scout_agent;
-                            console.log(`Using scout_agent model for ${currentAgent}: ${modelToUse}`);
-                        }
-                        // Try with _agent suffix
-                        else if (data.agent_models[currentAgent + '_agent']) {
-                            modelToUse = data.agent_models[currentAgent + '_agent'];
-                            console.log(`Using ${currentAgent}_agent model: ${modelToUse}`);
-                        }
-                        // Try without _agent suffix
-                        else if (currentAgent.endsWith('_agent') && data.agent_models[currentAgent.replace('_agent', '')]) {
-                            modelToUse = data.agent_models[currentAgent.replace('_agent', '')];
-                            console.log(`Using ${currentAgent.replace('_agent', '')} model: ${modelToUse}`);
-                        }
-                        // For any partial match (case insensitive)
-                        else {
-                            for (const [agentKey, modelValue] of Object.entries(data.agent_models)) {
-                                if (currentAgent.includes(agentKey.toLowerCase()) || 
-                                    agentKey.toLowerCase().includes(currentAgent)) {
-                                    modelToUse = modelValue;
-                                    console.log(`Using partial match ${agentKey} model for ${currentAgent}: ${modelToUse}`);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    console.log(`Selected model for ${currentAgent}: ${modelToUse}`);
-                    
-                    // Update model name
-                    if (modelToUse) {
-                        window.statusUtils.updateModelStatus(modelToUse);
-                    } else {
-                        // Fallback to updateModelForCurrentAgent
-                        updateModelForCurrentAgent();
-                    }
-                    
-                    // Force a visual refresh of the status bar
-                    if (typeof updateStatusBar === 'function') {
-                        updateStatusBar();
-                    } else if (window.statusUtils && window.statusUtils.updateStatusBar) {
-                        window.statusUtils.updateStatusBar();
-                    }
-                } else {
-                    // Fallback to updateModelForCurrentAgent
-                    updateModelForCurrentAgent();
-                }
-            })
-            .catch(error => {
-                console.warn("Failed to fetch agent info:", error);
-                
-                // Check if this was an abort error (timeout)
-                if (error.name === 'AbortError') {
-                    console.warn("Agent info request timed out");
-                }
-                
-                // Retry if we haven't hit the maximum
-                if (retryCount < MAX_RETRIES) {
-                    console.log(`Retrying agent info fetch after error (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
-                    setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
-                    return;
-                }
-                
-                // If API fails and retries exhausted, still update the displayed model based on current agent
-                console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for agent info, using fallback`);
-                updateModelForCurrentAgent();
-            });
-    } catch (error) {
-        console.warn("Error in fetchAgentInfo:", error);
-        
-        // Retry if we haven't hit the maximum
-        if (retryCount < MAX_RETRIES) {
-            console.log(`Retrying agent info fetch after error (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
-            setTimeout(() => fetchAgentInfo(retryCount + 1), RETRY_DELAY * (retryCount + 1));
-            return;
+    // Load session list from local storage
+    const savedSessions = localStorage.getItem('sessions');
+    if (savedSessions) {
+        try {
+            state.sessions = JSON.parse(savedSessions);
+            console.log(`Loaded ${state.sessions.length} saved sessions`);
+        } catch (e) {
+            console.error('Failed to parse saved sessions:', e);
+            state.sessions = [{id: state.selectedSession, name: 'Current Session'}];
         }
-        
-        // If API fails and retries exhausted, still update the displayed model based on current agent
-        console.warn(`Exceeded maximum retries (${MAX_RETRIES}) for agent info, using fallback`);
-        updateModelForCurrentAgent();
-    }
-}
-
-// Update model display based on the current agent name
-function updateModelForCurrentAgent() {
-    const agentName = window.state.currentAgentName.toLowerCase();
-    let modelName;
-    
-    // Log the current agent for debugging
-    console.log(`Updating model for agent: ${agentName}`);
-    
-    // Try to find the model in agentModels first (from API)
-    if (window.state.agentModels) {
-        // Check all possible variations of the agent name
-        const possibleNames = [
-            agentName,
-            agentName + '_agent',
-            agentName.replace('_agent', '')
-        ];
-        
-        // Try each possible name
-        for (const name of possibleNames) {
-            if (window.state.agentModels[name]) {
-                modelName = window.state.agentModels[name];
-                console.log(`Found model in agentModels for "${name}": ${modelName}`);
-                break;
-            }
-        }
+    } else {
+        state.sessions = [{id: state.selectedSession, name: 'Current Session'}];
     }
     
-    // If we still don't have a model, use hardcoded values matching config.yaml
-    if (!modelName) {
-        console.log(`No model found in agentModels, using hardcoded values`);
-        
-        // Check the agent name with more flexibility - EXACTLY match config.yaml values
-        if (agentName.includes('scout')) {
-            modelName = "gemini-2.5-pro-preview-05-06";  // Match config.yaml scout_agent
-        } else if (agentName.includes('code') || agentName === "code_execution_agent") {
-            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml code_execution_agent
-        } else if (agentName.includes('search')) {
-            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml search_agent
-        } else if (agentName.includes('todo')) {
-            modelName = "gemini-2.5-flash-preview-04-17";  // Match config.yaml todo_agent
-        } else {
-            // Default for beto/main agent - match config.yaml main_model
-            modelName = "gemini-2.5-flash-preview-04-17";
-        }
+    // Ensure current session is in the list
+    if (!state.sessions.find(s => s.id === state.selectedSession)) {
+        state.sessions.push({
+            id: state.selectedSession,
+            name: 'Current Session',
+            created: Date.now()
+        });
+        saveSessions();
     }
     
-    window.statusUtils.updateModelStatus(modelName);
-    console.log(`Updated model based on agent ${agentName}: ${modelName}`);
+    // Initialize session selector
+    updateSessionSelector();
+}
+
+// Set up event listeners
+function setupEventListeners() {
+    // Window events
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('beforeunload', handleBeforeUnload);
     
-    // Force a visual refresh of the status bar
-    if (typeof updateStatusBar === 'function') {
-        updateStatusBar();
-    } else if (window.statusUtils && window.statusUtils.updateStatusBar) {
-        window.statusUtils.updateStatusBar();
-    }
+    // Setup keyboard shortcuts
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Handle theme changes
+    state.darkModeMediaQuery.addEventListener('change', handleSystemThemeChange);
+    
+    // Handle idle detection
+    document.addEventListener('mousemove', resetIdleTimer);
+    document.addEventListener('keypress', resetIdleTimer);
+    document.addEventListener('click', resetIdleTimer);
+    document.addEventListener('scroll', resetIdleTimer);
+    
+    // Start idle timer
+    resetIdleTimer();
 }
 
-// Generate a UUID for session ID
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
-// Reset agent to BETO to fix any agent mismatch issues
-// Track agent context and transitions
-function trackAgentContext(agentName) {
-    // Normalize agent name to uppercase for consistency
-    agentName = agentName.toUpperCase();
-
-    // Initialize context for this agent if it doesn't exist yet
-    if (!state.agentContexts[agentName]) {
-        console.log(`Initializing context for agent: ${agentName}`);
-        state.agentContexts[agentName] = {
-            lastMessageId: null,
-            lastSentMessage: null,
-            pendingResponse: false
-        };
-    }
-
-    return state.agentContexts[agentName];
-}
-
-// Handle agent switching, preserving context between transfers
-function switchAgentContext(newAgentName) {
-    const prevAgentName = state.currentAgentName;
-    console.log(`Switching agent context from ${prevAgentName} to ${newAgentName}`);
-
-    // Save current agent's context state
-    if (prevAgentName && prevAgentName !== newAgentName) {
-        const prevContext = trackAgentContext(prevAgentName);
-        prevContext.lastMessageId = findLastMessageIdForAgent(prevAgentName);
-        prevContext.pendingResponse = false; // Reset pending flag when switching away
-        console.log(`Saved context for ${prevAgentName}:`, prevContext);
-    }
-
-    // Get new agent's context
-    const newContext = trackAgentContext(newAgentName);
-    console.log(`Loaded context for ${newAgentName}:`, newContext);
-
-    // Update the current agent
-    state.currentAgentName = newAgentName;
-
-    // Return the loaded context
-    return newContext;
-}
-
-// Helper to find the last message ID for an agent
+// Find the last message ID for a specific agent
 function findLastMessageIdForAgent(agentName) {
-    // Normalize for comparison
-    agentName = agentName.toUpperCase();
-
-    // Get all messages from storage
-    const messages = window.chatPersistence.getMessages(window.state.sessionId);
-    if (!messages || messages.length === 0) return null;
-
-    // Loop backward through messages to find the last one from this agent
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i];
-        if (msg.agent === agentName ||
-           (msg.role === 'assistant' && (!msg.agent || msg.agent === agentName))) {
-            return msg.id;
+    // Get the chat message elements
+    const chatMessages = document.querySelectorAll('.chat-message');
+    
+    // Iterate through messages in reverse order (newest first)
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+        const msg = chatMessages[i];
+        const msgId = msg.getAttribute('data-id');
+        const role = msg.getAttribute('data-role');
+        const agent = msg.getAttribute('data-agent');
+        
+        // Match messages from this agent, or from user to this agent
+        if ((role === 'user' && (!agent || agent === agentName)) || 
+           (role === 'assistant' && (!agent || agent === agentName))) {
+            return msgId;
         }
     }
 
     return null;
 }
 
-function resetAgentToBeto() {
-    console.log(`Resetting agent from ${state.currentAgentName} to BETO`);
+// Simplified agent context tracking - just maintain current agent
+window.trackAgentContext = function(agentName) {
+    // Normalize agent name to uppercase for consistency
+    agentName = agentName.toUpperCase();
 
-    // Switch to BETO context instead of just setting the name
-    switchAgentContext("BETO");
+    console.log(`Using simplified agent context tracking for: ${agentName}`);
+    return {
+        lastMessageId: null,
+        lastSentMessage: null,
+        pendingResponse: false
+    };
+};
 
-    // Update CSS and status
-    document.documentElement.style.setProperty('--agent-name', `"${state.currentAgentName}"`);
+// Simplified agent switching - just update the current agent name
+window.switchAgentContext = function(newAgentName) {
+    // Normalize agent name to uppercase for consistency
+    newAgentName = newAgentName.toUpperCase();
+    const prevAgentName = state.currentAgentName;
+    console.log(`Switching from ${prevAgentName} to ${newAgentName} (simplified approach)`);
 
-    // Direct update of status bar element
+    // Simply update the current agent name - no context preservation between agents
+    state.currentAgentName = newAgentName;
+
+    // Log the change
+    console.log(`Current agent is now: ${state.currentAgentName}`);
+
+    // Also save current agent in localStorage to persist between page refreshes
+    try {
+        localStorage.setItem('lastActiveAgent', newAgentName);
+        console.log(`Saved ${newAgentName} as lastActiveAgent in localStorage`);
+    } catch (e) {
+        console.warn(`Error saving lastActiveAgent to localStorage: ${e}`);
+    }
+
+    // Update document CSS property with agent name
+    document.documentElement.style.setProperty('--agent-name', `"${newAgentName}"`);
+
+    // Update agent status display
     const agentStatus = document.getElementById('agent-status');
     if (agentStatus) {
-        agentStatus.textContent = `AGENT: ${state.currentAgentName}`;
-
-        // Visual feedback for the change
-        agentStatus.style.color = 'var(--term-blue)';
-        setTimeout(() => {
-            agentStatus.style.color = '';
-        }, 500);
-    } else {
-        console.warn("Cannot find agent-status element in DOM");
+        agentStatus.textContent = `AGENT: ${newAgentName}`;
+        console.log(`Updated agent status display to: ${newAgentName}`);
     }
 
-    // Update other UI elements
-    if (window.statusUtils) {
-        window.statusUtils.updateAgentStatus("BETO");
-        window.statusUtils.updateClock();
-        window.statusUtils.setStatus('ready');
-    }
+    // Return a simple context object
+    return {
+        lastMessageId: null,
+        lastSentMessage: null,
+        pendingResponse: false
+    };
+};
 
-    // Make these functions globally available
-    window.resetAgentToBeto = resetAgentToBeto;
-    window.switchAgentContext = switchAgentContext;
-    window.trackAgentContext = trackAgentContext;
+// Initialize command registry
+function initializeCommands() {
+    // Add base commands
+    state.commandRegistry = {
+        help: {
+            description: 'Show available commands',
+            action: showCommandHelp
+        },
+        clear: {
+            description: 'Clear the chat',
+            action: clearChat
+        },
+        theme: {
+            description: 'Toggle dark/light theme',
+            action: toggleTheme
+        },
+        settings: {
+            description: 'Open settings panel',
+            action: () => togglePanel('settings')
+        },
+        events: {
+            description: 'Toggle events panel',
+            action: () => togglePanel('events')
+        },
+        tasks: {
+            description: 'Toggle tasks panel',
+            action: () => togglePanel('tasks')
+        },
+        sessions: {
+            description: 'Open sessions panel',
+            action: () => togglePanel('sessions')
+        },
+        voice: {
+            description: 'Toggle voice input/output',
+            action: toggleVoice
+        },
+        agent: {
+            description: 'Switch to a different agent',
+            action: switchAgent,
+            args: ['agent_name']
+        },
+        claude: {
+            description: 'Use a Claude template',
+            action: useClaudeTemplate,
+            args: ['template_name', '...args']
+        }
+    };
+    
+    console.log('Command registry initialized with', Object.keys(state.commandRegistry).length, 'commands');
 }
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', init);
+// Handle model updates for agent switching
+window.updateModelForCurrentAgent = function() {
+    // Don't update if agent models aren't loaded yet
+    if (!state.agentModels || Object.keys(state.agentModels).length === 0) {
+        console.log('Agent models not loaded yet, skipping model update');
+        return;
+    }
+
+    const agentName = state.currentAgentName.toLowerCase();
+    
+    // Handle specialized naming conventions
+    if (agentName === 'scout' && state.agentModels['scout_agent']) {
+        window.statusUtils.updateModelStatus(state.agentModels['scout_agent']);
+        console.log(`Updated model for scout: ${state.agentModels['scout_agent']}`);
+    }
+    // Try exact match
+    else if (state.agentModels[agentName]) {
+        window.statusUtils.updateModelStatus(state.agentModels[agentName]);
+        console.log(`Updated model for ${agentName}: ${state.agentModels[agentName]}`);
+    }
+    // Try _agent suffix
+    else if (state.agentModels[agentName + '_agent']) {
+        window.statusUtils.updateModelStatus(state.agentModels[agentName + '_agent']);
+        console.log(`Updated model for ${agentName} using _agent suffix: ${state.agentModels[agentName + '_agent']}`);
+    }
+    // Default to main model
+    else if (state.agentModels['main']) {
+        window.statusUtils.updateModelStatus(state.agentModels['main']);
+        console.log(`Using main model for ${agentName}: ${state.agentModels['main']}`);
+    }
+    else {
+        console.log(`No model found for agent: ${agentName}`);
+    }
+};
+
+// Initialize WebSocket connection
+function initializeConnection() {
+    if (state.socket && state.socketConnected) {
+        console.log('Already connected, skipping connection initialization');
+        return;
+    }
+    
+    // Attempt to connect via socket.js module
+    if (window.initSocket && typeof window.initSocket === 'function') {
+        console.log('Initializing socket connection for session:', state.selectedSession);
+        
+        window.initSocket(state.selectedSession).then(socket => {
+            state.socket = socket;
+            state.socketConnected = socket.socketConnected;
+            
+            console.log('Socket connection initialized:', state.socketConnected ? 'Connected' : 'Disconnected');
+            
+            if (state.socketConnected) {
+                state.wasConnected = true;
+                state.status = 'ready';
+                
+                // Process any pending messages
+                if (state.pendingMessage) {
+                    console.log('Sending pending message:', state.pendingMessage);
+                    sendMessage(state.pendingMessage);
+                    state.pendingMessage = null;
+                }
+                
+                if (state.messageQueue.length > 0) {
+                    console.log(`Processing ${state.messageQueue.length} queued messages`);
+                    processMessageQueue();
+                }
+                
+                // Request agent models information
+                requestAgentModels();
+            }
+        });
+    } else {
+        console.error('Socket initialization function not available');
+        state.status = 'error';
+    }
+}
+
+// Update session selector
+function updateSessionSelector() {
+    const sessionSelector = document.getElementById('session-selector');
+    if (!sessionSelector) return;
+    
+    // Clear current options
+    sessionSelector.innerHTML = '';
+    
+    // Add options for each session
+    state.sessions.forEach(session => {
+        const option = document.createElement('option');
+        option.value = session.id;
+        option.textContent = session.name || session.id;
+        option.selected = session.id === state.selectedSession;
+        sessionSelector.appendChild(option);
+    });
+}
+
+// Request agent models information
+function requestAgentModels() {
+    if (state.socket && state.socketConnected) {
+        console.log('Requesting agent models information');
+        state.socket.send(JSON.stringify({
+            type: 'agent_models_request'
+        }));
+    }
+}
+
+// Global exports
+window.state = state;
+window.initializeApp = initializeApp;
+window.switchAgentContext = switchAgentContext;
+window.trackAgentContext = trackAgentContext;
+window.updateModelForCurrentAgent = updateModelForCurrentAgent;

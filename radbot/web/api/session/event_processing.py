@@ -88,31 +88,32 @@ def _process_tool_call_event(event):
     return event_data
 
 def _process_agent_transfer_event(event):
-    """Process an agent transfer event."""
+    """Process an agent transfer event using ADK 0.4.0 style."""
     event_data = {
         "category": "agent_transfer",
         "summary": "Agent Transfer"
     }
     
-    # Extract to_agent
+    # Extract to_agent from actions.transfer_to_agent (ADK 0.4.0 style)
     to_agent = None
-    if hasattr(event, 'to_agent'):
-        to_agent = str(event.to_agent)
-        event_data["to_agent"] = to_agent
-        event_data["summary"] = f"Transfer to: {to_agent}"
-    elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'toAgent' in event.payload:
-        to_agent = str(event.payload['toAgent'])
-        event_data["to_agent"] = to_agent
-        event_data["summary"] = f"Transfer to: {to_agent}"
     
-    # Extract from_agent if available
-    if hasattr(event, 'from_agent'):
-        event_data["from_agent"] = str(event.from_agent)
-    elif hasattr(event, 'payload') and isinstance(event.payload, dict) and 'fromAgent' in event.payload:
-        event_data["from_agent"] = str(event.payload['fromAgent'])
+    if hasattr(event, 'actions') and hasattr(event.actions, 'transfer_to_agent') and event.actions.transfer_to_agent:
+        to_agent = str(event.actions.transfer_to_agent)
+        event_data["to_agent"] = to_agent
+        event_data["summary"] = f"Transfer to: {to_agent}"
+    else:
+        # Log warning if not using ADK 0.4.0 style
+        logger.warning("Transfer event without actions.transfer_to_agent detected. This event may not be properly handled.")
+    
+    # Extract from_agent if available - prefer author field in ADK 0.4.0
+    if hasattr(event, 'author'):
+        event_data["from_agent"] = str(event.author)
     
     # Get the basic event details
     event_details = _get_event_details(event)
+    
+    # Log the detected transfer for debugging
+    logger.info(f"Detected agent transfer to: {to_agent}")
     
     # Add model information for the transferred-to agent
     if to_agent:
@@ -121,6 +122,12 @@ def _process_agent_transfer_event(event):
         
         # Convert agent name to the format expected by config_manager
         agent_config_name = to_agent.lower()
+
+        # Make sure event_details is a dictionary before trying to add to it
+        if isinstance(event_details, str):
+            event_details = {"raw": event_details}
+
+        # Add model information based on agent type
         if agent_config_name == "scout":
             agent_config_name = "scout_agent"
             event_details['model'] = config_manager.get_agent_model(agent_config_name)

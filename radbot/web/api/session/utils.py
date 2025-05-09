@@ -171,11 +171,17 @@ def _get_current_timestamp():
 
 def _get_event_type(event):
     """Determine the type of event."""
+    # Check for actions.transfer_to_agent in ADK 0.4.0 style events
+    if hasattr(event, 'actions') and hasattr(event.actions, 'transfer_to_agent') and event.actions.transfer_to_agent:
+        return "agent_transfer"
+    
     # For tool events in ADK 0.4.0, check for function_call / tool_calls attribute
     if hasattr(event, 'function_call') or hasattr(event, 'tool_calls'):
+        # We don't classify transfer_to_agent function calls as agent_transfer events
+        # since we rely exclusively on the actions.transfer_to_agent field
         return "tool_call"
         
-    # Check for tool result event
+    # Check for tool result events
     if hasattr(event, 'function_response') or hasattr(event, 'tool_results'):
         return "tool_call"
     
@@ -184,23 +190,16 @@ def _get_event_type(event):
         return str(event.type)
     
     # Check for tool call events
-    if (hasattr(event, 'tool_name') or 
-        (hasattr(event, 'payload') and 
-         isinstance(event.payload, dict) and 
+    if (hasattr(event, 'tool_name') or
+        (hasattr(event, 'payload') and
+         isinstance(event.payload, dict) and
          'toolName' in event.payload)):
         return "tool_call"
     
-    # Check for agent transfer events
-    if (hasattr(event, 'to_agent') or 
-        (hasattr(event, 'payload') and 
-         isinstance(event.payload, dict) and 
-         'toAgent' in event.payload)):
-        return "agent_transfer"
-    
     # Check for planner events
-    if (hasattr(event, 'plan') or 
-        (hasattr(event, 'payload') and 
-         isinstance(event.payload, dict) and 
+    if (hasattr(event, 'plan') or
+        (hasattr(event, 'payload') and
+         isinstance(event.payload, dict) and
          ('plan' in event.payload or 'planStep' in event.payload))):
         return "planner"
     
